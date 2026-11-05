@@ -169,6 +169,31 @@ class FacadeBatcher {
 
 const FACING = { south: 0, north: Math.PI, east: Math.PI / 2, west: -Math.PI / 2 };
 
+// Wo zwei Häuserzeilen an einer Ecke zusammenstoßen, ragt der Körper des einen Hauses
+// in die Fassade des anderen: Er mauert dort die Fensternischen zu, und seine
+// Stirnseite liegt in derselben Ebene wie die Fassade (Z-Fighting, Flackern).
+// Jeder Körper wird deshalb an der Seite gekürzt, an der am wenigsten wegfällt.
+function trimMasses(masses, slabs) {
+  const EPS = 0.001;
+  for (const m of masses) {
+    for (const s of slabs) {
+      if (s.id === m.id) continue;
+      const ox = Math.min(m.maxX, s.maxX) - Math.max(m.minX, s.minX);
+      const oz = Math.min(m.maxZ, s.maxZ) - Math.max(m.minZ, s.minZ);
+      if (ox <= EPS || oz <= EPS) continue;
+      const cuts = [
+        { key: 'maxX', value: s.minX, loss: m.maxX - s.minX, ok: s.minX > m.minX },
+        { key: 'minX', value: s.maxX, loss: s.maxX - m.minX, ok: s.maxX < m.maxX },
+        { key: 'maxZ', value: s.minZ, loss: m.maxZ - s.minZ, ok: s.minZ > m.minZ },
+        { key: 'minZ', value: s.maxZ, loss: s.maxZ - m.minZ, ok: s.maxZ < m.maxZ },
+      ].filter((c) => c.ok);
+      if (!cuts.length) continue;
+      const best = cuts.reduce((a, b) => (b.loss < a.loss ? b : a));
+      m[best.key] = best.value;
+    }
+  }
+}
+
 export function buildBerlin() {
   const loc = new Location('berlin', 'Hackescher Markt', { ambience: 'street', surface: 'stone' });
   const { scene } = loc;
@@ -220,6 +245,8 @@ export function buildBerlin() {
   const ironMat = std({ color: 0x0f1211, roughness: 0.55, metalness: 0.5 });
   const batcher = new FacadeBatcher();
   const massing = new Bag();
+  const masses = [];
+  const slabs = [];
   const roofs = [];
   const curbs = [];
 
@@ -247,15 +274,28 @@ export function buildBerlin() {
     const local = new Bag();
     const cTrim = new THREE.Color(col).multiplyScalar(1.15);
     const cDark = new THREE.Color(col).multiplyScalar(0.72);
-    local.box(cDark, W, H, depth - 0.34, W / 2, H / 2, -(depth + 0.34) / 2);
-    local.box(cTrim, W + 0.1, 0.3, 0.36, W / 2, FLOOR.ground + 0.02, 0.1);
+    // Hauskörper und Fassadenzone als Rechtecke in Weltkoordinaten. Gebaut wird der
+    // Körper erst, wenn alle Häuser stehen (trimMasses), damit er an Ecken nicht in
+    // die Fassade des Nachbarn ragt.
+    const rect = (x0, x1, z0, z1) => {
+      const pts = [[x0, z0], [x1, z0], [x0, z1], [x1, z1]].map(([lx, lz]) => new THREE.Vector3(lx, 0, lz).applyMatrix4(base));
+      const xs = pts.map((p) => p.x);
+      const zs = pts.map((p) => p.z);
+      return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+    };
+    const id = masses.length;
+    masses.push({ id, ...rect(0, W, -depth, -0.34), H, color: cDark });
+    slabs.push({ id, ...rect(0, W, -0.6, 0.3) });
+    // Gesimse genau so breit wie das Haus: breiter überlappen sie den Nachbarn in
+    // derselben Ebene und flackern.
+    local.box(cTrim, W, 0.3, 0.36, W / 2, FLOOR.ground + 0.02, 0.1);
     let y = FLOOR.ground;
     for (const t of types) {
       y += FLOOR[t];
       if (t !== 'attic') local.box(cTrim, W, 0.1, 0.1, W / 2, y, 0.05);
     }
-    local.box(cTrim, W + 0.3, 0.5, 0.62, W / 2, H - 0.05, 0.2);
-    local.box(cTrim, W + 0.1, 0.14, 0.34, W / 2, H - 0.42, 0.12);
+    local.box(cTrim, W, 0.5, 0.62, W / 2, H - 0.05, 0.2);
+    local.box(cTrim, W, 0.14, 0.34, W / 2, H - 0.42, 0.12);
     for (let i = 0; i < W / 0.6 - 1; i++) local.box(cTrim, 0.16, 0.2, 0.16, 0.5 + i * 0.6, H - 0.4, 0.26);
     const geo = local.build();
     geo.applyMatrix4(base);
@@ -339,6 +379,12 @@ export function buildBerlin() {
   row({ x: -32, z: -2, face: 'north', bays: 41 });
 
   batcher.build(scene, wallMat, darkGlass, litGlass);
+  trimMasses(masses, slabs);
+  for (const m of masses) {
+    const w = m.maxX - m.minX;
+    const d = m.maxZ - m.minZ;
+    if (w > 0.05 && d > 0.05) massing.box(m.color, w, m.H, d, (m.minX + m.maxX) / 2, m.H / 2, (m.minZ + m.maxZ) / 2);
+  }
 
   // Gehwege, Bordkanten
   const pave = pavement();
@@ -356,15 +402,19 @@ export function buildBerlin() {
   addMesh(scene, merge(walkBag), walkMat);
   addMesh(scene, merge(curbBag), std({ color: 0x46464a, roughness: 0.7 }));
 
-  // Fahrbahn
+  // Fahrbahn: von z = -430 bis unter die Quaikante (44.6), damit sie nicht über der Spree liegt.
   const cob = cobble();
+  const STREET_Z0 = -430;
+  const STREET_Z1 = 44.6;
+  const streetDepth = STREET_Z1 - STREET_Z0;
   const street = new THREE.Mesh(
-    new THREE.PlaneGeometry(720, 540),
+    new THREE.PlaneGeometry(720, streetDepth),
     std({ ...cob, roughness: 1, metalness: 0.05, normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 1.6 }),
   );
-  for (const t of Object.values(cob)) t.repeat.set(90, 67.5);
+  // Pflastergröße wie bisher: 8 m pro Kachel.
+  for (const t of Object.values(cob)) t.repeat.set(90, streetDepth / 8);
   street.rotation.x = -Math.PI / 2;
-  street.position.set(0, 0, -160);
+  street.position.set(0, 0, (STREET_Z0 + STREET_Z1) / 2);
   scene.add(street);
 
   // Stadtbahnviadukt: z = 18 bis 32, mit Bögen. Bogen bei x = 0 ist der Durchgang zur Spree.
@@ -372,21 +422,20 @@ export function buildBerlin() {
   const VZ1 = 32;
   const VH = 8.5;
   const SEG = 11;
+  // Umriss mit offenem Bogen statt Rechteck mit Loch: Ein Loch, das bis zum Boden
+  // reicht, bekommt beim Extrudieren eine Bodenfläche auf Höhe 0, die mit dem
+  // Pflaster flackert.
   const archShape = () => {
     const s = new THREE.Shape();
     s.moveTo(0, 0);
+    s.lineTo(1.1, 0);
+    s.lineTo(1.1, 4.1);
+    s.absarc(SEG / 2, 4.1, SEG / 2 - 1.1, Math.PI, 0, true);
+    s.lineTo(SEG - 1.1, 0);
     s.lineTo(SEG, 0);
     s.lineTo(SEG, VH);
     s.lineTo(0, VH);
     s.closePath();
-    const hole = new THREE.Path();
-    const rad = SEG / 2 - 1.1;
-    hole.moveTo(1.1, 0);
-    hole.lineTo(1.1, 4.1);
-    hole.absarc(SEG / 2, 4.1, rad, Math.PI, 0, true);
-    hole.lineTo(SEG - 1.1, 0);
-    hole.closePath();
-    s.holes.push(hole);
     return s;
   };
   const archGeo = new THREE.ExtrudeGeometry(archShape(), { depth: VZ1 - VZ0, bevelEnabled: false, curveSegments: 12 });

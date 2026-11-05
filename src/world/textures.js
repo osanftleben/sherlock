@@ -263,6 +263,10 @@ export function wood(tone = [92, 58, 34], seed = 61) {
     const r = rng(seed);
     const [a, b, d] = tone;
     const plank = 64;
+    // Fugenfarbe als Grund: sonst bleibt die Fuge durchsichtig und das Korn
+    // darüber erscheint nach dem Upload als helle Sprenkel.
+    c.fillStyle = `rgb(${a * 0.18},${b * 0.18},${d * 0.18})`;
+    c.fillRect(0, 0, size, size);
     for (let i = 0; i * plank < size; i++) {
       const v = 0.75 + r() * 0.35;
       c.fillStyle = `rgb(${a * v},${b * v},${d * v})`;
@@ -439,6 +443,9 @@ export function clockFace(hour = 9, minute = 40, size = 256) {
   const c = canvas(size);
   const ctx = c.getContext('2d');
   const m = size / 2;
+  // Deckender Grund in Randfarbe, damit am Scheibenrand kein heller Saum entsteht.
+  ctx.fillStyle = '#2a2015';
+  ctx.fillRect(0, 0, size, size);
   ctx.fillStyle = '#e8dfc6';
   ctx.beginPath();
   ctx.arc(m, m, m - 2, 0, 7);

@@ -1049,9 +1049,9 @@ function makeDroschke() {
   const lantern = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.12), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 2.5, 1) }));
   lantern.position.set(0.82, 1.5, 0.15);
   g.add(lantern);
-  const driver = makeFigure({ coat: 0x24201a, hat: 'top', hatColor: 0x18140f, moustache: true });
-  driver.scale.setScalar(0.9);
-  driver.position.set(0, 1.0, 0.2);
+  // Kutscher sitzt auf dem Bock (Oberkante 1.07).
+  const driver = makeFigure({ outfit: 'overcoat', cape: true, coat: 0x24201a, hat: 'top', hatColor: 0x18140f, moustache: 'walrus', pose: 'sit' });
+  driver.position.set(0, 0.2, 0.15);
   g.add(driver);
   const horse = makeHorse(0x30221a);
   horse.position.set(0, 0, 3.0);
@@ -1100,14 +1100,14 @@ function buildTraffic(loc, r) {
 
   // Passanten auf den Gehwegen
   const looks = [
-    { coat: 0x1f2228, hat: 'top', moustache: true },
-    { coat: 0x2a2620, hat: 'bowler', beard: true, hair: 0x4a4038 },
-    { coat: 0x30261e, hat: 'cap', trousers: 0x24201a },
-    { coat: 0x262a2e, hat: 'cap', moustache: true },
-    { coat: 0x38242a, skirt: true, hat: 'bonnet', hatColor: 0x22161a, height: 1.62 },
-    { coat: 0x2a2c38, skirt: true, hat: 'bonnet', hatColor: 0x1c1c26, height: 1.6 },
-    { coat: 0x1c1f24, hat: 'bowler', cane: true },
-    { coat: 0x322a22, hat: 'cap', apron: 0x8a8272 },
+    { outfit: 'overcoat', coat: 0x1f2228, hat: 'top', moustache: 'kaiser', cane: true, height: 1.8 },
+    { outfit: 'frock', coat: 0x2a2620, vest: 0x3a3226, hat: 'bowler', beard: 'full', hair: 0x4a4038, chain: true, build: 'stout' },
+    { coat: 0x30261e, neck: 'scarf', tie: 0x5a3020, hat: 'cap', trousers: 0x24201a, beard: 'stubble' },
+    { outfit: 'overcoat', coat: 0x262a2e, hat: 'cap', moustache: 'walrus', hair: 0x6a6258 },
+    { outfit: 'dress', coat: 0x38242a, hat: 'bonnet', hatColor: 0x22161a, shawl: 0x4a3a30, height: 1.62 },
+    { outfit: 'dress', coat: 0x2a2c38, hat: 'bonnet', hatColor: 0x1c1c26, collar: 0xe0dacb, build: 'slim', height: 1.6 },
+    { outfit: 'frock', coat: 0x1c1f24, hat: 'bowler', cane: true, beard: 'mutton', eyewear: 'spectacles' },
+    { coat: 0x322a22, neck: 'none', hat: 'cap', apron: 0x8a8272, moustache: 'brush', build: 'stout' },
   ];
   const routes = [
     [[-7.5, -28], [-7.5, -180]],

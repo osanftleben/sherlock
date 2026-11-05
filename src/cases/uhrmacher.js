@@ -82,17 +82,18 @@ export const uhrmacher = {
   },
 
   npcs: [
-    { id: 'martha', location: 'pension', anchor: 'martha', name: 'Martha Kessler', dialog: 'martha', look: { coat: 0x1c1a1e, skirt: true, hair: 0x4a3322, hat: 'none', height: 1.64 } },
-    { id: 'voss', location: 'pension', anchor: 'voss', name: 'Dr. Henriette Voss', dialog: 'voss', look: { coat: 0x2a3440, skirt: true, hair: 0x6a4a30, hat: 'none', height: 1.7, apron: 0xbfb8a4 } },
-    { id: 'piefke', location: 'berlin', anchor: 'vorWerkstatt', name: 'Schutzmann Piefke', dialog: 'piefke', look: { coat: 0x1b2a44, trousers: 0x14181f, hat: 'pickelhaube', moustache: true, hair: 0x2a2018 } },
-    { id: 'krause', location: 'berlin', anchor: 'sophienEcke', name: 'Nachtwächter Krause', dialog: 'krause', look: { coat: 0x2c2820, hat: 'cap', hatColor: 0x1a1812, beard: true, hair: 0x7a7468, cane: true } },
-    { id: 'seidel', location: 'apotheke', anchor: 'seidel', name: 'Apotheker Seidel', dialog: 'seidel', look: { coat: 0xd0cabb, trousers: 0x20201f, hair: 0x8a8478, moustache: true } },
-    { id: 'kluge', location: 'destille', anchor: 'kluge', name: 'Mutter Kluge', dialog: 'kluge', look: { coat: 0x38302a, skirt: true, apron: 0xb0a890, hair: 0x6a6258, height: 1.6 } },
-    { id: 'brandt', location: 'destille', anchor: 'brandt', name: 'Otto Brandt', dialog: 'brandt', look: { coat: 0x32291e, trousers: 0x201c16, hat: 'cap', hatColor: 0x241e16, hair: 0x4a3622, height: 1.72 } },
-    { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { coat: 0x2a2a30, trousers: 0x3a3a40, moustache: true, cane: true, hair: 0x5a5048 } },
-    { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { coat: 0x16181c, trousers: 0x202024, hair: 0x2a241e, moustache: true, height: 1.8 } },
-    { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, hat: 'cap', beard: true }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
-    { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: true }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
+    // Trauerkleid: Ihr Onkel ist eben gestorben.
+    { id: 'martha', location: 'pension', anchor: 'martha', name: 'Martha Kessler', dialog: 'martha', look: { outfit: 'dress', coat: 0x141215, collar: 0x1e1b1f, hair: 0x4a3322, skin: 0xd2ab8c, build: 'slim', height: 1.64 } },
+    { id: 'voss', location: 'pension', anchor: 'voss', name: 'Dr. Henriette Voss', dialog: 'voss', look: { outfit: 'dress', coat: 0x2a3440, collar: 0xe8e2d4, apron: 0xbfb8a4, hair: 0x6a4a30, eyewear: 'pincenez', chain: true, height: 1.7 } },
+    { id: 'piefke', location: 'berlin', anchor: 'vorWerkstatt', name: 'Schutzmann Piefke', dialog: 'piefke', look: { outfit: 'tunic', coat: 0x1b2a44, piping: 0x8a1c1c, trousers: 0x14181f, hat: 'pickelhaube', moustache: 'kaiser', hair: 0x2a2018, sabre: true, build: 'stout' } },
+    { id: 'krause', location: 'berlin', anchor: 'sophienEcke', name: 'Nachtwächter Krause', dialog: 'krause', look: { outfit: 'overcoat', coat: 0x3a3226, cape: true, buttons: 0xb8963f, neck: 'scarf', tie: 0x4a3a2a, hat: 'peaked', hatColor: 0x1a1812, beard: 'full', hair: 0x8a847a, lantern: true, cane: true, build: 'stout' } },
+    { id: 'seidel', location: 'apotheke', anchor: 'seidel', name: 'Apotheker Seidel', dialog: 'seidel', look: { outfit: 'labcoat', coat: 0xd8d2c4, vest: 0x4a4a48, buttons: 0xe8e4da, trousers: 0x20201f, hair: 0x9a948a, hairStyle: 'receding', moustache: 'walrus', eyewear: 'pincenez', build: 'slim' } },
+    { id: 'kluge', location: 'destille', anchor: 'kluge', name: 'Mutter Kluge', dialog: 'kluge', look: { outfit: 'dress', coat: 0x38302a, collar: 0x38302a, apron: 0xb0a890, shawl: 0x5a2a22, hair: 0x7a726a, skin: 0xc49478, build: 'stout', height: 1.6 } },
+    { id: 'brandt', location: 'destille', anchor: 'brandt', name: 'Otto Brandt', dialog: 'brandt', look: { outfit: 'jacket', coat: 0x4a3a26, vest: 0x2a241c, shirt: 0xc8c0aa, neck: 'scarf', tie: 0x7a2a1e, trousers: 0x2a241a, hat: 'cap', hatColor: 0x2a2418, hair: 0x4a3622, beard: 'stubble', glass: true, height: 1.72 } },
+    { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { outfit: 'frock', coat: 0x2a2a30, vest: 0x5a1e22, neck: 'cravat', tie: 0xd8d2c4, trousers: 0x3a3a40, hair: 0x5a5048, hairStyle: 'parted', moustache: 'kaiser', eyewear: 'monocle', cane: 'silver', build: 'slim', height: 1.8 } },
+    { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { outfit: 'frock', coat: 0x16181c, vest: 0x2a2a2e, trousers: 0x202024, hair: 0x2a241e, hairStyle: 'parted', beard: 'mutton', moustache: 'brush', eyewear: 'spectacles', chain: true, height: 1.8 } },
+    { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, neck: 'scarf', tie: 0x3a3428, hat: 'cap', beard: 'full', glass: true, build: 'stout' }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
+    { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: 'walrus', hair: 0x5a5048, glass: true }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
   ],
 
   hotspots: [

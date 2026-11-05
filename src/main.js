@@ -12,7 +12,7 @@ import { Player } from './engine/player.js';
 import { UI } from './ui/ui.js';
 import { buildBerlin } from './world/berlin.js';
 import { buildInteriors } from './world/interiors.js';
-import { idleFigure, makeFigure } from './world/figures.js';
+import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
 import { softDisc } from './world/textures.js';
 import { CASES, FIRST_CASE } from './cases/index.js';
 
@@ -37,6 +37,7 @@ class Game {
     this.ui = new UI(document.getElementById('ui'));
     this.player = new Player(this.view.camera);
     this.locations = {};
+    this.speakers = {};
     this.location = null;
     this.mode = 'loading';
     this.target = null;
@@ -121,6 +122,7 @@ class Game {
       const loc = this.locations[npc.location];
       const a = loc.anchors[npc.anchor];
       const fig = makeFigure(npc.look);
+      if (npc.dialog) this.speakers[npc.dialog] = fig;
       fig.position.copy(a.pos);
       fig.rotation.y = a.yaw;
       loc.scene.add(fig);
@@ -334,6 +336,10 @@ class Game {
       .map((o, i) => ({ ...o, key: `o_${id}_${nodeId}_${i}` }))
       .filter((o) => this.state.check(o.req) && !(o.once && this.state.has(o.key)));
     if (!options.length) options.push({ t: 'Auf Wiedersehen.', end: true });
+    // Die Figur spricht ungefähr so lange, wie man zum Lesen ihrer Zeilen braucht.
+    const speaker = this.speakers[id];
+    const spoken = override || node.text || '';
+    if (speaker) talkFigure(speaker, this.time + Math.min(6, 1.2 + spoken.length * 0.03));
     this.ui.dialog({
       who: node.who || dlg.who,
       obs: override ? null : node.obs,

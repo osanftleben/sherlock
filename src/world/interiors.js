@@ -130,7 +130,7 @@ class Room {
     return { off: bx };
   }
 
-  clock(x, y, z, facing, radius = 0.24, hour = 9, minute = 40) {
+  clock(x, y, z, facing, radius = 0.24, hour = 9, minute = 40, audible = true) {
     const g = new THREE.Group();
     const body = new THREE.Mesh(new THREE.CylinderGeometry(radius + 0.03, radius + 0.03, 0.06, 20), std({ color: 0x3a2412, roughness: 0.5 }));
     body.rotation.x = Math.PI / 2;
@@ -138,14 +138,14 @@ class Room {
     const face = new THREE.Mesh(new THREE.CircleGeometry(radius, 20), new THREE.MeshStandardMaterial({ map: clockFace(hour, minute), roughness: 0.4, emissive: 0x302a20 }));
     face.position.z = 0.032;
     g.add(face);
-    g.userData.ticks = { kind: 'wall', size: radius };
+    if (audible) g.userData.ticks = { kind: 'wall', size: radius };
     g.position.set(x, y, z);
     g.rotation.y = facing;
     this.scene.add(g);
   }
 
   // Wanduhr mit schwingendem Pendel.
-  regulator(x, y, z, facing, seed = 0) {
+  regulator(x, y, z, facing, seed = 0, audible = true) {
     const g = new THREE.Group();
     const bag = new Bag();
     bag.box(0x3a2010, 0.42, 1.2, 0.14, 0, 0, 0);
@@ -165,7 +165,7 @@ class Room {
     pivot.add(bob);
     g.add(pivot);
     // Das Ticken (core/ticking.js) folgt derselben Pendelfrequenz.
-    g.userData.ticks = { kind: 'pendulum', seed };
+    if (audible) g.userData.ticks = { kind: 'pendulum', seed };
     g.position.set(x, y, z);
     g.rotation.y = facing;
     this.scene.add(g);
@@ -314,21 +314,22 @@ function buildWerkstatt() {
   emptyHook.position.set(bx - 1.0 + 4 * 0.4, by + 0.5 - 2 * 0.36 + 0.08, bz + 0.03);
   scene.add(emptyHook);
 
-  // Uhrenwand im Westen
-  let n = 0;
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 5; col++) {
-      const z = -2.6 + col * 1.3 + (row % 2) * 0.35;
-      const y = 1.25 + row * 0.8;
-      if (z > 2.9) continue;
-      if ((row + col) % 3 === 0) room.regulator(-W + 0.09, y, z, Math.PI / 2, n);
-      else room.clock(-W + 0.05, y, z, Math.PI / 2, 0.17 + (n % 3) * 0.05, 9, 39 + (n % 3));
-      n++;
-    }
-  }
+  // Uhrenwand im Westen: drei Regulatoren, dazwischen, darunter und darüber runde
+  // Wanduhren, so gesetzt, dass sich keine zwei Gehäuse berühren.
+  const wallClocks = [
+    ['reg', -2.3, 2.15], ['reg', -0.3, 2.15], ['reg', 1.7, 2.15],
+    ['clk', -1.3, 2.55, 0.24], ['clk', 0.7, 2.55, 0.24],
+    ['clk', -1.3, 1.75, 0.18], ['clk', 0.7, 1.75, 0.18],
+    ['clk', -2.3, 1.05, 0.2], ['clk', -1.3, 1.05, 0.17], ['clk', -0.3, 1.05, 0.2], ['clk', 0.7, 1.05, 0.17], ['clk', 1.7, 1.05, 0.2],
+    ['clk', -2.3, 3.07, 0.15], ['clk', -0.3, 3.07, 0.15], ['clk', 1.7, 3.07, 0.15],
+  ];
+  wallClocks.forEach(([kind, z, y, rad], n) => {
+    if (kind === 'reg') room.regulator(-W + 0.09, y, z, Math.PI / 2, n * 1.7);
+    else room.clock(-W + 0.05, y, z, Math.PI / 2, rad, 9, 38 + (n % 4));
+  });
   loc.anchor('clocks', -W + 0.2, 1.8, 0);
   room.woodBag.box(0x3a2010, 0.4, 2.15, 0.5, -3.3, 1.08, -3.1);
-  room.clock(-3.3, 1.72, -2.84, 0, 0.17);
+  room.clock(-3.3, 1.72, -2.84, 0, 0.17, 9, 40, false);
   room.solid(-3.3, -3.1, 0.4, 0.5);
 
   // Geschirrbord an der Südwand: eine Tasse blitzt sauber.

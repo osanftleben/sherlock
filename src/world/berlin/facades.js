@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Bag, addMesh, box, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
+import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
 import {
   SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
@@ -776,7 +776,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     // Dächer, Massen
     addMesh(scene, merge(roofs), roofMat);
-    const massMat = std({ vertexColors: true, ...plasterTex, roughness: 0.95 });
+    const massMat = matte({ vertexColors: true, ...plasterTex });
     addMesh(scene, massing.build(), massMat);
     // Erker und Balkone in eigenen Meshes, damit die übrigen Häuser unverändert bleiben.
     if (reliefBag.parts.length) addMesh(scene, reliefBag.build(), massMat);

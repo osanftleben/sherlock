@@ -79,6 +79,12 @@ export function std(options) {
   return new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0, ...options });
 }
 
+// Mattes Material für große Flächen (Putz, Ziegel, Schiefer): Lambert statt PBR spart je Bildpunkt
+// die Glanzrechnung für alle Lichter. Die Umgebungskarte der Szene hellt es genauso auf wie `std`.
+export function matte({ roughness, metalness, ...options } = {}) {
+  return new THREE.MeshLambertMaterial(options);
+}
+
 export function addMesh(parent, geo, material, x = 0, y = 0, z = 0) {
   const m = new THREE.Mesh(geo, material);
   m.position.set(x, y, z);

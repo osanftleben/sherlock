@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Bag, addMesh, cyl, merge, std } from '../kit.js';
+import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
 import { brick, fogPuff, signTexture } from '../textures.js';
 import { addSign } from './facades.js';
 
@@ -58,12 +58,12 @@ export function buildRailway(loc, r, brickMat) {
     }
   }
   addMesh(scene, merge(viaductParts), brickMat);
-  addMesh(scene, infill.build(), std({ vertexColors: true, ...brick(), roughness: 0.9 }));
+  addMesh(scene, infill.build(), matte({ vertexColors: true, ...brick() }));
   addMesh(scene, archLights.build(), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.31, 0.09), vertexColors: true }));
   const deck = new Bag();
   const deckW = 49 * SEG;
   deck.box(0x2c2622, deckW, 0.5, VZ1 - VZ0 + 0.8, 0, VH + 0.25, (VZ0 + VZ1) / 2);
-  addMesh(scene, deck.build(), std({ vertexColors: true, roughness: 0.9 }));
+  addMesh(scene, deck.build(), matte({ vertexColors: true }));
   const rails = new Bag();
   for (const z of [VZ0 - 0.2, VZ1 + 0.2]) {
     rails.box(0x15181a, deckW, 0.07, 0.07, 0, VH + 1.45, z);

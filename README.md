@@ -99,6 +99,9 @@ Die Wände der Fensterachsen (je Achse über 200 Dreiecke) werden in `FacadeBatc
 Feldern von `CULL_CELL` Metern (64) in eigene Instanz-Meshes geteilt, damit three.js die Häuser hinter
 der Kamera gar nicht erst zeichnet. Kleinere Felder sparen Dreiecke, kosten aber Zeichenaufrufe;
 größere umgekehrt. Die Scheiben bleiben je Art ein Mesh, weil sie billig sind.
+Große matte Flächen (Putz, Hauskörper, Schiefer, Ziegel, Horizont) nutzen `matte()` aus `kit.js`, also
+Lambert statt PBR. Das spart in 1080p rund 2 ms. Was glänzen oder spiegeln soll (Pflaster, Glas,
+Eisen), bleibt bei `std()`.
 
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Dahinter stehen Kulissen (Abschnitt „Kulissen hinter den Baustellen“ samt Laternen), die nur den Blick

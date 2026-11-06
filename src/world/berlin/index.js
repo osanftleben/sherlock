@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
-import { Bag, addMesh, box, std } from '../kit.js';
+import { Bag, addMesh, box, matte, std } from '../kit.js';
 import { brick, cobble, plaster, signTexture, slate, softDisc, rng } from '../textures.js';
 import { addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
@@ -58,11 +58,11 @@ export function buildBerlin() {
 
   // Materialien
   const plasterTex = plaster();
-  const wallMat = std({ ...plasterTex, vertexColors: true, roughness: 0.92, normalScale: new THREE.Vector2(0.5, 0.5) });
+  const wallMat = matte({ ...plasterTex, vertexColors: true, normalScale: new THREE.Vector2(0.5, 0.5) });
   const darkGlass = std({ color: 0x0b0f16, roughness: 0.18, metalness: 0.5 });
   const litGlass = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.31, 0.09) });
-  const roofMat = std({ ...slate(), roughness: 0.65 });
-  const brickMat = std({ ...brick(), roughness: 0.88 });
+  const roofMat = matte(slate());
+  const brickMat = matte(brick());
   const ironMat = std({ color: 0x0f1211, roughness: 0.55, metalness: 0.5 });
   // Ladensorten je Straße, damit man die Straßen an ihren Läden unterscheidet:
   // Rosenthaler Straße Alltagsbedarf, Sophienstraße Handwerk und Bücher,

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Bag, addMesh, box, cyl, merge, std } from '../kit.js';
+import { Bag, addMesh, box, cyl, matte, merge } from '../kit.js';
 
 // Was man von fern sieht: Häuser jenseits der Spree, Dom, Neue Synagoge.
 export function buildHorizon(loc, r) {
@@ -10,7 +10,7 @@ export function buildHorizon(loc, r) {
     const h = 14 + r() * 8;
     far.box(0x1a1f2a, 18, h, 10, x, h / 2, 118);
   }
-  const silhouette = std({ vertexColors: true, roughness: 1 });
+  const silhouette = matte({ vertexColors: true });
   addMesh(scene, far.build(), silhouette);
   const farLights = new Bag();
   for (let i = 0; i < 60; i++) {

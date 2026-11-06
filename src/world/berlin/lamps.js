@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Bag, cyl, std } from '../kit.js';
+import { Bag, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 
 export function buildLamps(loc, positions, ironMat) {
@@ -22,10 +22,19 @@ export function buildLamps(loc, positions, ironMat) {
   const poolMat = new THREE.MeshBasicMaterial({ map: softDisc('lampPool', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.33)'), color: 0xc77b38, transparent: true, opacity: 0.33, depthWrite: false, blending: THREE.AdditiveBlending });
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, positions.length);
   const glows = [];
-  positions.forEach(([x, z], i) => {
+  const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+  positions.forEach(([x, z, broken], i) => {
     const y = loc.heightAt(x, z);
     m.makeTranslation(x, y, z);
     postMesh.setMatrixAt(i, m);
+    loc.collide(x - 0.14, x + 0.14, z - 0.14, z + 0.14);
+    if (broken) {
+      // Kaputt: kein Licht, kein Schein, das Gehäuse dunkel, eine Scheibe eingeschlagen.
+      glassMesh.setMatrixAt(i, zero);
+      pools.setMatrixAt(i, zero);
+      buildBrokenLamp(scene, x, y, z);
+      return;
+    }
     glassMesh.setMatrixAt(i, m);
     m.makeScale(13, 1, 13).setPosition(x, y + 0.03, z);
     pools.setMatrixAt(i, m);
@@ -34,7 +43,6 @@ export function buildLamps(loc, positions, ironMat) {
     s.scale.setScalar(3.6);
     scene.add(s);
     glows.push({ s, x, z, y, seed: i * 1.7 });
-    loc.collide(x - 0.14, x + 0.14, z - 0.14, z + 0.14);
   });
   postMesh.frustumCulled = glassMesh.frustumCulled = pools.frustumCulled = false;
   scene.add(postMesh, glassMesh, pools);
@@ -71,4 +79,34 @@ export function buildLamps(loc, positions, ironMat) {
       g.s.material.opacity = 0.5 + 0.06 * Math.sin(t * 6 + g.seed);
     }
   });
+}
+
+// Gehäuse einer kaputten Laterne: fünf blinde, verrußte Scheiben, die sechste fehlt.
+// Ihre Scherben liegen noch auf dem Gehweg.
+function buildBrokenLamp(scene, x, y, z) {
+  const panes = [];
+  const shards = [];
+  for (let k = 0; k < 6; k++) {
+    if (k === 2) continue;
+    const a = (k + 0.5) * (Math.PI / 3);
+    // Trapez zwischen den Ringen r = 0,2 oben und 0,13 unten, Höhe 0,55.
+    const g = new THREE.CylinderGeometry(0.2, 0.13, 0.55, 1, 1, true, a - Math.PI / 6, Math.PI / 3);
+    panes.push(g.translate(x, y + 3.8, z));
+  }
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let k = 0; k < 9; k++) {
+    const s = new THREE.Shape();
+    const w = 0.03 + rand() * 0.05;
+    s.moveTo(0, 0);
+    s.lineTo(w, rand() * 0.02);
+    s.lineTo(rand() * w, w * (0.8 + rand()));
+    s.closePath();
+    const g = new THREE.ShapeGeometry(s).rotateX(-Math.PI / 2).rotateY(rand() * Math.PI * 2);
+    const d = 0.15 + rand() * 0.55;
+    const a = rand() * Math.PI * 2;
+    shards.push(g.translate(x + Math.cos(a) * d, y + 0.005, z + Math.sin(a) * d));
+  }
+  const glass = std({ color: 0x1a1c1e, roughness: 0.15, metalness: 0.6, side: THREE.DoubleSide });
+  scene.add(new THREE.Mesh(merge([...panes, ...shards]), glass));
 }

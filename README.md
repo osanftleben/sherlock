@@ -47,11 +47,13 @@ src/
   world/
     berlin/          das Viertel um den Hackeschen Markt
       index.js       Straßenzüge, Eingänge, Anker, Stadtplan
-      facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Erker, Balkone, Gauben, Gehwege
+      facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Erker, Balkone, Gauben, Durchfahrten, Gehwege
+      court.js       Hinterhof hinter der Durchfahrt neben Kesslers Werkstatt
       railway.js     Stadtbahn, Bahnhof Börse, Zug
       plaza.js       Platz: Bäume, Litfaßsäule, Urania-Säule, Achteck
       shopwindows.js Schaufenster und Fenster der Schauplätze von Fall 1
-      lamps.js, traffic.js, weather.js, river.js, horizon.js
+      lamps.js       Gaslaternen, die nächsten sechs werfen Licht; kaputte bleiben dunkel
+      traffic.js, weather.js, river.js, horizon.js
     interiors/       Innenräume, ein Modul je Raum
       index.js       Liste der Räume
       room.js        Grundgerüst eines Raums: Wände, Tür, Möbel, Lampen, Uhren
@@ -117,6 +119,13 @@ zeigen dieselbe Art nur als Schimmer hinter Glas, das ein gemaltes Bild der Nach
 **Erker, Balkone, Gauben:** Häuser aus `row()` bekommen sie nach eigenem Zufall (`planRelief` in
 `facades.js`); Häuser aus `block()` nur mit `relief: true`. Die Schauplätze der Fälle bleiben deshalb
 glatt, und nichts verdeckt ihre Schilder oder Fundstellen.
+
+**Durchfahrten und Höfe:** `row({ …, gate: n })` baut in Achse `n` der Reihe eine Tordurchfahrt mit
+Rundbogen, Gewölbe und offenen Torflügeln, auf der Hofseite dieselbe Achse gedreht. Der Zufall wird
+dabei gezogen wie für die Achse, die dort vorher stand, damit alle übrigen Häuser gleich bleiben. Unter
+dem Gewölbe regnet es nicht (`loc.dry`, höchstens vier Stellen je Viertel). Hofwände entstehen mit
+`courtWall()` aus denselben Fensterachsen, ohne Hauskörper und Dach (Beispiel: `court.js`). Eine Laterne
+wird mit `[x, z, true]` in der Liste der Laternen zur kaputten: kein Licht, eingeschlagene Scheibe.
 
 ## Geschichtlicher Hintergrund
 

@@ -145,6 +145,12 @@ export const uhrmacher = {
       title: 'Extrablatt', give: ['c_extrablatt'],
       text: 'Zwischen Wintergarten und Zirkus Renz klebt ein roter Anschlag, noch feucht: „Bankhaus Lindner & Sohn. Der Aufsichtsrat ordnet zur Beruhigung der Einleger eine außerordentliche Revision an. Beginn: Montag, den 14. November.“ Für Berlin ist das seit dem letzten Jahr kein gutes Wort mehr.',
     } } },
+    // Was Krause beschreibt: die Durchfahrt neben der Werkstatt und die kaputte Laterne davor.
+    // Nur Stimmung, kein Hinweis. Nach Krauses Aussage liest Holmes beides anders.
+    { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['!c_glocke'], action: { say: 'Eine Tordurchfahrt zum Hof, breit genug für einen Bierwagen. Unter dem Gewölbe ist es so finster, dass ich die eigene Hand kaum sehe. Bis zu Kesslers Ladentür sind es vier Schritte.' } },
+    { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['c_glocke'], action: { say: 'Hier kam Krauses Herr heraus. Wer Kesslers Laden verlässt, steht unter der Laterne über der Tür, und die brennt. Vier Schritte weiter, unter diesem Gewölbe, sieht ihn niemand mehr. Er hat hier gewartet, bis die Straße leer war.' } },
+    { location: 'berlin', anchor: 'kaputteLaterne', label: 'Kaputte Laterne', radius: 0.6, range: 4, when: ['!c_glocke'], action: { say: 'Eine Scheibe eingeschlagen, der Brenner kalt, die Scherben liegen noch auf dem Gehweg. Zwischen den brennenden Laternen ist das hier das dunkelste Stück der Rosenthaler Straße.' } },
+    { location: 'berlin', anchor: 'kaputteLaterne', label: 'Kaputte Laterne', radius: 0.6, range: 4, when: ['c_glocke'], action: { say: 'Krauses kaputte Laterne. Hier blieb der Mann stehen und ließ seine Uhr schlagen. Wer die Stunde im Dunkeln hören kann, muss kein Streichholz anreißen, das ihm ins Gesicht leuchtet.' } },
 
     // Bank
     { location: 'bank', anchor: 'zigarren', label: 'Zigarrenkiste', glint: true, radius: 0.25, action: { inspect: {

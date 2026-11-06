@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Bag, addMesh, box, merge, pediment, roofPrism, std } from '../kit.js';
+import { Bag, addMesh, box, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
 import {
   SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
@@ -16,11 +16,14 @@ const SHADE_ALBEDO = 0.07;
 const SHADE_REFLECT = 6;
 // Schmiedeeisen: Handläufe, Ausleger
 const IRON = 0x1a1c1b;
+// Tordurchfahrt zum Hof: lichte Breite und Kämpferhöhe des Rundbogens.
+export const GATE_W = 2.4;
+const GATE_SPRING = 2.75;
 export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a288, 0x8a7a68, 0x9a9488];
 
 function bayParts(type) {
   const W = BAY_W;
-  const H = FLOOR[type === 'shop' || type === 'door' || type === 'display' ? 'ground' : type];
+  const H = FLOOR[type === 'shop' || type === 'door' || type === 'display' || type === 'gate' ? 'ground' : type];
   const wall = new Bag();
   const glass = [];
   const trimC = new THREE.Color(1.22, 1.2, 1.15);
@@ -56,6 +59,39 @@ function bayParts(type) {
     wall.box(trimC, ww * 0.22, 0.14, 0.12, W / 2 - ww / 3, wy - 0.16, 0.06);
     wall.box(trimC, ww * 0.22, 0.14, 0.12, W / 2 + ww / 3, wy - 0.16, 0.06);
   };
+
+  if (type === 'gate') {
+    // Tordurchfahrt: Wand mit Rundbogen bis zum Boden, Bogenrahmen, Kämpfer, Schlussstein.
+    const r = GATE_W / 2;
+    const cx = W / 2;
+    const s = new THREE.Shape();
+    s.moveTo(0, 0);
+    s.lineTo(cx - r, 0);
+    s.lineTo(cx - r, GATE_SPRING);
+    s.absarc(cx, GATE_SPRING, r, Math.PI, 0, true);
+    s.lineTo(cx + r, 0);
+    s.lineTo(W, 0);
+    s.lineTo(W, H);
+    s.lineTo(0, H);
+    s.closePath();
+    const front = new THREE.ExtrudeGeometry(s, { depth: D, bevelEnabled: false, curveSegments: 14 });
+    wall.add(worldUV(front.translate(0, 0, -D), 0.5), 0xffffff);
+    const ring = new THREE.Shape();
+    ring.moveTo(cx + r + 0.22, GATE_SPRING);
+    ring.absarc(cx, GATE_SPRING, r + 0.22, 0, Math.PI, false);
+    ring.lineTo(cx - r, GATE_SPRING);
+    ring.absarc(cx, GATE_SPRING, r, Math.PI, 0, true);
+    ring.closePath();
+    wall.add(worldUV(new THREE.ExtrudeGeometry(ring, { depth: 0.06, bevelEnabled: false, curveSegments: 14 }), 0.5), trimC);
+    for (const sx of [-1, 1]) {
+      // Pfeiler mit Quaderung, darauf der Kämpfer.
+      for (let y = 0.25; y < GATE_SPRING - 0.2; y += 0.5) wall.box(trimC, 0.26, 0.42, 0.05, cx + sx * (r + 0.13), y + 0.21, 0.025);
+      wall.box(trimC, 0.36, 0.16, 0.1, cx + sx * (r + 0.13), GATE_SPRING - 0.08, 0.05);
+      wall.box(stone, cx - r, 0.5, 0.12, sx < 0 ? (cx - r) / 2 : W - (cx - r) / 2, 0.25, 0.06);
+    }
+    wall.box(trimC, 0.34, 0.42, 0.12, cx, GATE_SPRING + r + 0.12, 0.06);
+    return { wall: wall.build(), glass: null };
+  }
 
   if (type === 'ground' || type === 'shop' || type === 'door' || type === 'display') {
     // Sockel mit Quaderung.
@@ -153,7 +189,7 @@ function bayParts(type) {
 class FacadeBatcher {
   constructor() {
     this.types = {};
-    for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic', 'dormer']) {
+    for (const t of ['ground', 'shop', 'display', 'door', 'gate', 'noble', 'upper', 'attic', 'dormer']) {
       this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {}, rooms: [], shades: [] };
     }
   }
@@ -406,6 +442,83 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
+  // Innenleben einer Tordurchfahrt in Hauskoordinaten: x0..x1 lichte Weite, z0 (Straßenseite)
+  // bis z1 (Hofseite). Wände, Tonnengewölbe, Granitspuren im Pflaster, offene Torflügel,
+  // Prellsteine an den Ecken. Kein eigenes Licht: Die Durchfahrt ist nachts dunkel.
+  const buildPassage = ({ base, x0, x1, z0, z1, col }) => {
+    const b = new Bag();
+    const r = (x1 - x0) / 2;
+    const cx = (x0 + x1) / 2;
+    const len = z0 - z1;
+    const cz = (z0 + z1) / 2;
+    const sooty = new THREE.Color(col).multiplyScalar(0.55);
+    for (const sx of [x0 - 0.1, x1 + 0.1]) b.box(sooty, 0.2, GATE_SPRING + 0.02, len, sx, (GATE_SPRING + 0.02) / 2, cz);
+    // Granitsockel gegen die Radnaben.
+    for (const sx of [x0 + 0.04, x1 - 0.04]) b.box(0x55534e, 0.08, 0.55, len, sx, 0.275, cz);
+    const vault = new THREE.CylinderGeometry(r, r, len, 16, 1, true, Math.PI / 2, Math.PI);
+    vault.rotateX(Math.PI / 2).translate(cx, GATE_SPRING, cz);
+    b.add(inward(worldUV(vault, 0.5)), sooty);
+    // Fahrspuren aus Granitplatten, vom Tor bis ein Stück in den Hof.
+    const tz0 = z0 + 0.34;
+    const tz1 = z1 - 0.34 - 1.6;
+    for (const sx of [-0.62, 0.62]) b.box(0x77756f, 0.46, 0.03, tz0 - tz1, cx + sx, 0.015, (tz0 + tz1) / 2);
+    // Torflügel, nach innen an die Wände geklappt, mit Füllungen zur Durchfahrt hin.
+    const wood = 0x2a2219;
+    for (const s of [-1, 1]) {
+      const wx = s < 0 ? x0 + 0.12 : x1 - 0.12;
+      const lz = z0 - 0.06 - r / 2;
+      b.box(wood, 0.07, 2.95, r, wx, 1.475, lz);
+      for (const py of [0.85, 2.15]) b.box(0x342a1e, 0.03, 1.05, r - 0.3, wx - s * 0.05, py, lz);
+    }
+    // Prellsteine an den vier Ecken, auf der Straßenseite auf dem Gehweg.
+    for (const [px, pz, py] of [[x0 - 0.06, 0.2, 0.13], [x1 + 0.06, 0.2, 0.13], [x0 - 0.06, z1 - 0.54, 0], [x1 + 0.06, z1 - 0.54, 0]]) {
+      b.add(new THREE.CylinderGeometry(0.06, 0.17, 0.6, 8).translate(px, py + 0.3, pz), 0x6a6862);
+    }
+    const g = b.build();
+    g.applyMatrix4(base);
+    reliefBag.parts.push(g);
+  };
+
+  // Hofwand: Fensterachsen ohne Hauskörper, Dach und Gehweg, für Hinterhöfe. Eigener Zufall
+  // (courtRand), damit die Häuser an den Straßen bleiben, wie sie sind. ground[i] = null lässt
+  // das Erdgeschoss frei, etwa für die Hofseite einer Tordurchfahrt. Gibt die Lage der Wand zurück.
+  const courtRand = rng(1899);
+  const courtWall = ({ x, z, face, bays, ground = [], color = 0x8c8474, lit = 0.2, floors = 3 }) => {
+    const base = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().makeTranslation(x, 0, z), new THREE.Matrix4().makeRotationY(FACING[face]));
+    const W = bays * BAY_W;
+    const cell = (on) => ({
+      cell: Math.floor(courtRand() * WINDOW_ATLAS.rows) * WINDOW_ATLAS.cols + Math.floor(courtRand() * WINDOW_ATLAS.cols),
+      bright: on ? 0.75 + courtRand() * 0.3 : 0.25 + courtRand(),
+    });
+    const toWorld = (lx0, lx1, lz0, lz1) => {
+      const pts = [[lx0, lz0], [lx1, lz1]].map(([lx, lz]) => new THREE.Vector3(lx, 0, lz).applyMatrix4(base));
+      return [Math.min(pts[0].x, pts[1].x), Math.max(pts[0].x, pts[1].x), Math.min(pts[0].z, pts[1].z), Math.max(pts[0].z, pts[1].z)];
+    };
+    for (let i = 0; i < bays; i++) {
+      const tg = ground[i] === undefined ? 'ground' : ground[i];
+      const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
+      if (tg) {
+        const on = courtRand() < lit;
+        batcher.place(tg, gx, color, on, true, null, tg === 'ground' ? cell(on) : null);
+        loc.collide(...toWorld(i * BAY_W, (i + 1) * BAY_W, -0.34, 0.05));
+      }
+      for (let f = 0; f < floors; f++) {
+        const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, FLOOR.ground + f * FLOOR.upper, 0));
+        const on = courtRand() < lit;
+        batcher.place('upper', m, color, on, true, null, cell(on));
+      }
+    }
+    const H = FLOOR.ground + floors * FLOOR.upper;
+    const cTrim = new THREE.Color(color).multiplyScalar(1.12);
+    const local = new Bag();
+    local.box(cTrim, W, 0.22, 0.2, W / 2, FLOOR.ground + 0.02, 0.08);
+    local.box(cTrim, W, 0.34, 0.36, W / 2, H + 0.15, 0.1);
+    const geo = local.build();
+    geo.applyMatrix4(base);
+    massing.parts.push(geo);
+    return { H, W, base };
+  };
+
   // Schreibt die Texturkoordinaten einer Geometrie auf eine Zelle eines Atlas um.
   const atlasUV = (g, cell, { cols, rows }) => {
     const uv = g.attributes.uv;
@@ -443,7 +556,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   // Schaufenstern Platz für eine Auslage ist. Hinter den übrigen Achsen deckt deren
   // Scheibe oder Tür die Lücke ab.
   // relief: Erker, Balkone und Dachgauben (nur Häuser aus row(), nicht die Schauplätze).
-  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0, relief = false }, bays) => {
+  // gate: Achse im Erdgeschoss, durch die eine Tordurchfahrt in den Hof führt.
+  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0, relief = false, gate = null }, bays) => {
     const rot = FACING[face];
     const R = new THREE.Matrix4().makeRotationY(rot);
     const T = new THREE.Matrix4().makeTranslation(x, 0, z);
@@ -478,8 +592,25 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         const mix = shopMix(p.x, p.z);
         kind = mix[Math.floor(kindRand() * mix.length)];
       }
-      batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
-      if (tGround === 'shop' && shopMix) {
+      if (i === gate) {
+        // Tordurchfahrt. Der Zufall wird gezogen wie für die Achse, die vorher hier stand,
+        // damit alle übrigen Häuser, Fenster und Schilder bleiben, wie sie sind.
+        if (tGround === 'ground') (lit ? room : shade)(0);
+        if (tGround === 'shop' && shopMix) {
+          if (!kind) signRand();
+          if (!inErker(i, 0)) {
+            signRand();
+            if (i > 0 && i < bays - 1) signRand();
+          }
+        }
+        batcher.place('gate', gx, col, false, false);
+        // Hofseite: dieselbe Achse, um 180° gedreht an der Rückwand des Hauses.
+        const back = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation((i + 1) * BAY_W, 0, -depth - 0.34).multiply(new THREE.Matrix4().makeRotationY(Math.PI)));
+        batcher.place('gate', back, col, false, false);
+      } else {
+        batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
+      }
+      if (tGround === 'shop' && shopMix && i !== gate) {
         // Dunkle Läden haben noch keine Sorte: aus eigenem Zufall, damit kindRand bleibt.
         const p = new THREE.Vector3().setFromMatrixPosition(gx);
         const mix = shopMix(p.x, p.z);
@@ -512,9 +643,20 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
     };
     const id = masses.length;
+    // Lichte Weite der Durchfahrt in Hauskoordinaten.
+    const g0 = gate === null ? 0 : (gate + 0.5) * BAY_W - GATE_W / 2;
+    const g1 = g0 + GATE_W;
     if (recess) {
       masses.push({ id, ...rect(0, W, -depth, -0.34 - recess), H: FLOOR.ground, color: cDark });
       masses.push({ id, ...rect(0, W, -depth, -0.34), y0: FLOOR.ground, H, color: cDark });
+    } else if (gate !== null) {
+      // Das Erdgeschoss links und rechts der Achse, darüber das ganze Haus.
+      masses.push({ id, ...rect(0, gate * BAY_W, -depth, -0.34), H: FLOOR.ground, color: cDark });
+      masses.push({ id, ...rect((gate + 1) * BAY_W, W, -depth, -0.34), H: FLOOR.ground, color: cDark });
+      masses.push({ id, ...rect(0, W, -depth, -0.34), y0: FLOOR.ground, H, color: cDark });
+      buildPassage({ base, x0: g0, x1: g1, z0: -0.34, z1: -depth, col });
+      // Unter dem Gewölbe regnet es nicht (weather.js).
+      (loc.dry ??= []).push(rect(g0, g1, -depth - 0.34, -0.2));
     } else {
       masses.push({ id, ...rect(0, W, -depth, -0.34), H, color: cDark });
     }
@@ -553,7 +695,14 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       new THREE.Vector3(lx, 0, lz).applyMatrix4(base));
     const xs = corners.map((c) => c.x);
     const zs = corners.map((c) => c.z);
-    loc.collide(Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs));
+    if (gate === null) loc.collide(Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs));
+    else {
+      // Links und rechts der Durchfahrt, bis hinter die Hofseite des Tors.
+      const a = rect(0, g0, -depth - 0.34, 0);
+      const b = rect(g1, W, -depth - 0.34, 0);
+      loc.collide(a.minX, a.maxX, a.minZ, a.maxZ);
+      loc.collide(b.minX, b.maxX, b.minZ, b.maxZ);
+    }
 
     // Gehweg vor dem Haus samt Bordkante.
     if (sidewalk) {
@@ -575,14 +724,16 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   };
 
   // Reihe zusammenhängender Häuser mit wechselnder Breite und Höhe.
-  const row = ({ x, z, face, bays, rand = r }) => {
+  // gate: Achse der ganzen Reihe mit einer Tordurchfahrt.
+  const row = ({ x, z, face, bays, rand = r, gate = null }) => {
     const rot = FACING[face];
     const dx = Math.cos(rot);
     const dz = -Math.sin(rot);
     let done = 0;
     while (done < bays) {
       const n = Math.min(bays - done, 5 + Math.floor(rand() * 4));
-      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: rand() < 0.3 ? 3 : 4, rand, relief: true }, n);
+      const g = gate !== null && gate >= done && gate < done + n ? gate - done : null;
+      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: rand() < 0.3 ? 3 : 4, rand, relief: true, gate: g }, n);
       done += n;
     }
   };
@@ -636,7 +787,16 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
-  return { block, row, finish };
+  return { block, row, courtWall, finish };
+}
+
+// Kehrt Dreiecke und Normalen um, damit man eine Fläche von innen sieht (Gewölbe).
+function inward(geo) {
+  const idx = geo.index.array;
+  for (let i = 0; i < idx.length; i += 3) [idx[i + 1], idx[i + 2]] = [idx[i + 2], idx[i + 1]];
+  const n = geo.attributes.normal;
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, -n.getX(i), -n.getY(i), -n.getZ(i));
+  return geo;
 }
 
 export function addSign(loc, pos, rotY, texture, w, h) {

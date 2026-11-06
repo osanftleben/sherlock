@@ -7,6 +7,7 @@ import { buildRailway } from './railway.js';
 import { buildHorizon } from './horizon.js';
 import { buildRiver } from './river.js';
 import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
+import { buildCourt } from './court.js';
 import { buildLamps } from './lamps.js';
 import { buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -81,7 +82,8 @@ export function buildBerlin() {
   row({ x: -9, z: -109, face: 'east', bays: 24 }); // bis z = -190
 
   row({ x: 9, z: -190, face: 'west', bays: 25 });
-  row({ x: 9, z: -95, face: 'west', bays: 5 }); // z -95 bis -78
+  // Das Haus neben Kessler hat in seiner letzten Achse die Durchfahrt zum Hof (court.js).
+  row({ x: 9, z: -95, face: 'west', bays: 5, gate: 4 }); // z -95 bis -78
   const kessler = block({ x: 9, z: -78, face: 'west', color: 0x8a8070, ground: ['ground', 'door', 'display', 'display', 'ground', 'ground'], ownGlass: [2, 3], recess: DISPLAY_RECESS }, 6);
   row({ x: 9, z: -57.6, face: 'west', bays: 10 });
 
@@ -123,6 +125,7 @@ export function buildBerlin() {
   row({ x: -187, z: -14, face: 'south', bays: 5, rand: rb });
   row({ x: -171.4, z: -2, face: 'north', bays: 5, rand: rb });
 
+  buildCourt(loc, facades, { brickMat, ironMat });
   facades.finish();
 
   // Fahrbahn: von z = -430 bis unter die Quaikante (44.6), damit sie nicht über der Spree liegt.
@@ -166,6 +169,10 @@ export function buildBerlin() {
   for (const [x, z] of [[6.6, -208], [-6.6, -220], [-18, -240.6], [18, -240.6]]) lampAt(x, z);
   for (const [x, z] of [[132, -97.4], [143, -102.6], [154, -97.4], [165, -102.6], [181.8, -88], [181.8, -112]]) lampAt(x, z);
   lampAt(-176, -11.6);
+  // Die Laterne vor der Durchfahrt neben Kessler ist kaputt („hab’s jemeldet, passiert aber nüscht“).
+  // Sie steht ein Stück weiter nördlich als die Reihe, dicht beim Tor.
+  const broken = lampPositions.findIndex(([x, z]) => x === 6.6 && z === -88);
+  lampPositions[broken] = [6.6, -82.2, true];
   for (let x = 150; x <= 210; x += 20) {
     lampAt(x, 43);
     lampAt(-x, 43);
@@ -314,6 +321,8 @@ export function buildBerlin() {
   const k = kessler.at(0, 0, 1.3);
   loc.anchor('vorWerkstatt', k.x, 0.13, k.z, -Math.PI / 2);
   loc.anchor('sophienEcke', 12.5, 0.13, -96.7, -Math.PI * 0.6);
+  loc.anchor('durchgang', 10.4, 1.6, -79.7);
+  loc.anchor('kaputteLaterne', 6.6, 3.3, -82.2);
   loc.anchor('platz', 9, 0, -7, Math.PI);
 
   // Stadtplan für das Notizbuch.

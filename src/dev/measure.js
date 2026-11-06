@@ -11,6 +11,8 @@ export const POINTS = [
   ['Markt', -12, -4, Math.PI / 2],
   ['Rosenthaler', 0, -60, 0],
   ['Kessler', 3.5, -70, -Math.PI / 2 + 0.55],
+  ['Durchfahrt', 7.5, -79.7, -Math.PI / 2],
+  ['Hof', 24.2, -79.8, -Math.PI / 2 - 0.75],
   ['Sophien', 20, -100, -Math.PI / 2],
   ['Oranienburger', -55, -8, Math.PI / 2],
   ['Viadukt', 0, 14, Math.PI],

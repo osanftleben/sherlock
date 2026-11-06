@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CASE_LIST } from '../cases/index.js';
 
 // Entwicklerwerkzeug: prüft den geladenen Fall gegen die gebauten Orte.
 // Aufruf im Entwicklungsmodus mit http://localhost:5173/?pruefen
@@ -297,12 +298,26 @@ function simulate(c, locations, usable, errors) {
   }
 }
 
-// Ergebnis in der Konsole und als Tafel über dem Spiel.
+// Prüft alle Fälle nacheinander, jeden in der Welt aufgebaut, und stellt danach den
+// vorher aufgebauten Fall wieder her. Ergebnis in der Konsole und als Tafel über dem Spiel.
 export function showCheck(game) {
   const t0 = performance.now();
-  const { errors, warnings, areas } = checkCase(game.case, game.locations);
+  const before = game.case.id;
+  const errors = [];
+  const warnings = [];
+  let areas = {};
+  for (const c of CASE_LIST) {
+    game.useCase(c.id);
+    const prefix = CASE_LIST.length > 1 ? `[${c.title}] ` : '';
+    const r = checkCase(c, game.locations);
+    errors.push(...r.errors.map((e) => prefix + e));
+    warnings.push(...r.warnings.map((w) => prefix + w));
+    areas = r.areas;
+  }
+  game.useCase(before);
   const ms = Math.round(performance.now() - t0);
-  const title = `Fallprüfung „${game.case.title}“: ${errors.length} Fehler, ${warnings.length} Warnungen (${ms} ms)`;
+  const which = CASE_LIST.length > 1 ? `${CASE_LIST.length} Fälle` : `„${CASE_LIST[0].title}“`;
+  const title = `Fallprüfung ${which}: ${errors.length} Fehler, ${warnings.length} Warnungen (${ms} ms)`;
   console.group(title);
   errors.forEach((e) => console.error(e));
   warnings.forEach((w) => console.warn(w));

@@ -20,12 +20,14 @@ export class Location {
 
   // Achsenparallele Rechtecke in der XZ-Ebene.
   collide(minX, maxX, minZ, maxZ) {
-    this.colliders.push({
+    const rect = {
       minX: Math.min(minX, maxX),
       maxX: Math.max(minX, maxX),
       minZ: Math.min(minZ, maxZ),
       maxZ: Math.max(minZ, maxZ),
-    });
+    };
+    this.colliders.push(rect);
+    return rect;
   }
 
   anchor(name, x, y, z, yaw = 0) {
@@ -41,6 +43,16 @@ export class Location {
 
   onUpdate(fn) {
     this.updaters.push(fn);
+    return fn;
+  }
+
+  // Nimmt wieder heraus, was ein Fall hinzugefügt hat; Rückgabewerte von
+  // addHotspot, collide und onUpdate.
+  remove({ hotspot, collider, updater, object }) {
+    if (hotspot) this.hotspots = this.hotspots.filter((s) => s !== hotspot);
+    if (collider) this.colliders = this.colliders.filter((c) => c !== collider);
+    if (updater) this.updaters = this.updaters.filter((f) => f !== updater);
+    if (object) this.scene.remove(object);
   }
 
   update(dt, time, ctx) {

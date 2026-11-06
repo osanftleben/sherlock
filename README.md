@@ -29,7 +29,7 @@ Danach http://localhost:5173 öffnen.
 | M | Stadtplan |
 | Esc | Pause |
 
-Der Spielstand wird automatisch im Browser gespeichert.
+Der Spielstand wird automatisch im Browser gespeichert, für jeden Fall getrennt.
 
 ## Aufbau
 
@@ -55,13 +55,15 @@ Das Projekt braucht keine Bild- oder Audiodateien. Texturen und Klänge entstehe
 
 ## Erweitern
 
-**Neuer Fall:** Eine Datei wie `cases/uhrmacher.js` anlegen und in `cases/index.js` eintragen.
-Ein Fall besteht nur aus Daten: Hinweise, Schlüsse (Hinweispaare), Figuren, Hotspots und Dialoge.
-Figuren und Hotspots hängen an benannten Ankern der Orte (`loc.anchor(...)`). Noch fehlt die
-Fallauswahl: `main.js` lädt nur `FIRST_CASE`, und `applyCase` kann einen Fall nicht wieder entfernen.
+**Neuer Fall:** Eine Datei wie `cases/uhrmacher.js` anlegen und in `CASE_LIST` in `cases/index.js`
+eintragen. Ein Fall besteht nur aus Daten: Hinweise, Schlüsse (Hinweispaare), Figuren, Hotspots und
+Dialoge. Figuren und Hotspots hängen an benannten Ankern der Orte (`loc.anchor(...)`). Mit
+`after: '<id>'` wird ein Fall erst freigegeben, wenn jener gelöst ist. Der Titelbildschirm listet alle
+Fälle; beim Wechsel baut `removeCase` die Figuren und Fundstellen des alten Falls ab und `applyCase`
+die des neuen auf. Jeder Fall hat seinen eigenen Spielstand.
 
-**Fall prüfen:** Bei laufendem `npm run dev` die Adresse http://localhost:5173/?pruefen öffnen. Eine
-Tafel oben rechts und die Browser-Konsole zeigen das Ergebnis:
+**Fall prüfen:** Bei laufendem `npm run dev` die Adresse http://localhost:5173/?pruefen öffnen. Geprüft
+werden alle Fälle nacheinander. Eine Tafel oben rechts und die Browser-Konsole zeigen das Ergebnis:
 
 - *Fehler:* Anker, Dialogziele oder Bedingungen, die ins Leere zeigen. Fundstellen, die von keinem
   begehbaren Standpunkt aus in Reichweite liegen. Hinweise, Schlüsse oder Ziele, die sich beim

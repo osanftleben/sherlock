@@ -86,19 +86,34 @@ export class UI {
     this.layer.append(s);
   }
 
-  title({ canContinue, onNew, onContinue, caseInfo }) {
+  // cases: [{ id, number, title, status: 'neu' | 'begonnen' | 'geloest' | 'gesperrt', current, after }]
+  title({ cases, onNew, onContinue }) {
     this.clear();
     const s = el('div', 'screen');
-    s.append(
-      el('h1', '', 'Sherlock Holmes'),
-      el('h1', '', 'in Berlin'),
-      el('p', 'number', caseInfo.number),
-      el('p', 'sub', caseInfo.title),
-    );
-    const menu = el('div', 'menu');
-    if (canContinue) menu.append(button('Fortsetzen', '', onContinue));
-    menu.append(button('Neues Spiel', '', onNew));
-    s.append(menu);
+    s.append(el('h1', '', 'Sherlock Holmes'), el('h1', '', 'in Berlin'));
+    const list = el('div', 'cases');
+    const STATUS = { neu: '', begonnen: 'Begonnen', geloest: 'Gelöst' };
+    for (const c of cases) {
+      const card = el('div', `case ${c.status}`);
+      card.append(el('p', 'number', c.number), el('p', 'sub', c.title));
+      const menu = el('div', 'menu');
+      if (c.status === 'gesperrt') {
+        card.append(el('p', 'state', `Erst nach „${c.after}“`));
+      } else {
+        if (STATUS[c.status]) card.append(el('p', 'state', STATUS[c.status]));
+        if (c.status === 'neu') {
+          menu.append(button('Beginnen', '', () => onNew(c.id)));
+        } else {
+          menu.append(
+            button(c.status === 'geloest' ? 'Weiter umsehen' : 'Fortsetzen', '', () => onContinue(c.id)),
+            button('Von vorn', '', () => onNew(c.id)),
+          );
+        }
+      }
+      card.append(menu);
+      list.append(card);
+    }
+    s.append(list);
     const controls = el('p', 'controls');
     controls.innerHTML = 'WASD oder Pfeiltasten gehen · Maus schauen · Umschalt laufen<br>E oder Klick untersuchen · N Notizbuch · M Stadtplan · Esc Pause';
     s.append(controls);

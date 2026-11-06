@@ -15,7 +15,7 @@ import { buildBerlin } from './world/berlin.js';
 import { buildInteriors } from './world/interiors.js';
 import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
 import { softDisc } from './world/textures.js';
-import { CASES, FIRST_CASE } from './cases/index.js';
+import { CASES, CASE_LIST, FIRST_CASE } from './cases/index.js';
 
 const RETORTS = [
   'Nein. Das eine erklärt das andere nicht.',
@@ -31,7 +31,7 @@ function nextFrame() {
 
 class Game {
   constructor() {
-    this.state = new GameState();
+    this.state = new GameState(FIRST_CASE);
     this.view = new View(document.getElementById('view'));
     this.input = new Input(this.view.renderer.domElement);
     this.audio = new Audio();
@@ -46,7 +46,8 @@ class Game {
     this.time = 0;
     this.saveTimer = 0;
     this.travelling = false;
-    this.case = CASES[FIRST_CASE];
+    this.case = null;
+    this.caseParts = [];
   }
 
   async init() {
@@ -62,7 +63,8 @@ class Game {
     this.locations[berlin.id] = berlin;
     for (const room of buildInteriors()) this.locations[room.id] = room;
     this.applyEnvironments();
-    this.applyCase(this.case);
+    // Hinter dem Titel steht schon die Welt des zuletzt gespielten Falls.
+    this.applyCase(CASES[this.state.summary().current] || CASES[FIRST_CASE]);
 
     this.input.onKey = (code) => this.onKey(code);
     this.input.onClick = () => this.interact();
@@ -113,13 +115,25 @@ class Game {
     pmrem.dispose();
   }
 
+  // Setzt Fundstellen und Figuren eines Falls in die Orte. Alles Hinzugefügte landet
+  // in `this.caseParts`, damit removeCase es beim Fallwechsel wieder herausnehmen kann.
   applyCase(c) {
+    this.case = c;
+    this.speakers = {};
+    const parts = (this.caseParts = []);
+    const keep = (loc, part) => parts.push({ loc, ...part });
     for (const def of c.hotspots) {
       const loc = this.locations[def.location];
       const a = loc.anchors[def.anchor];
-      if (def.replaces) loc.hotspots = loc.hotspots.filter((s) => s.id !== def.replaces);
+      if (def.replaces) {
+        for (const old of loc.hotspots.filter((s) => s.id === def.replaces)) {
+          loc.remove({ hotspot: old });
+          keep(loc, { restore: old });
+        }
+      }
       const spot = loc.addHotspot({ ...def, pos: a.pos.clone() });
-      if (def.glint) this.addGlint(loc, spot);
+      keep(loc, { hotspot: spot });
+      if (def.glint) keep(loc, this.addGlint(loc, spot));
     }
     for (const npc of c.npcs) {
       const loc = this.locations[npc.location];
@@ -129,17 +143,38 @@ class Game {
       fig.position.copy(a.pos);
       fig.rotation.y = a.yaw;
       loc.scene.add(fig);
-      loc.collide(a.pos.x - 0.28, a.pos.x + 0.28, a.pos.z - 0.28, a.pos.z + 0.28);
-      loc.onUpdate((dt, t, { camera }) => idleFigure(fig, t, camera.position));
-      loc.addHotspot({
-        id: `npc_${npc.id}`,
-        pos: [a.pos.x, a.pos.y + 1.45, a.pos.z],
-        radius: 0.6,
-        range: 3.2,
-        label: npc.name,
-        action: npc.dialog ? { dialog: npc.dialog } : { say: npc.say },
+      keep(loc, {
+        object: fig,
+        collider: loc.collide(a.pos.x - 0.28, a.pos.x + 0.28, a.pos.z - 0.28, a.pos.z + 0.28),
+        updater: loc.onUpdate((dt, t, { camera }) => idleFigure(fig, t, camera.position)),
+        hotspot: loc.addHotspot({
+          id: `npc_${npc.id}`,
+          pos: [a.pos.x, a.pos.y + 1.45, a.pos.z],
+          radius: 0.6,
+          range: 3.2,
+          label: npc.name,
+          action: npc.dialog ? { dialog: npc.dialog } : { say: npc.say },
+        }),
       });
     }
+  }
+
+  removeCase() {
+    for (const { loc, restore, ...part } of this.caseParts || []) {
+      loc.remove(part);
+      if (restore) loc.hotspots.push(restore);
+    }
+    this.caseParts = [];
+    this.speakers = {};
+    this.case = null;
+  }
+
+  // Wechselt den aufgebauten Fall, falls nötig, und lässt die Szenen neu kompilieren.
+  useCase(id) {
+    if (this.case?.id === id) return;
+    this.removeCase();
+    this.applyCase(CASES[id]);
+    for (const loc of Object.values(this.locations)) this.view.renderer.compile(loc.scene, this.view.camera);
   }
 
   // Kleines Funkeln, damit winzige Spuren im Halbdunkel auffindbar bleiben.
@@ -155,11 +190,12 @@ class Game {
     }));
     sprite.position.copy(spot.pos);
     loc.scene.add(sprite);
-    loc.onUpdate((dt, t, { camera }) => {
+    const updater = loc.onUpdate((dt, t, { camera }) => {
       const near = camera.position.distanceTo(spot.pos) < 6.5;
       sprite.visible = near && !(doneKey && this.state.has(doneKey));
       if (sprite.visible) sprite.scale.setScalar(0.075 + 0.03 * Math.sin(t * 3 + spot.pos.x * 5));
     });
+    return { object: sprite, updater };
   }
 
   showTitle() {
@@ -168,20 +204,32 @@ class Game {
     this.input.unlock();
     this.ui.setHud(false);
     this.ui.title({
-      canContinue: GameState.hasSave(),
-      caseInfo: this.case,
-      onNew: () => this.newGame(),
-      onContinue: () => this.continueGame(),
+      cases: this.caseList(),
+      onNew: (id) => this.newGame(id),
+      onContinue: (id) => this.continueGame(id),
     });
     this.enter('berlin', { pos: [0, 0, 10], yaw: 0 });
     this.titleYaw = 0;
   }
 
-  newGame() {
+  // Alle Fälle mit Stand: neu, begonnen, gelöst oder noch gesperrt.
+  caseList() {
+    const { current, cases } = this.state.summary();
+    return CASE_LIST.map((c) => {
+      const saved = cases[c.id];
+      let status = 'neu';
+      if (saved) status = saved.solved ? 'geloest' : 'begonnen';
+      else if (c.after && !cases[c.after]?.solved) status = 'gesperrt';
+      return { id: c.id, number: c.number, title: c.title, status, current: c.id === current, after: c.after && CASES[c.after]?.title };
+    });
+  }
+
+  newGame(id) {
     this.audio.start();
-    GameState.clearSave();
+    this.useCase(id);
+    this.state.clearCase(id);
     this.state.reset();
-    this.state.caseId = this.case.id;
+    this.state.caseId = id;
     this.mode = 'story';
     this.ui.story(this.case.intro, () => {
       this.travel(this.case.start.location, this.locations[this.case.start.location].spawn, () => {
@@ -190,12 +238,13 @@ class Game {
     });
   }
 
-  continueGame() {
+  continueGame(id) {
     this.audio.start();
-    this.state.load();
-    const id = this.state.location && this.locations[this.state.location] ? this.state.location : this.case.start.location;
-    const spawn = this.state.player || this.locations[id].spawn;
-    this.travel(id, spawn, () => this.setPlay());
+    this.useCase(id);
+    this.state.load(id);
+    const loc = this.state.location && this.locations[this.state.location] ? this.state.location : this.case.start.location;
+    const spawn = this.state.player || this.locations[loc].spawn;
+    this.travel(loc, spawn, () => this.setPlay());
   }
 
   enter(id, spawn) {

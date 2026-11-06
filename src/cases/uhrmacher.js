@@ -92,8 +92,9 @@ export const uhrmacher = {
     { id: 'brandt', location: 'destille', anchor: 'brandt', name: 'Otto Brandt', dialog: 'brandt', look: { outfit: 'jacket', coat: 0x4a3a26, vest: 0x2a241c, shirt: 0xc8c0aa, neck: 'scarf', tie: 0x7a2a1e, trousers: 0x2a241a, hat: 'cap', hatColor: 0x2a2418, hair: 0x4a3622, beard: 'stubble', glass: true, height: 1.72 } },
     { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { outfit: 'frock', coat: 0x2a2a30, vest: 0x5a1e22, neck: 'cravat', tie: 0xd8d2c4, trousers: 0x3a3a40, hair: 0x5a5048, hairStyle: 'parted', moustache: 'kaiser', eyewear: 'monocle', cane: 'silver', build: 'slim', height: 1.8 } },
     { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { outfit: 'frock', coat: 0x16181c, vest: 0x2a2a2e, trousers: 0x202024, hair: 0x2a241e, hairStyle: 'parted', beard: 'mutton', moustache: 'brush', eyewear: 'spectacles', chain: true, height: 1.8 } },
-    { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, neck: 'scarf', tie: 0x3a3428, hat: 'cap', beard: 'full', glass: true, build: 'stout' }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
-    { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: 'walrus', hair: 0x5a5048, glass: true }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
+    { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, neck: 'scarf', tie: 0x3a3428, hat: 'cap', beard: 'full', glass: true, build: 'stout', pose: 'sit' }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
+    { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: 'walrus', hair: 0x5a5048, glass: true, pose: 'sit' }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
+    { id: 'gast3', location: 'destille', anchor: 'gast3', name: 'Kartenspieler', look: { outfit: 'jacket', coat: 0x3a3a2c, vest: 0x5a4a2a, neck: 'tie', tie: 0x2a2a24, hair: 0x6a5a48, hairStyle: 'receding', beard: 'mutton', moustache: 'brush', build: 'stout', pose: 'sit' }, say: '„Der Herr Leutnant spielt nur noch uff Ehrenwort. Ick nehm’ lieber Jroschen, die kann man wenigstens zählen.“ Er mischt weiter, ohne aufzusehen.' },
   ],
 
   hotspots: [
@@ -152,6 +153,10 @@ export const uhrmacher = {
     { location: 'bank', anchor: 'tresor', label: 'Tresor', radius: 0.8, action: { say: 'Ein Panzerschrank von Arnheim, Berliner Wertarbeit. Die Tür ist tadellos. Das Unheil wohnt selten im Schloss, meist bei dem, der den Schlüssel hat.' } },
     { location: 'bank', anchor: 'wanduhr', label: 'Wanduhr', radius: 0.5, range: 4, action: { say: 'Eine schöne Regulatoruhr, genau auf die Minute. Der Prokurist schaut oft hinauf.' } },
 
+    // Destille
+    { location: 'destille', anchor: 'tafel', label: 'Kreidetafel', radius: 0.6, range: 3.6, action: { say: 'Molle zehn Pfennig, Korn fünf. Darunter, wer anschreiben lässt: „Herr Leutnant: 14 M. 60“, zweimal unterstrichen. Mutter Kluge gibt Kredit, aber sie vergisst nichts.' } },
+    { location: 'destille', anchor: 'karten', label: 'Kartentisch', radius: 0.5, action: { say: 'Skat, drei Blätter und ein offener Stich. Das Geld liegt beim Gegner. Auf Rathens Seite nur ein Zettel: „Schulde dem Überbringer zwanzig Mark. Ehrenwort. v. R.“ Ein Ehrenwort, das schon gut im Umlauf ist.' } },
+
     // Apotheke
     { location: 'apotheke', anchor: 'jars', label: 'Standgefäße', radius: 1.2, range: 3.6, action: { say: 'Tinct. Opii, Sal Mirabile, Chinin. Eine ganze Wand von Dingen, die heilen oder töten, je nach Löffel.' } },
 
@@ -159,6 +164,9 @@ export const uhrmacher = {
     { location: 'pension', anchor: 'violine', label: 'Violine', radius: 0.35, action: { play: 'violin', say: 'Sie hat nicht den Ton meiner Stradivari, die liegt in der Baker Street, bei einem Mann, der mich für tot hält. Aber sie tut es.' } },
     { location: 'pension', anchor: 'pantoffel', label: 'Persischer Pantoffel', radius: 0.25, action: { say: 'Mein Tabak. Gewisse Gewohnheiten überleben sogar den eigenen Tod. Frau Puhlmann hält das für norwegische Sitte.' } },
     { location: 'pension', anchor: 'labor', label: 'Experimentiertisch', radius: 0.8, action: { say: 'Dr. Voss’ Reagenzien neben meinen. Sie behauptet, ihre seien besser beschriftet. Sie hat recht.' } },
+    { location: 'pension', anchor: 'briefe', label: 'Briefe am Kaminsims', radius: 0.25, action: { say: 'Unbeantwortete Post, mit dem Taschenmesser an den Sims geheftet. Frau Puhlmann nennt das einen Frevel an echtem Marmor. Ich nenne es Ordnung.' } },
+    { location: 'pension', anchor: 'zeitungen', label: 'Zeitungsstapel', radius: 0.35, action: { say: 'Die Vossische, das Tageblatt, der Börsen-Courier. Berlin druckt mehr Zeitungen als London, und alle sind sich nur in einem einig: dass die anderen lügen.' } },
+    { location: 'pension', anchor: 'diplom', label: 'Gerahmtes Diplom', radius: 0.35, action: { say: 'Doctor medicinae, Universität Zürich, mit Auszeichnung. In Preußen hätte man Dr. Voss nicht einmal in den Hörsaal gelassen. Sie hängt das Diplom genau dorthin, wo jeder Besucher es sieht.' } },
     { location: 'pension', anchor: 'buecher', label: 'Bücherregal', radius: 0.9, action: { say: 'Fontane, Virchow, ein Baedeker von Berlin und ein Band über die Tabakaschen, den angeblich ein Toter geschrieben hat.' } },
   ],
 

@@ -52,6 +52,7 @@ class Game {
     await Promise.all([
       document.fonts.load('40px "UnifrakturMaguntia"'),
       document.fonts.load('20px "EB Garamond"'),
+      document.fonts.load('italic 20px "EB Garamond"'),
     ]);
     await nextFrame();
 

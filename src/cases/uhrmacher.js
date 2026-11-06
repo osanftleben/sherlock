@@ -40,6 +40,7 @@ export const uhrmacher = {
     c_aussage: { title: 'Wendts Aussage', text: 'Wendt behauptet, seine Repetieruhr liege noch bei Kessler, er habe sie seit Mittwoch nicht gesehen. Den Freitagabend habe er in der Bank verbracht und sei nie in der Werkstatt gewesen.' },
     c_havanna: { title: 'Wendts Havanna', text: 'Auf Wendts Schreibtisch steht eine Kiste H. Upmann. Die Asche im Becher ist weiß, fest und lang.' },
     c_portier: { title: 'Der Portier', text: 'Portier Lemke schloss am Freitag um acht ab und ging. Wendt behielt den Schlüssel zur Hofpforte, um später selbst zu gehen; wann, weiß niemand. Seit Mittwoch fragte Wendt ihn nach der Zeit, die Uhr sei beim Uhrmacher. Heute früh schlug sie in Wendts Weste.' },
+    c_uhr17: { title: 'Die Uhr Nr. 17', text: 'Wendt musste mir seine Repetieruhr zeigen. Sie schlägt mit demselben hellen Glöckchen, das Krause und Lemke gehört haben. Innen im Rückdeckel steht Kesslers Ritzung „17/92“. Der Staubdeckel darunter ist leer, am Rand klebt ein Rest Siegellack.' },
     c_kette: { title: 'Die Uhrkette', text: 'Wendts Uhrkette spannt sich straff in die Westentasche: An ihrem Ende hängt ein Gewicht. Trotzdem liest er die Zeit von der Wanduhr ab, statt die Tasche zu berühren.' },
   },
 
@@ -56,6 +57,7 @@ export const uhrmacher = {
     d_luege: { title: 'Wendt lügt', pairs: [['c_aussage', 'c_haken'], ['c_aussage', 'c_kette']], text: 'Die Uhr soll noch bei Kessler liegen, aber der Haken ist leer und Wendts Kette trägt ein Gewicht. Er hat sie selbst geholt, und das nur am Freitagabend.' },
     d_alibi: { title: 'Wendts Alibi hat ein Loch', pairs: [['c_aussage', 'c_portier']], text: 'Sein einziger Zeuge ging um acht. Danach saß der Prokurist allein in der Bank, mit dem Schlüssel zur Hofpforte in der Tasche, und bis zur Rosenthaler Straße sind es zehn Minuten. Und die Uhr, die angeblich noch bei Kessler liegt, schlug heute früh in seiner Weste.' },
     d_motiv: { title: 'Das Motiv', pairs: [['c_loesch', 'c_extrablatt']], text: 'Am Montag kommt die Revision. Der Zettel in der Uhr war der Beweis einer Unterschlagung, und Kessler drohte mit der Polizei. Dem Täter blieben drei Tage.' },
+    d_zettel: { title: 'Der Zettel ist fort', pairs: [['c_uhr17', 'c_loesch']], text: 'Kessler schrieb von einem Zettel in der Uhr, und jetzt ist der Staubdeckel leer. Wendt hat ihn am Freitagabend herausgenommen, bevor er die Uhr einsteckte, und dazu die Seite aus dem Reparaturbuch. Nur der Bleistiftabdruck darunter ist ihm entgangen.' },
     d_beweis: { title: 'Der Beweis in der Weste', pairs: [['c_ritz', 'c_kette']], text: 'In Wendts Weste hängt eine Uhr, in deren Gehäuse Kessler „17/92“ geritzt hat. Ein Griff genügt, und seine Aussage ist widerlegt.' },
   },
 
@@ -79,6 +81,7 @@ export const uhrmacher = {
     { until: ['c_chloral'], text: 'Den Bodensatz von Dr. Voss prüfen lassen', hint: 'Bringen Sie mir, was Sie in dieser Tasse gefunden haben, dann weiß ich mehr.' },
     { until: ['c_alibi', 'c_rathen', 'c_glocke', 'c_rezept', 'c_aussage'], text: 'Zeugen und Verdächtige befragen: Goldene Schrippe, Apotheke, Bankhaus, Nachtwächter', hint: 'Sie reden noch nicht mit genug Leuten. Die Schrippe in der Sophienstraße, Seidels Apotheke, das Bankhaus am Markt, und nachts läuft an der Ecke Sophienstraße ein Wächter herum.' },
     { until: ['d_mord', 'd_repetier', 'd_luege', 'd_motiv'], text: 'Hinweise im Notizbuch verknüpfen (N)', hint: 'Sie haben genug Fäden. Verknüpfen Sie im Notizbuch je zwei Hinweise miteinander. Etwa: Was sagt uns der Abdruck im Buch über das, was der Wächter gehört hat?' },
+    { until: ['c_uhr17'], text: 'Wendt mit seiner Uhr stellen', hint: 'Wenn Sie recht haben, trägt der Prokurist den Beweis in der Weste. Lassen Sie ihn die Uhr vorführen. Und fragen Sie vorher Brandt, woran man eine Uhr aus Kesslers Werkstatt erkennt.' },
     { until: ['f_geloest'], text: 'Dr. Voss die Lösung darlegen', hint: 'Mir scheint, Sie sind so weit. Sagen Sie mir, wer es war.' },
   ],
 
@@ -426,7 +429,7 @@ export const uhrmacher = {
 
     wendt: {
       who: 'Reinhold Wendt',
-      start: [{ req: ['f_wendt'], node: 'hub' }, { node: 'a' }],
+      start: [{ req: ['c_uhr17'], node: 'danach' }, { req: ['f_wendt'], node: 'hub' }, { node: 'a' }],
       nodes: {
         a: {
           give: ['f_wendt'],
@@ -444,6 +447,7 @@ export const uhrmacher = {
             { t: 'Was hat es mit der Revision auf sich?', go: 'revision', once: true },
             { t: 'Sie schlafen schlecht, Herr Prokurist.', go: 'schlaf', once: true, req: ['c_rezept'] },
             { t: 'Ihr Portier ging am Freitag um acht.', go: 'portier', once: true, req: ['c_portier'] },
+            { t: 'Herr Prokurist, Ihre Uhr. Lassen Sie sie mich hören.', go: 'stellen', req: ['d_beweis', 'd_repetier', 'c_portier'] },
             { t: 'Danke für Ihre Zeit.', end: true },
           ],
         },
@@ -453,6 +457,14 @@ export const uhrmacher = {
         zigarre: { give: ['c_havanna'], text: 'H. Upmann, bedienen Sie sich. Mein einziges Laster, wie meine Frau sagt.', obs: 'Im Aschenbecher liegt ein Stück Asche, lang, weiß und fest.', opts: [{ t: 'Sehr freundlich, später vielleicht.', go: 'hub' }] },
         revision: { text: 'Eine Beruhigungsmaßnahme für das Publikum. Seit den Zusammenbrüchen des vergangenen Jahres zuckt jeder Einleger zusammen, wenn eine Tür knarrt. Bei uns ist alles in bester Ordnung, und am Montag wird das jeder sehen.', opts: [{ t: 'Daran zweifle ich nicht.', go: 'hub' }] },
         portier: { text: 'Lemke? Gewiss, um acht geht er. Danach war ich allein hier, mit den Büchern. Ist Fleiß neuerdings verdächtig, Herr Sigerson?', obs: 'Er streicht über die Weste, als wolle er sie glätten. Die Kette ist noch immer straff.', opts: [{ t: 'Fleiß nicht.', go: 'hub' }] },
+        stellen: { text: 'Meine Uhr? Ich sagte Ihnen bereits, sie liegt bei Kessler. Ich lasse sie abholen, sobald …', obs: 'Er bricht ab. Die Kette spannt sich über der Weste, und er legt die flache Hand darauf.', opts: [{ t: 'Dann hängt an Ihrer Kette ein auffallend schweres Nichts.', go: 'kette' }] },
+        kette: { text: 'Ein Ersatz. Eine einfache Taschenuhr, für die paar Tage. Ich wüsste nicht, was Sie das angeht.', opts: [{ t: 'Lemke hörte sie heute früh in Ihrer Weste schlagen. Krause hörte sie Freitag um zehn, unter der kaputten Laterne.', go: 'schlag' }] },
+        schlag: { text: '…', obs: 'Eine lange Weile sagt er nichts. Dann zieht er die Uhr aus der Tasche und legt sie auf die Schreibunterlage, als wäre sie heiß: eine goldene Savonnette mit Repetierschieber am Rand.', opts: [{ t: '(Den Repetierschieber ziehen)', go: 'repetition' }] },
+        repetition: { sound: 'repetition', text: 'Das beweist gar nichts. Repetieruhren verkauft jeder Juwelier Unter den Linden.', obs: 'Neun tiefe Schläge, dann dreimal hell und tief: drei Viertel zehn. Und darüber derselbe feine Ton, den Krause für ein Glöckchen hielt.', opts: [{ t: '(Den Rückdeckel aufklappen)', go: 'deckel' }] },
+        deckel: { give: ['c_uhr17'], text: 'Ich … ich habe sie am Freitag abgeholt. Das ist kein Verbrechen.', obs: 'Innen im Rückdeckel, wo kein Kunde hinsieht, eine feine Ritzung: 17/92. Der Staubdeckel darunter ist leer, nur am Rand klebt ein Rest Siegellack.', opts: [{ t: 'Um neun Uhr abends, mit Chloral in der Tasche. Erzählen Sie das morgen Kommissar Lehmann.', go: 'ende' }] },
+        ende: { text: 'Gehen Sie. Bitte, gehen Sie.', obs: 'Er steckt die Uhr nicht wieder ein. Er hält sie in beiden Händen und sieht dem Sekundenzeiger zu. Piefke wird die Nacht über die Hofpforte im Auge behalten; dafür sorge ich auf dem Rückweg.', opts: [{ t: 'Gute Nacht, Herr Prokurist.', end: true }] },
+        danach: { text: 'Ich habe Ihnen nichts mehr zu sagen. Sagen Sie es dem Kommissar.', obs: 'Die Uhr liegt noch immer vor ihm auf der Schreibunterlage. Er hat sie nicht wieder angerührt.', opts: [{ t: 'Eine Frage noch: Ihre Zigarren.', go: 'zigarre2', req: ['!c_havanna'] }, { t: 'Das werde ich.', end: true }] },
+        zigarre2: { give: ['c_havanna'], text: 'H. Upmann. Nehmen Sie die ganze Kiste, wenn Sie wollen. Ich werde sie nicht mehr brauchen.', obs: 'Im Aschenbecher liegt ein Stück Asche, lang, weiß und fest.', opts: [{ t: 'Danke, nein.', end: true }] },
         schlaf: { text: 'Das sieht man mir an? Die Geschäfte. Dr. Lessing verschreibt mir etwas dagegen, Seidel hat es vorrätig. Ich nehme es selten. Sehr selten. Warum fragen Sie?', opts: [{ t: 'Reine Teilnahme.', go: 'hub' }] },
       },
     },
@@ -499,7 +511,7 @@ export const uhrmacher = {
       },
     ],
     epilogue: [
-      'Sonntagmorgen, Bankhaus Lindner & Sohn. Kommissar Lehmann ist übernächtigt und schlecht gelaunt, bis Schutzmann Piefke dem Prokuristen die Uhr aus der Weste zieht. Mit einer Lupe liest Otto Brandt, nüchtern zum ersten Mal seit acht Tagen, die winzige Ritzung im Gehäuse vor: 17/92.',
+      'Sonntagmorgen, Bankhaus Lindner & Sohn. Kommissar Lehmann ist übernächtigt und schlecht gelaunt, bis Schutzmann Piefke die goldene Repetieruhr des Prokuristen vor ihn auf den Tisch legt. Mit einer Lupe liest Otto Brandt, nüchtern zum ersten Mal seit acht Tagen, die winzige Ritzung im Gehäuse vor: 17/92.',
       'Wendt schweigt noch eine Stunde. Dann gesteht er: 86.000 Mark aus Kundendepots, verspekuliert an der Börse, dreihundert Schritt von seinem Schreibtisch entfernt. Die Depotnummern hatte er im Staubdeckel notiert, weil er seinen eigenen Büchern nicht mehr traute. Das Schlagwerk hakte, und er vergaß den Zettel, als er die Uhr zur Reparatur gab. Kessler war kein Mann, der einen solchen Zettel übersah.',
       'Martha Kessler führt die Werkstatt weiter. Otto Brandt zieht jeden Freitag um acht die Uhren auf, und er ist dabei nüchtern.',
       'Nach London dringt davon nichts. Der Name Sigerson steht in keiner Akte: Dafür hat Lehmann gesorgt, der den Ruhm gern allein trägt.',

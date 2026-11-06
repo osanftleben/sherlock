@@ -158,9 +158,20 @@ export class Audio {
     }
   }
 
-  // Die Repetieruhr selbst, nur für Krauses Aussage.
+  // Die Repetieruhr, wie Krause und Lemke sie hören: nur das helle Glöckchen.
   repeater() {
     for (let i = 0; i < 3; i++) this.tone({ freq: 2093, dur: 0.5, gain: 0.05, when: i * 0.32 });
+  }
+
+  // Dieselbe Uhr in der Hand, Viertelrepetition: neun Stundenschläge auf der tiefen Tonfeder,
+  // dann drei Viertel als Doppelschlag hell–tief. Drei Viertel zehn.
+  repetition() {
+    for (let i = 0; i < 9; i++) this.tone({ freq: 1397, dur: 0.6, gain: 0.05, when: i * 0.42 });
+    for (let i = 0; i < 3; i++) {
+      const when = 9 * 0.42 + 0.5 + i * 0.5;
+      this.tone({ freq: 2093, dur: 0.45, gain: 0.05, when });
+      this.tone({ freq: 1397, dur: 0.5, gain: 0.05, when: when + 0.17 });
+    }
   }
 
   chime() {

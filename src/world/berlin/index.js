@@ -9,7 +9,7 @@ import { buildRiver } from './river.js';
 import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { buildLamps } from './lamps.js';
-import { buildPlaza } from './plaza.js';
+import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
 import { buildWeather } from './weather.js';
 
@@ -167,6 +167,9 @@ export function buildBerlin() {
   }
   // Am Platz und unter dem Viadukt
   for (const [x, z] of [[-29.4, -21.6], [29.4, -21.6], [-29.4, 14], [29.4, 14], [-14, -21.6], [14, -21.6], [-8, 15], [8, 15], [29.4, -4]]) lampAt(x, z);
+  // Zwei Laternen links und rechts vom Brunnen, damit die Mitte des Platzes nicht im Dunkeln liegt.
+  lampAt(FOUNTAIN.x - FOUNTAIN.r - 0.9, FOUNTAIN.z);
+  lampAt(FOUNTAIN.x + FOUNTAIN.r + 0.9, FOUNTAIN.z);
   for (let x = -130; x <= 130; x += 20) lampAt(x, 43);
   // Hinter den Sperren: Die Laternen gehen weiter, bis der Nebel sie schluckt.
   for (const [x, z] of [[6.6, -208], [-6.6, -220], [-18, -240.6], [18, -240.6]]) lampAt(x, z);

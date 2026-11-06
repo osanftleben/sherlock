@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { Bag, std } from '../kit.js';
 import { makeFigure, makeHorse, trotHorse, walkFigure } from '../figures.js';
+import { rng } from '../textures.js';
 
-export function makeDroschke() {
+export function makeDroschke({ driver: withDriver = true } = {}) {
   const g = new THREE.Group();
   const mat = std({ vertexColors: true, roughness: 0.4, metalness: 0.2 });
   const body = new Bag();
@@ -36,9 +37,11 @@ export function makeDroschke() {
   lantern.position.set(0.82, 1.5, 0.15);
   g.add(lantern);
   // Kutscher sitzt auf dem Bock (Oberkante 1.07).
-  const driver = makeFigure({ outfit: 'overcoat', cape: true, coat: 0x24201a, hat: 'top', hatColor: 0x18140f, moustache: 'walrus', pose: 'sit' });
-  driver.position.set(0, 0.2, 0.15);
-  g.add(driver);
+  if (withDriver) {
+    const driver = makeFigure({ outfit: 'overcoat', cape: true, coat: 0x24201a, hat: 'top', hatColor: 0x18140f, moustache: 'walrus', pose: 'sit' });
+    driver.position.set(0, 0.2, 0.15);
+    g.add(driver);
+  }
   const horse = makeHorse(0x30221a);
   horse.position.set(0, 0, 3.0);
   g.add(horse);
@@ -107,14 +110,22 @@ export function buildTraffic(loc, r) {
     [[-24, -18], [24, -18]],
     [[20, 12], [-20, 12]],
     [[-90, 40], [80, 40]],
-    [[-3, 35], [-3, -20]],
+    // Durch den Viaduktbogen bis vor den Brunnen (plaza.js).
+    [[-3, 35], [-3, 0]],
+    // Quer über den Platz, am Brunnen vorbei, und an der Urania-Säule entlang.
+    [[-20, -9], [20, -12]],
+    [[10, -20], [10, 4]],
   ];
+  // Die Passanten nach den ersten zwölf ziehen aus eigenem Zufall, damit r für das Wetter
+  // danach bleibt, wie es war.
+  const rw = rng(1894);
   const walkers = routes.map((route, i) => {
     const fig = makeFigure(looks[i % looks.length]);
     const from = new THREE.Vector2(route[0][0], route[0][1]);
     const to = new THREE.Vector2(route[1][0], route[1][1]);
     const len = from.distanceTo(to);
-    const w = { fig, from, to, len, s: r() * len, dir: 1, phase: r() * 6, speed: 1.05 + r() * 0.4 };
+    const rr = i < 12 ? r : rw;
+    const w = { fig, from, to, len, s: rr() * len, dir: 1, phase: rr() * 6, speed: 1.05 + rr() * 0.4 };
     scene.add(fig);
     return w;
   });

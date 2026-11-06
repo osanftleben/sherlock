@@ -96,42 +96,45 @@ class Glow extends UnrealBloomPass {
   }
 }
 
-// Misst die GPU-Zeit ganzer Bilder (wo der Browser Zeitabfragen erlaubt, sonst null).
+// Misst die GPU-Zeit einzelner Durchgänge (wo der Browser Zeitabfragen erlaubt).
+// Abfragen sind asynchron: Ergebnisse kommen ein paar Bilder später über poll().
 class GpuClock {
   constructor(gl) {
     this.gl = gl;
     this.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
     this.pending = [];
-    this.query = null;
+    this.active = null;
   }
 
-  begin() {
-    if (!this.ext || this.pending.length > 6) return;
-    this.query = this.gl.createQuery();
-    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.query);
+  begin(label) {
+    if (!this.ext || this.pending.length > 24) return;
+    this.active = { label, query: this.gl.createQuery() };
+    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.active.query);
   }
 
   end() {
-    if (!this.query) return;
+    if (!this.active) return;
     this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
-    this.pending.push(this.query);
-    this.query = null;
+    this.pending.push(this.active);
+    this.active = null;
   }
 
-  // Fertige Messungen in Millisekunden, älteste zuerst.
+  // Fertige Messungen als { label, ms }, älteste zuerst.
   poll() {
     const { gl, ext } = this;
     const out = [];
     if (!ext) return out;
     const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
-    while (this.pending.length && gl.getQueryParameter(this.pending[0], gl.QUERY_RESULT_AVAILABLE)) {
-      const q = this.pending.shift();
-      if (!disjoint) out.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
-      gl.deleteQuery(q);
+    while (this.pending.length && gl.getQueryParameter(this.pending[0].query, gl.QUERY_RESULT_AVAILABLE)) {
+      const { label, query } = this.pending.shift();
+      if (!disjoint) out.push({ label, ms: gl.getQueryParameter(query, gl.QUERY_RESULT) / 1e6 });
+      gl.deleteQuery(query);
     }
     return out;
   }
 }
+
+export const STAGES = ['Szene', 'Leuchten', 'Schluss'];
 
 // Ziel: mindestens 60 Bilder je Sekunde (16,7 ms). Die Grafikkarte bekommt 13,5 ms je Bild, der Rest bleibt
 // für Browser und Bildschirmausgabe.
@@ -164,6 +167,10 @@ export class View {
     this.clock = new GpuClock(this.renderer.getContext());
     this.gpuMs = 0;
     this.sample = { time: 0, sum: 0, n: 0, slow: 0, frames: 0 };
+    // Für Messwerkzeuge: Rückruf je fertiger GPU-Messung, Zeichenaufrufe und Dreiecke der Szene.
+    this.onTiming = null;
+    this.sceneInfo = { calls: 0, triangles: 0 };
+    this.locked = false;
     this.resize();
     addEventListener('resize', () => this.resize());
   }
@@ -197,14 +204,18 @@ export class View {
   // Reicht die kleinste Auflösung nicht, fällt das Leuchten weg.
   adapt(dt) {
     const s = this.sample;
-    for (const ms of this.clock.poll()) {
-      s.sum += ms;
-      s.n++;
+    for (const t of this.clock.poll()) {
+      s.sum += t.ms;
+      if (t.label === 'Schluss') s.n++;
+      if (this.onTiming) this.onTiming(t);
     }
     s.time += dt;
     s.frames++;
     if (dt > 1 / 50) s.slow++;
-    if (s.time < 0.5) return;
+    if (s.time < 0.5 || this.locked) {
+      if (this.locked) Object.assign(s, { time: 0, sum: 0, n: 0, slow: 0, frames: 0 });
+      return;
+    }
 
     let scale = this.scale;
     if (this.clock.ext) {
@@ -227,23 +238,41 @@ export class View {
     }
   }
 
+  // Für Messungen: feste innere Auflösung, Regelung aus. lockScale(null) gibt sie wieder frei.
+  lockScale(scale) {
+    this.locked = scale !== null;
+    if (this.locked) {
+      this.scale = scale;
+      this.glow.enabled = true;
+      this.sizeScene();
+    }
+  }
+
   render(dt, time) {
     const r = this.renderer;
     this.fade += (this.fadeTarget - this.fade) * Math.min(1, dt * 5);
 
-    this.clock.begin();
+    this.clock.begin('Szene');
     r.setRenderTarget(this.target);
     r.render(this.scene, this.camera);
+    this.clock.end();
+    this.sceneInfo.calls = r.info.render.calls;
+    this.sceneInfo.triangles = r.info.render.triangles;
 
     const clear = r.autoClear;
     r.autoClear = false;
-    if (this.glow.enabled) this.glow.draw(r, this.target);
+    if (this.glow.enabled) {
+      this.clock.begin('Leuchten');
+      this.glow.draw(r, this.target);
+      this.clock.end();
+    }
 
     const u = this.final.uniforms;
     u.glow.value = this.glow.enabled ? 1 : 0;
     u.toneMappingExposure.value = this.exposure;
     u.fade.value = this.fade;
     u.time.value = time % 10;
+    this.clock.begin('Schluss');
     r.setRenderTarget(null);
     this.quad.render(r);
     this.clock.end();

@@ -571,6 +571,10 @@ game.init().then(() => {
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('pruefen')) {
     import('./dev/checkCase.js').then((m) => m.showCheck(game));
   }
+  // Entwicklerwerkzeug: http://localhost:5173/?messen misst die Darstellungskosten an festen Standpunkten.
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('messen')) {
+    import('./dev/measure.js').then((m) => m.showMeasure(game));
+  }
 }).catch((err) => {
   console.error(err);
   document.getElementById('ui').textContent = `Das Spiel konnte nicht starten: ${err.message}`;

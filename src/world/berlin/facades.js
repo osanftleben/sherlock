@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, merge, pediment, roofPrism, std } from '../kit.js';
-import { WINDOW_ATLAS, pavement, rng, shopDisplay, shopShutter, windowAtlas } from '../textures.js';
+import { WINDOW_ATLAS, pavement, railing, rng, shopDisplay, shopShutter, windowAtlas } from '../textures.js';
 
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
 export const BAY_W = 3.4;
 export const FLOOR = { ground: 4.4, noble: 3.9, upper: 3.5, attic: 2.9 };
 // So weit springt ein Erker vor die Fassade.
 const ERKER_OUT = 0.75;
+// Höhe der Balkongitter unter dem Handlauf.
+const RAIL_H = 0.92;
 export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a288, 0x8a7a68, 0x9a9488];
 
 function bayParts(type) {
@@ -302,15 +304,20 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     const wall = new Bag();
     const iron = new Bag();
     const IRON = 0x1a1c1b;
-    // Schmiedeeisernes Gitter entlang einer achsparallelen Strecke, Unterkante y.
-    const railing = (xa, za, xb, zb, y) => {
+    // Schmiedeeisernes Gitter entlang einer achsparallelen Strecke, Unterkante y: eine Fläche
+    // mit ausgestanztem Gitterbild (railing), darauf ein echter Handlauf.
+    const rail = (xa, za, xb, zb, y) => {
       const len = Math.hypot(xb - xa, zb - za);
       const alongX = Math.abs(xb - xa) > Math.abs(zb - za);
-      for (const yy of [y + 0.05, y + 0.92]) {
-        iron.box(IRON, alongX ? len : 0.05, 0.05, alongX ? 0.05 : len, (xa + xb) / 2, yy, (za + zb) / 2);
-      }
-      const k = Math.max(2, Math.round(len / 0.13));
-      for (let j = 0; j <= k; j++) iron.box(IRON, 0.025, 0.84, 0.025, xa + ((xb - xa) * j) / k, y + 0.48, za + ((zb - za) * j) / k);
+      const g = new THREE.PlaneGeometry(len, RAIL_H);
+      // Ganze Kacheln zu 0,5 m, damit an beiden Enden ein Stab steht.
+      const tiles = Math.max(1, Math.round(len / 0.5));
+      const uv = g.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * tiles);
+      if (!alongX) g.rotateY(Math.PI / 2);
+      g.translate((xa + xb) / 2, y + RAIL_H / 2, (za + zb) / 2);
+      iron.add(g, 0xffffff);
+      wall.box(IRON, alongX ? len + 0.04 : 0.06, 0.05, alongX ? 0.06 : len + 0.04, (xa + xb) / 2, y + RAIL_H + 0.025, (za + zb) / 2);
     };
 
     if (erker) {
@@ -334,9 +341,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       for (const by of bands.slice(0, -1)) wall.box(cTrim, w + 0.02, 0.1, 0.1, mid, by, E + 0.04);
       wall.box(cTrim, w + 0.16, 0.24, E + 0.2, mid, top + 0.06, (E + 0.2) / 2);
       const ry = top + 0.18;
-      railing(x0 + 0.05, E + 0.12, x1 - 0.05, E + 0.12, ry);
-      railing(x0 + 0.05, 0.05, x0 + 0.05, E + 0.12, ry);
-      railing(x1 - 0.05, 0.05, x1 - 0.05, E + 0.12, ry);
+      rail(x0 + 0.05, E + 0.12, x1 - 0.05, E + 0.12, ry);
+      rail(x0 + 0.05, 0.05, x0 + 0.05, E + 0.12, ry);
+      rail(x1 - 0.05, 0.05, x1 - 0.05, E + 0.12, ry);
     }
 
     // Balkon vor dem Fenster der Beletage: Steinplatte auf zwei Konsolen, Eisengitter.
@@ -347,9 +354,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       const d = 0.85;
       wall.box(cTrim, w, 0.16, d, cx, y - 0.08, d / 2);
       for (const s of [-1, 1]) wall.box(cTrim, 0.22, 0.34, d - 0.1, cx + s * (w / 2 - 0.25), y - 0.33, (d - 0.1) / 2);
-      railing(cx - w / 2 + 0.05, d - 0.05, cx + w / 2 - 0.05, d - 0.05, y);
-      railing(cx - w / 2 + 0.05, 0.05, cx - w / 2 + 0.05, d - 0.05, y);
-      railing(cx + w / 2 - 0.05, 0.05, cx + w / 2 - 0.05, d - 0.05, y);
+      rail(cx - w / 2 + 0.05, d - 0.05, cx + w / 2 - 0.05, d - 0.05, y);
+      rail(cx - w / 2 + 0.05, 0.05, cx - w / 2 + 0.05, d - 0.05, y);
+      rail(cx + w / 2 - 0.05, 0.05, cx + w / 2 - 0.05, d - 0.05, y);
     }
 
     // Gauben auf der steilen Vorderseite des Dachs; ihr Fuß steckt im Dach.
@@ -534,7 +541,11 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     addMesh(scene, massing.build(), massMat);
     // Erker und Balkone in eigenen Meshes, damit die übrigen Häuser unverändert bleiben.
     if (reliefBag.parts.length) addMesh(scene, reliefBag.build(), massMat);
-    if (ironBag.parts.length) addMesh(scene, ironBag.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }));
+    // Gitter: Alpha bestimmt die Abdeckung der Multisampling-Proben (alphaToCoverage). Aus der
+    // Ferne wird das Gitter so zu einem halb durchscheinenden dunklen Band, statt zu verschwinden.
+    if (ironBag.parts.length) {
+      addMesh(scene, ironBag.build(), std({ map: railing(), vertexColors: true, roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide, alphaToCoverage: true }));
+    }
   };
 
   return { block, row, finish };

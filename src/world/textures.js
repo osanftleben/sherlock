@@ -1759,3 +1759,62 @@ export function windowAtlas() {
     return { map, avg: new THREE.Color(sum[0] / n, sum[1] / n, sum[2] / n) };
   });
 }
+
+// Schmiedeeisernes Balkongitter, ausgestanzt: Grund durchsichtig. Eine Kachel ist 0,5 m breit
+// und 0,92 m hoch: Stäbe alle 12,5 cm, oben ein Fries aus Ringen, in der Mitte S-Voluten,
+// unten ein Fußband. Die Kachel beginnt und endet mit einem Stab, so stehen an jedem Ende Pfosten.
+export function railing() {
+  return cached('railing', () => {
+    const w = 256;
+    const h = 512;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    const iron = '#1c201e';
+    ctx.fillStyle = iron;
+    ctx.strokeStyle = iron;
+    // Stäbe, die äußeren halb, damit sich Kacheln zu einem ganzen Stab fügen
+    for (let x = 0; x <= w; x += 64) ctx.fillRect(x - 5, 0, 10, h);
+    // Riegel oben, unter dem Fries und unten
+    ctx.fillRect(0, 0, w, 12);
+    ctx.fillRect(0, 86, w, 10);
+    ctx.fillRect(0, h - 24, w, 24);
+    ctx.fillRect(0, h - 64, w, 8);
+    // Fries aus Ringen
+    ctx.lineWidth = 7;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.arc(32 + k * 64, 49, 25, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // S-Voluten in jedem zweiten Feld, im anderen eine Raute
+    ctx.lineWidth = 6;
+    for (let k = 0; k < 4; k++) {
+      const cx = 32 + k * 64;
+      ctx.beginPath();
+      if (k % 2) {
+        ctx.arc(cx, 250, 20, Math.PI * 0.5, Math.PI * 2);
+        ctx.moveTo(cx + 20, 290);
+        ctx.arc(cx, 290, 20, 0, Math.PI * 1.5, true);
+      } else {
+        ctx.moveTo(cx, 220);
+        ctx.lineTo(cx + 22, 270);
+        ctx.lineTo(cx, 320);
+        ctx.lineTo(cx - 22, 270);
+        ctx.closePath();
+      }
+      ctx.stroke();
+    }
+    // Kleine Ringe im Fußband
+    ctx.lineWidth = 5;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.arc(32 + k * 64, h - 40, 11, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}

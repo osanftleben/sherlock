@@ -19,6 +19,8 @@ const IRON = 0x1a1c1b;
 // Tordurchfahrt zum Hof: lichte Breite und Kämpferhöhe des Rundbogens.
 export const GATE_W = 2.4;
 const GATE_SPRING = 2.75;
+// Kantenlänge der Zellen, in die die Fensterachsen für das Culling geteilt werden.
+const CULL_CELL = 64;
 export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a288, 0x8a7a68, 0x9a9488];
 
 function bayParts(type) {
@@ -207,42 +209,50 @@ class FacadeBatcher {
     else (lit ? t.lit : t.dark).push(matrix);
   }
 
+  // Die Wände der Achsen (über 200 Dreiecke je Achse) werden nach Zellen des Stadtgrundrisses
+  // (CULL_CELL) in eigene Instanz-Meshes geteilt. Jedes kennt seine Hüllkugel, so zeichnet three.js
+  // nur die Zellen im Blickfeld statt aller Achsen des Viertels, auch der hinter der Kamera.
+  // Die Scheiben (12 Dreiecke) bleiben je Art ein Mesh: Mehr Zeichenaufrufe kosten dort mehr,
+  // als das Culling spart.
   build(scene, wallMat, darkGlass, litGlass) {
     const color = new THREE.Color();
     // Geschlossene Läden haben Klappläden, erleuchtete zeigen ihre Auslage.
     const shutter = std({ map: shopShutter(), roughness: 0.85 });
     const displayTint = new THREE.Color(0.95, 0.85, 0.7);
-    for (const [name, t] of Object.entries(this.types)) {
-      if (t.walls.length) {
-        const mesh = new THREE.InstancedMesh(t.parts.wall, wallMat, t.walls.length);
-        t.walls.forEach((w, i) => {
-          mesh.setMatrixAt(i, w.matrix);
-          mesh.setColorAt(i, color.set(w.color));
-        });
-        mesh.frustumCulled = false;
+    const chunks = (list) => {
+      const cells = new Map();
+      for (const e of list) {
+        const m = (e.matrix ?? e).elements;
+        const key = `${Math.floor(m[12] / CULL_CELL)},${Math.floor(m[14] / CULL_CELL)}`;
+        if (!cells.has(key)) cells.set(key, []);
+        cells.get(key).push(e);
+      }
+      return cells.values();
+    };
+    const add = (list, geo, mat, fill, split = false) => {
+      if (!list.length) return;
+      for (const part of split ? chunks(list) : [list]) {
+        const mesh = new THREE.InstancedMesh(geo(part), mat, part.length);
+        part.forEach((e, i) => fill(mesh, e, i));
+        mesh.computeBoundingSphere();
         scene.add(mesh);
       }
+    };
+    for (const [name, t] of Object.entries(this.types)) {
+      add(t.walls, () => t.parts.wall, wallMat, (mesh, w, i) => {
+        mesh.setMatrixAt(i, w.matrix);
+        mesh.setColorAt(i, color.set(w.color));
+      }, true);
       const lists = [[t.dark, name === 'shop' ? shutter : darkGlass], [t.lit, litGlass]];
       for (const [kind, list] of Object.entries(t.kinds)) lists.push([list, new THREE.MeshBasicMaterial({ map: shopDisplay(kind), color: displayTint })]);
-      for (const [list, mat] of lists) {
-        if (!list.length) continue;
-        const mesh = new THREE.InstancedMesh(t.parts.glass, mat, list.length);
-        list.forEach((m, i) => mesh.setMatrixAt(i, m));
-        mesh.frustumCulled = false;
-        scene.add(mesh);
-      }
+      for (const [list, mat] of lists) add(list, () => t.parts.glass, mat, (mesh, m, i) => mesh.setMatrixAt(i, m));
       for (const [list, mat] of [[t.rooms, roomMaterial(litGlass)], [t.shades, shadeMaterial()]]) {
-        if (!list.length) continue;
-        // Eigene Kopie der Scheibe, weil nur diese Instanzen eine Atlaszelle tragen.
-        const geo = t.parts.glass.clone();
-        geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(list.map((w) => w.cell)), 1));
-        const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-        list.forEach((w, i) => {
+        // Eigene Kopie der Scheibe je Zelle, weil nur diese Instanzen eine Atlaszelle tragen.
+        const geo = (part) => t.parts.glass.clone().setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(part.map((w) => w.cell)), 1));
+        add(list, geo, mat, (mesh, w, i) => {
           mesh.setMatrixAt(i, w.matrix);
           mesh.setColorAt(i, color.setScalar(w.bright));
         });
-        mesh.frustumCulled = false;
-        scene.add(mesh);
       }
     }
   }

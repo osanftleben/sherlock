@@ -95,6 +95,10 @@ Optik und Texte prüft das nicht. Bedingungen der Form `!id` wertet die Simulati
 öffnen (Browserfenster sichtbar lassen). Gemessen wird an festen Standpunkten in 1920 × 1080 bei
 voller innerer Auflösung: GPU-Zeit je Durchgang (Szene, Leuchten, Schlussbild), Bildrate,
 Zeichenaufrufe und Dreiecke.
+Die Wände der Fensterachsen (je Achse über 200 Dreiecke) werden in `FacadeBatcher.build()` nach
+Feldern von `CULL_CELL` Metern (64) in eigene Instanz-Meshes geteilt, damit three.js die Häuser hinter
+der Kamera gar nicht erst zeichnet. Kleinere Felder sparen Dreiecke, kosten aber Zeichenaufrufe;
+größere umgekehrt. Die Scheiben bleiben je Art ein Mesh, weil sie billig sind.
 
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Dahinter stehen Kulissen (Abschnitt „Kulissen hinter den Baustellen“ samt Laternen), die nur den Blick

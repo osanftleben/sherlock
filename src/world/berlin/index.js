@@ -99,9 +99,13 @@ export function buildBerlin() {
   // --- Hackescher Markt -------------------------------------------------------
   row({ x: -32, z: -24, face: 'south', bays: 7 });
   row({ x: 9, z: -24, face: 'south', bays: 7 });
-  row({ x: 32, z: -24, face: 'west', bays: 13 });
+  // Das zweite Haus der Ostfront hat acht Achsen: Schmuckgiebel über den beiden mittleren.
+  row({ x: 32, z: -24, face: 'west', bays: 13, gable: (i, n) => (i === 1 && n === 8 ? { start: 3, n: 2 } : null) });
   row({ x: -32, z: -14, face: 'east', bays: 3 });
-  const bank = block({ x: -32, z: 18, face: 'east', color: 0x77706a, floors: 3, lit: 0.1, ground: ['ground', 'ground', 'door', 'ground', 'ground', 'ground'], ownGlass: [0, 1, 3, 4, 5] }, 6);
+  const bank = block({ x: -32, z: 18, face: 'east', color: 0x77706a, floors: 3, lit: 0.1, ground: ['ground', 'ground', 'door', 'ground', 'ground', 'ground'], ownGlass: [0, 1, 3, 4, 5], gable: { start: 1, n: 4, style: 'pediment' } }, 6);
+  // Ecktürme an den beiden Häusern, die vom Platz aus die Rosenthaler Straße einrahmen.
+  facades.cornerTower({ corner: [9, -24], out: [-1, 1], color: 0x9a8a72 });
+  facades.cornerTower({ corner: [-8.2, -24], out: [1, 1], color: 0xa29680 });
 
   // --- Oranienburger Straße ---------------------------------------------------
   row({ x: -170, z: -14, face: 'south', bays: 25 });

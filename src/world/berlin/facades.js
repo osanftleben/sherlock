@@ -452,6 +452,115 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
+  // Schmuckgiebel über den Achsen start .. start + n - 1 eines Hauses, auf dem Hauptgesims.
+  // style 'curved': geschweifter Giebel mit Ochsenauge und Vasen, wie über einem Mittelrisalit.
+  // style 'pediment': flacher Dreiecksgiebel, für das Bankhaus.
+  const buildGable = ({ start, n, style = 'curved' }, { base, H, col, cTrim }) => {
+    const wall = new Bag();
+    const w = n * BAY_W;
+    const cx = (start + n / 2) * BAY_W;
+    const y0 = H + 0.2;
+    if (style === 'pediment') {
+      const h = Math.min(3.2, w * 0.2);
+      wall.box(cTrim, w + 0.3, 0.3, 0.7, cx, y0 + 0.15, 0.1);
+      wall.add(pediment(w + 0.3, h, 0.7, cx, y0 + 0.3, 0.1), cTrim);
+      wall.add(pediment(w - 0.6, h - 0.45, 0.6, cx, y0 + 0.42, 0.05), col);
+      // Akroterien an Spitze und Ecken.
+      wall.add(new THREE.CylinderGeometry(0.12, 0.2, 0.55, 8).translate(cx, y0 + 0.3 + h + 0.2, 0.1), cTrim);
+      for (const s of [-1, 1]) wall.add(new THREE.CylinderGeometry(0.1, 0.18, 0.5, 8).translate(cx + s * (w / 2 - 0.05), y0 + 0.55, 0.1), cTrim);
+    } else {
+      const hw = w / 2 - 0.1;
+      const s = new THREE.Shape();
+      s.moveTo(-hw, 0);
+      s.lineTo(-hw, 0.6);
+      s.quadraticCurveTo(-hw * 0.45, 0.6, -hw * 0.42, 1.9);
+      s.lineTo(-hw * 0.42, 2.7);
+      s.quadraticCurveTo(0, 4.2, hw * 0.42, 2.7);
+      s.lineTo(hw * 0.42, 1.9);
+      s.quadraticCurveTo(hw * 0.45, 0.6, hw, 0.6);
+      s.lineTo(hw, 0);
+      s.closePath();
+      const eye = new THREE.Path();
+      eye.absarc(0, 1.85, 0.55, 0, Math.PI * 2, true);
+      s.holes.push(eye);
+      const body = new THREE.ExtrudeGeometry(s, { depth: 0.45, bevelEnabled: false, curveSegments: 10 });
+      wall.add(worldUV(body.translate(cx, y0, -0.25), 0.5), col);
+      // Gesimsstück über dem Mittelteil, Rahmen ums Ochsenauge, Vasen und Knauf.
+      wall.box(cTrim, hw * 0.84 + 0.3, 0.16, 0.6, cx, y0 + 2.7, 0);
+      wall.add(new THREE.TorusGeometry(0.6, 0.08, 6, 20).translate(cx, y0 + 1.85, 0.22), cTrim);
+      for (const sx of [-1, 1]) {
+        wall.add(new THREE.CylinderGeometry(0.13, 0.19, 0.45, 8).translate(cx + sx * hw, y0 + 0.83, -0.02), cTrim);
+        wall.add(new THREE.SphereGeometry(0.13, 8, 6).translate(cx + sx * hw, y0 + 1.15, -0.02), cTrim);
+      }
+      wall.add(new THREE.CylinderGeometry(0.05, 0.14, 0.6, 8).translate(cx, y0 + 3.75, -0.02), cTrim);
+      const pane = new THREE.CircleGeometry(0.56, 20).translate(cx, y0 + 1.85, -0.05);
+      pane.applyMatrix4(base);
+      towerDark.push(pane);
+    }
+    const g = wall.build();
+    g.applyMatrix4(base);
+    reliefBag.parts.push(g);
+  };
+
+  // Eckturm über einer Häuserecke: Achteck auf einer Konsole über dem Erdgeschoss, oben eine
+  // geschweifte Haube mit Laterne. Er ändert vor allem die Silhouette gegen den Himmel, und die
+  // ist das, was man nachts von den Häusern sieht. corner: Hausecke, out: Richtung zur Straße.
+  const towerRand = rng(1899);
+  const cornerTower = ({ corner: [x, z], out: [ox, oz], color = 0xa89a80, top = 19.1 }) => {
+    const R = 1.7;
+    const len = Math.hypot(ox, oz);
+    const dx = ox / len;
+    const dz = oz / len;
+    // 0,85 m je Achse vor die Ecke: So bleiben die Fenster der Eckachsen frei.
+    const c = { x: x + Math.sign(ox) * 0.85, z: z + Math.sign(oz) * 0.85 };
+    const ao = Math.atan2(dx, dz);
+    const col = new THREE.Color(color);
+    const cTrim = col.clone().multiplyScalar(1.15);
+    const wall = new Bag();
+    const oct = (rt, rb, h, y) => new THREE.CylinderGeometry(rt, rb, h, 8).rotateY(ao - Math.PI / 8).translate(c.x, y, c.z);
+    const apothem = R * Math.cos(Math.PI / 8);
+    wall.add(oct(R, 0.45, 1.2, FLOOR.ground - 0.6), cTrim);
+    wall.add(worldUV(oct(R, R, top - FLOOR.ground, (FLOOR.ground + top) / 2), 0.5), col);
+    // Gurtgesimse in Höhe der Gesimse der Nachbarhäuser, oben ein kräftiges Kranzgesims.
+    const floors = [['noble', FLOOR.ground], ['upper', FLOOR.ground + FLOOR.noble], ['upper', FLOOR.ground + FLOOR.noble + FLOOR.upper], ['attic', FLOOR.ground + FLOOR.noble + 2 * FLOOR.upper]];
+    for (const [, fy] of floors) wall.add(oct(R + 0.07, R + 0.07, 0.14, fy), cTrim);
+    wall.add(oct(R + 0.3, R + 0.12, 0.45, top), cTrim);
+    // Tambour, Haube, Laterne, Spitze.
+    wall.add(worldUV(oct(R * 0.82, R * 0.82, 1.0, top + 0.7), 0.5), col);
+    wall.add(oct(R * 0.82 + 0.12, R * 0.82 + 0.12, 0.18, top + 1.2), cTrim);
+    const copper = new Bag();
+    const hb = top + 1.29;
+    const profile = [[R * 0.9, 0], [R * 0.95, 0.25], [R * 0.86, 0.75], [R * 0.6, 1.45], [R * 0.3, 2.0], [R * 0.24, 2.25], [0.0, 2.25]].map(([px, py]) => new THREE.Vector2(px, py));
+    copper.add(new THREE.LatheGeometry(profile, 16).translate(c.x, hb, c.z), 0xffffff);
+    copper.add(oct(0.28, 0.3, 0.8, hb + 2.65), 0xffffff);
+    copper.add(new THREE.ConeGeometry(0.42, 0.55, 8).rotateY(ao - Math.PI / 8).translate(c.x, hb + 3.32, c.z), 0xffffff);
+    copper.add(new THREE.CylinderGeometry(0.015, 0.06, 1.3, 6).translate(c.x, hb + 4.2, c.z), 0xffffff);
+    copper.add(new THREE.SphereGeometry(0.09, 8, 6).translate(c.x, hb + 3.75, c.z), 0xffffff);
+    towerCopper.push(copper.build());
+
+    // Fenster auf den fünf Seiten, die zu Platz und Straßen zeigen.
+    const sizes = { noble: [0.78, 2.1], upper: [0.74, 1.9], attic: [0.6, 1.2] };
+    for (const [type, fy] of floors) {
+      const [ww, wh] = sizes[type];
+      const lit = towerRand() < 0.4;
+      for (let k = -2; k <= 2; k++) {
+        const a = ao + (k * Math.PI) / 4;
+        const nx = Math.sin(a);
+        const nz = Math.cos(a);
+        const wy = fy + 0.75 + wh / 2;
+        const pane = new THREE.PlaneGeometry(ww, wh).rotateY(a).translate(c.x + nx * (apothem + 0.01), wy, c.z + nz * (apothem + 0.01));
+        (lit && towerRand() < 0.8 ? towerLit : towerDark).push(pane);
+        const sill = new THREE.BoxGeometry(ww + 0.2, 0.08, 0.16).translate(0, fy + 0.71, apothem + 0.06).rotateY(a).translate(c.x, 0, c.z);
+        const lintel = new THREE.BoxGeometry(ww + 0.24, 0.12, 0.12).translate(0, fy + 0.75 + wh + 0.08, apothem + 0.04).rotateY(a).translate(c.x, 0, c.z);
+        wall.add(sill, cTrim).add(lintel, cTrim);
+      }
+    }
+    reliefBag.parts.push(wall.build());
+  };
+  const towerLit = [];
+  const towerDark = [];
+  const towerCopper = [];
+
   // Innenleben einer Tordurchfahrt in Hauskoordinaten: x0..x1 lichte Weite, z0 (Straßenseite)
   // bis z1 (Hofseite). Wände, Tonnengewölbe, Granitspuren im Pflaster, offene Torflügel,
   // Prellsteine an den Ecken. Kein eigenes Licht: Die Durchfahrt ist nachts dunkel.
@@ -567,7 +676,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   // Scheibe oder Tür die Lücke ab.
   // relief: Erker, Balkone und Dachgauben (nur Häuser aus row(), nicht die Schauplätze).
   // gate: Achse im Erdgeschoss, durch die eine Tordurchfahrt in den Hof führt.
-  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0, relief = false, gate = null }, bays) => {
+  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0, relief = false, gate = null, gable = null }, bays) => {
     const rot = FACING[face];
     const R = new THREE.Matrix4().makeRotationY(rot);
     const T = new THREE.Matrix4().makeTranslation(x, 0, z);
@@ -590,6 +699,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       bright: 0.25 + shadeRand(),
     });
     const plan = relief ? planRelief(bays, types, lit) : { erker: null, balconies: [], dormers: [] };
+    // Unter einem Schmuckgiebel keine Gauben. Gefiltert erst nach dem Planen, damit der Zufall bleibt.
+    if (gable) plan.dormers = plan.dormers.filter((d) => d.bay < gable.start || d.bay >= gable.start + gable.n);
     const inErker = (i, f) => plan.erker && i >= plan.erker.start && i < plan.erker.start + plan.erker.n && f < types.length - 1;
     for (let i = 0; i < bays; i++) {
       const tGround = ground[i] || (rand() < 0.32 ? 'shop' : 'ground');
@@ -699,6 +810,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
 
     if (relief) buildRelief(plan, { base, types, col, cTrim, H });
+    if (gable) buildGable(gable, { base, H, col, cTrim });
 
     // Grundriss als Kollision: Ecken des Rechtecks in die Welt übertragen.
     const corners = [[0, 0], [W, 0], [0, -depth], [W, -depth]].map(([lx, lz]) =>
@@ -735,17 +847,22 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
   // Reihe zusammenhängender Häuser mit wechselnder Breite und Höhe.
   // gate: Achse der ganzen Reihe mit einer Tordurchfahrt.
-  const row = ({ x, z, face, bays, rand = r, gate = null }) => {
+  // gable(index, bays): Schmuckgiebel für das index-te Haus der Reihe, das bays Achsen hat
+  // ({ start, n, style } in Achsen dieses Hauses), oder null.
+  const row = ({ x, z, face, bays, rand = r, gate = null, gable = null }) => {
     const rot = FACING[face];
     const dx = Math.cos(rot);
     const dz = -Math.sin(rot);
     let done = 0;
+    const houses = [];
     while (done < bays) {
       const n = Math.min(bays - done, 5 + Math.floor(rand() * 4));
       const g = gate !== null && gate >= done && gate < done + n ? gate - done : null;
-      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: rand() < 0.3 ? 3 : 4, rand, relief: true, gate: g }, n);
+      const floors = rand() < 0.3 ? 3 : 4;
+      houses.push(block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors, rand, relief: true, gate: g, gable: gable?.(houses.length, n) ?? null }, n));
       done += n;
     }
+    return houses;
   };
 
   const finish = () => {
@@ -776,6 +893,10 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     // Dächer, Massen
     addMesh(scene, merge(roofs), roofMat);
+    // Ecktürme: Hauben aus Kupfer mit Patina, Fenster schlicht erleuchtet oder dunkel.
+    if (towerCopper.length) addMesh(scene, merge(towerCopper), std({ color: 0x5a8070, roughness: 0.55, metalness: 0.35 }));
+    if (towerLit.length) addMesh(scene, merge(towerLit), litGlass);
+    if (towerDark.length) addMesh(scene, merge(towerDark), darkGlass);
     const massMat = matte({ vertexColors: true, ...plasterTex });
     addMesh(scene, massing.build(), massMat);
     // Erker und Balkone in eigenen Meshes, damit die übrigen Häuser unverändert bleiben.
@@ -797,7 +918,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
-  return { block, row, courtWall, finish };
+  return { block, row, courtWall, cornerTower, finish };
 }
 
 // Kehrt Dreiecke und Normalen um, damit man eine Fläche von innen sieht (Gewölbe).

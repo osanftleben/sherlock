@@ -6,7 +6,7 @@ import * as THREE from 'three';
 //                               und schlägt alle paar Minuten die Gongfeder an
 //   { kind: 'wall', size }      runde Wanduhr, schneller und leiser, je kleiner desto heller
 // Der Direktschall fällt mit dem Abstand ab, der Raumhall bleibt überall etwa gleich.
-const PENDULUM_SPEED = 3.14; // muss zur Pendelanimation in interiors.js passen
+const PENDULUM_SPEED = 3.14; // muss zur Pendelanimation in interiors/room.js passen
 const AHEAD = 0.12; // so weit im Voraus werden Schläge eingeplant (Sekunden)
 const AUDIBLE = 14; // weiter entfernte Uhren werden gar nicht erst gespielt (Meter)
 const SEND = 0.12; // Anteil, der in den Raumhall geht

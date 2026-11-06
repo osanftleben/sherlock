@@ -51,7 +51,11 @@ src/
       railway.js     Stadtbahn, Bahnhof Börse, Zug
       plaza.js       Platz: Bäume, Litfaßsäule, Urania-Säule, Achteck
       lamps.js, traffic.js, weather.js, river.js, horizon.js
-    interiors.js     Innenräume
+    interiors/       Innenräume, ein Modul je Raum
+      index.js       Liste der Räume
+      room.js        Grundgerüst eines Raums: Wände, Tür, Möbel, Lampen, Uhren
+      fittings.js    Ausstattung für mehrere Räume (Teppich, Ohrensessel, Gaskrone …)
+      werkstatt.js, apotheke.js, destille.js, bank.js, pension.js
     figures.js       Figuren, Pferde
     kit.js           Geometrie-Bausatz
     textures.js      alle Texturen, zur Laufzeit im Canvas erzeugt
@@ -92,8 +96,9 @@ Zeichenaufrufe und Dreiecke.
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Sie entfernen, an derselben Stelle mit `block` und `row` weiterbauen und `loc.map` ergänzen.
 
-**Neuer Innenraum:** Eine `build…`-Funktion in `world/interiors.js` ergänzen und in `berlin/index.js`
-mit `doorSpot` und `loc.exits` an ein Haus anschließen.
+**Neuer Innenraum:** Ein Modul wie `world/interiors/bank.js` mit einer `build…`-Funktion anlegen, in
+`world/interiors/index.js` eintragen und in `berlin/index.js` mit `doorSpot` und `loc.exits` an ein Haus
+anschließen. Was mehrere Räume brauchen, gehört nach `fittings.js`.
 
 ## Geschichtlicher Hintergrund
 

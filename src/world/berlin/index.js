@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
 import { Bag, addMesh, box, matte, std } from '../kit.js';
 import { brick, cobble, plaster, signTexture, slate, softDisc, rng } from '../textures.js';
-import { addSign, createFacades } from './facades.js';
+import { BAY_W, addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
 import { buildHorizon } from './horizon.js';
 import { buildRiver } from './river.js';
@@ -278,13 +278,21 @@ export function buildBerlin() {
     const p = bld.at(bay, 3.95, 0.32);
     addSign(loc, p, bld.rot, signTexture(text), width, width * 0.17);
   };
+  // Türlaterne an einem Eisenausleger rechts neben der Tür, unter dem Ladenschild: Das Schild hängt
+  // über derselben Achse (3,3 bis 4,6 m hoch), die Laterne darf es nicht verdecken.
+  const lampGlass = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) });
   const lanternOver = (bld, bay) => {
-    const p = bld.at(bay, 3.6, 0.5);
+    const side = bay + 1.15 / BAY_W;
+    const p = bld.at(side, 2.75, 0.45);
+    const arm = bld.at(side, 3.0, 0.24);
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xffb060, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     glow.position.copy(p);
-    glow.scale.setScalar(1.8);
+    glow.scale.setScalar(1.5);
     scene.add(glow);
-    addMesh(scene, box(0.16, 0.26, 0.16, p.x, p.y, p.z), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) }));
+    addMesh(scene, box(0.16, 0.26, 0.16, p.x, p.y, p.z), lampGlass);
+    addMesh(scene, box(0.24, 0.06, 0.24, p.x, p.y + 0.16, p.z), ironMat);
+    addMesh(scene, new THREE.BoxGeometry(0.04, 0.04, 0.44).rotateY(bld.rot).translate(arm.x, arm.y, arm.z), ironMat);
+    addMesh(scene, box(0.03, 0.06, 0.03, p.x, p.y + 0.22, p.z), ironMat);
   };
 
   shopSign(kessler, 2.5, 'Uhrmacher E. Kessler');

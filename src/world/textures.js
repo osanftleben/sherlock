@@ -702,6 +702,138 @@ export function diploma() {
   });
 }
 
+// Ölportrait des Firmengründers: dunkler Grund, schwarzer Rock, weißer Kragen, graue Koteletten.
+export function portrait() {
+  return cached('portrait', () => {
+    const w = 256;
+    const h = 320;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    const bg = ctx.createRadialGradient(w * 0.45, h * 0.35, 10, w / 2, h / 2, h * 0.7);
+    bg.addColorStop(0, '#4a3a26');
+    bg.addColorStop(1, '#140e08');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, w, h);
+    // Rock und Schultern
+    ctx.fillStyle = '#0e0c0a';
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h * 1.02, w * 0.48, h * 0.42, 0, 0, 7);
+    ctx.fill();
+    // Hemdbrust und Halsbinde
+    ctx.fillStyle = '#d8d0bc';
+    ctx.beginPath();
+    ctx.moveTo(w * 0.42, h * 0.62);
+    ctx.lineTo(w * 0.58, h * 0.62);
+    ctx.lineTo(w * 0.53, h * 0.85);
+    ctx.lineTo(w * 0.47, h * 0.85);
+    ctx.fill();
+    ctx.fillStyle = '#1a1612';
+    ctx.fillRect(w * 0.44, h * 0.61, w * 0.12, h * 0.03);
+    // Gesicht mit Licht von links
+    const face = ctx.createRadialGradient(w * 0.45, h * 0.38, 4, w / 2, h * 0.42, w * 0.2);
+    face.addColorStop(0, '#d8a888');
+    face.addColorStop(1, '#6a4430');
+    ctx.fillStyle = face;
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h * 0.42, w * 0.15, h * 0.16, 0, 0, 7);
+    ctx.fill();
+    // Graue Koteletten, Haarkranz, Augen
+    ctx.fillStyle = '#8a8478';
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(w / 2 + s * w * 0.13, h * 0.5, w * 0.06, h * 0.09, s * 0.2, 0, 7);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.ellipse(w / 2, h * 0.28, w * 0.15, h * 0.05, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#2a1a12';
+    for (const s of [-1, 1]) ctx.fillRect(w / 2 + s * w * 0.06 - 4, h * 0.4, 8, 3);
+    ctx.fillRect(w / 2 - 10, h * 0.5, 20, 2);
+    // Firnis
+    const v = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, h * 0.7);
+    v.addColorStop(0, 'rgba(60,40,10,0)');
+    v.addColorStop(1, 'rgba(10,6,2,0.75)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = 'rgba(200,170,110,0.8)';
+    ctx.font = 'italic 14px "EB Garamond", serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Joh. Fr. Lindner 1801–1879', w / 2, h - 14);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
+// Kurszettel der Berliner Börse, mit Bleistift bearbeitet: Kreise, Pfeile, Unterstreichungen.
+export function stockList() {
+  return cached('stocks', () => {
+    const w = 320;
+    const h = 420;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    const r = rng(1892);
+    ctx.fillStyle = '#e0d8c2';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#1e1a16';
+    ctx.textAlign = 'center';
+    ctx.font = '26px "UnifrakturMaguntia", serif';
+    ctx.fillText('Berliner Börse', w / 2, 34);
+    ctx.font = '13px "EB Garamond", serif';
+    ctx.fillText('Amtlicher Kurszettel · 11. November 1892', w / 2, 54);
+    ctx.fillRect(16, 62, w - 32, 1.5);
+    const rows = [
+      ['Disconto-Ges.', '178,25'], ['Deutsche Bank', '156,40'], ['Darmstädter Bank', '133,10'],
+      ['Berl. Handels-Ges.', '139,75'], ['Laurahütte', '97,60'], ['Dortmunder Union', '58,30'],
+      ['Bochumer Gussstahl', '112,50'], ['Harpener Bergbau', '128,90'], ['Gelsenkirchener', '141,20'],
+      ['Argentinier 5%', '36,80'], ['Portugiesen 3%', '22,40'], ['Russ. Noten', '201,15'],
+      ['Ital. Rente', '88,60'], ['Mexikaner 6%', '79,25'],
+    ];
+    ctx.font = '15px "EB Garamond", serif';
+    rows.forEach(([name, val], i) => {
+      const y = 84 + i * 23;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#1e1a16';
+      ctx.fillText(name, 22, y);
+      ctx.textAlign = 'right';
+      ctx.fillText(val, w - 60, y);
+      // Bleistift: fallende Papiere eingekreist und mit Pfeil
+      if ([4, 5, 9, 10, 13].includes(i)) {
+        ctx.strokeStyle = 'rgba(60,60,64,0.75)';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.ellipse(w - 82, y - 5, 34, 11, (r() - 0.5) * 0.2, 0, 7);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(w - 36, y - 14);
+        ctx.lineTo(w - 36, y + 2);
+        ctx.lineTo(w - 41, y - 4);
+        ctx.moveTo(w - 36, y + 2);
+        ctx.lineTo(w - 31, y - 4);
+        ctx.stroke();
+      }
+    });
+    // Rechnung am Rand, mehrfach durchgestrichen
+    ctx.strokeStyle = 'rgba(60,60,64,0.7)';
+    ctx.fillStyle = 'rgba(60,60,64,0.8)';
+    ctx.font = 'italic 16px "EB Garamond", serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Deckung bis Montag?', 30, h - 46);
+    ctx.lineWidth = 1.4;
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.moveTo(26, h - 50 + k * 3);
+      ctx.lineTo(170, h - 54 + k * 4);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
 export function clockFace(hour = 9, minute = 40, size = 256) {
   const c = canvas(size);
   const ctx = c.getContext('2d');

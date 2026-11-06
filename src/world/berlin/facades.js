@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, merge, pediment, roofPrism, std } from '../kit.js';
-import { pavement, rng, shopDisplay, shopShutter } from '../textures.js';
+import { WINDOW_ATLAS, pavement, rng, shopDisplay, shopShutter, windowAtlas } from '../textures.js';
 
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
 export const BAY_W = 3.4;
@@ -27,7 +27,8 @@ function bayParts(type) {
   };
   const sash = (ww, wy, wh, rows = 2) => {
     const z = -D + 0.09;
-    glass.push(box(ww - 0.06, wh - 0.06, 0.02, W / 2, wy + wh / 2, -D + 0.05));
+    // UV 0..1 über die ganze Scheibe für das gemalte Fensterbild (windowAtlas).
+    glass.push(new THREE.BoxGeometry(ww - 0.06, wh - 0.06, 0.02).translate(W / 2, wy + wh / 2, -D + 0.05));
     wall.box(wood, 0.06, wh, 0.05, W / 2, wy + wh / 2, z);
     for (let i = 1; i < rows; i++) wall.box(wood, ww, 0.05, 0.05, W / 2, wy + (wh * i) / rows, z);
     wall.box(wood, ww, 0.06, 0.05, W / 2, wy + 0.03, z);
@@ -121,17 +122,19 @@ class FacadeBatcher {
   constructor() {
     this.types = {};
     for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic']) {
-      this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {} };
+      this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {}, rooms: [] };
     }
   }
 
   // glass: false lässt die Scheibe weg, wenn der Aufrufer sie selbst baut (Schaufenster).
   // kind: Ladensorte eines erleuchteten Schaufensters, bestimmt die gemalte Auslage.
-  place(type, matrix, color, lit, glass = true, kind = null) {
+  // room: { cell, bright } eines erleuchteten Wohnungsfensters, Bild aus dem windowAtlas.
+  place(type, matrix, color, lit, glass = true, kind = null, room = null) {
     const t = this.types[type];
     t.walls.push({ matrix, color });
     if (!glass) return;
     if (lit && kind) (t.kinds[kind] ??= []).push(matrix);
+    else if (lit && room) t.rooms.push({ matrix, ...room });
     else (lit ? t.lit : t.dark).push(matrix);
   }
 
@@ -159,8 +162,45 @@ class FacadeBatcher {
         mesh.frustumCulled = false;
         scene.add(mesh);
       }
+      if (t.rooms.length) {
+        // Eigene Kopie der Scheibe, weil nur diese Instanzen eine Atlaszelle tragen.
+        const geo = t.parts.glass.clone();
+        geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(t.rooms.map((w) => w.cell)), 1));
+        const mesh = new THREE.InstancedMesh(geo, roomMaterial(litGlass), t.rooms.length);
+        t.rooms.forEach((w, i) => {
+          mesh.setMatrixAt(i, w.matrix);
+          mesh.setColorAt(i, color.setScalar(w.bright));
+        });
+        mesh.frustumCulled = false;
+        scene.add(mesh);
+      }
     }
   }
+}
+
+// Ein Material für alle erleuchteten Wohnungsfenster. Jede Instanz liest über aCell ihre
+// Zelle aus dem Atlas. Die Grundfarbe gleicht den Atlas so aus, dass er im Mittel so hell
+// ist wie die bisherige einfarbige Scheibe: Aus der Ferne (kleinste Mipmap) sieht das
+// Fenster aus wie vorher, aus der Nähe zeigt es Gardine oder Zimmer.
+let roomMat = null;
+function roomMaterial(litGlass) {
+  if (roomMat) return roomMat;
+  const { map, avg } = windowAtlas();
+  const { cols, rows } = WINDOW_ATLAS;
+  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  roomMat = new THREE.MeshBasicMaterial({ map, color: new THREE.Color().setScalar(lum(litGlass.color) / lum(avg)) });
+  roomMat.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aCell;')
+      .replace(
+        '#include <uv_vertex>',
+        `#include <uv_vertex>
+        vec2 cellXY = vec2(mod(aCell, ${cols}.0), ${rows - 1}.0 - floor(aCell / ${cols}.0));
+        vMapUv = (cellXY + 0.01 + 0.98 * vMapUv) / vec2(${cols}.0, ${rows}.0);`,
+      );
+  };
+  roomMat.customProgramCacheKey = () => 'windowAtlas';
+  return roomMat;
 }
 
 export const FACING = { south: 0, north: Math.PI, east: Math.PI / 2, west: -Math.PI / 2 };
@@ -197,6 +237,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const { scene } = loc;
   const batcher = new FacadeBatcher();
   const kindRand = rng(1894);
+  const winRand = rng(1895);
   const massing = new Bag();
   const masses = [];
   const slabs = [];
@@ -217,6 +258,13 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     const W = bays * BAY_W;
     const col = color ?? FACADES[Math.floor(rand() * FACADES.length)];
     const types = floors === 3 ? ['noble', 'upper', 'attic'] : ['noble', 'upper', 'upper', 'attic'];
+    // Fensterbilder aus eigenem Zufall: je Stockwerk eines Hauses eine Art, je Fenster
+    // eine Variante und eine leicht andere Helligkeit.
+    const styles = [-1, ...types].map(() => Math.floor(winRand() * WINDOW_ATLAS.rows));
+    const room = (floor) => ({
+      cell: styles[floor] * WINDOW_ATLAS.cols + Math.floor(winRand() * WINDOW_ATLAS.cols),
+      bright: 0.8 + winRand() * 0.35,
+    });
     for (let i = 0; i < bays; i++) {
       const tGround = ground[i] || (rand() < 0.32 ? 'shop' : 'ground');
       const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
@@ -228,13 +276,14 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         const mix = shopMix(p.x, p.z);
         kind = mix[Math.floor(kindRand() * mix.length)];
       }
-      batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind);
+      batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' && lit ? room(0) : null);
       let y = FLOOR.ground;
-      for (const type of types) {
+      types.forEach((type, f) => {
         const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, 0));
-        batcher.place(type, m, col, rand() < lit);
+        const on = rand() < lit;
+        batcher.place(type, m, col, on, true, null, on ? room(f + 1) : null);
         y += FLOOR[type];
-      }
+      });
     }
 
     const H = FLOOR.ground + types.reduce((sum, t) => sum + FLOOR[t], 0);

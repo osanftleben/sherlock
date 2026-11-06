@@ -1492,3 +1492,270 @@ export function glassLettering(lines) {
   t.anisotropy = 8;
   return t;
 }
+
+// Erleuchtete Wohnungsfenster: ein Atlas mit 4 Arten (Zeilen) zu je 4 Varianten (Spalten).
+// 0 Spitzengardine, 1 Blick ins Zimmer zwischen Übergardinen, 2 halb herabgelassenes Rollo,
+// 3 zugezogene dünne Vorhänge. avg ist der lineare Mittelwert, damit das Fenster aus der
+// Ferne (kleinste Mipmap) so hell bleibt wie die bisherige einfarbige Scheibe.
+export const WINDOW_ATLAS = { cols: 4, rows: 4 };
+
+export function windowAtlas() {
+  return cached('windows', () => {
+    const CW = 256;
+    const CH = 384;
+    const { cols, rows } = WINDOW_ATLAS;
+    const c = canvas(CW * cols, CH * rows);
+    const ctx = c.getContext('2d');
+    const r = rng(29);
+    const pick = (list) => list[Math.floor(r() * list.length)];
+
+    // Weicher Schatten einer Person hinter Stoff: Kopf und Schultern als Verläufe.
+    const figure = (x, y, s, a) => {
+      const soft = (cx, cy, rx, ry) => {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.scale(1, ry / rx);
+        const g = ctx.createRadialGradient(0, 0, rx * 0.4, 0, 0, rx);
+        g.addColorStop(0, `rgba(30,14,4,${a})`);
+        g.addColorStop(1, 'rgba(30,14,4,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, rx, 0, 7);
+        ctx.fill();
+        ctx.restore();
+      };
+      soft(x, y, 30 * s, 36 * s);
+      soft(x, y + 120 * s, 78 * s, 90 * s);
+      soft(x, y + 230 * s, 80 * s, 110 * s);
+    };
+    const glow = (x, y, r0, r1, inner, outer) => {
+      const g = ctx.createRadialGradient(x, y, r0, x, y, r1);
+      g.addColorStop(0, inner);
+      g.addColorStop(1, outer);
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, CW, CH);
+    };
+    // Spitze: Rautennetz, Rosetten, Bogenrand unten, senkrechte Falten.
+    const lace = (alpha) => {
+      ctx.strokeStyle = `rgba(255,244,222,${0.45 * alpha})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let k = -CH; k < CW + CH; k += 14) {
+        ctx.moveTo(k, 0);
+        ctx.lineTo(k + CH, CH);
+        ctx.moveTo(k, 0);
+        ctx.lineTo(k - CH, CH);
+      }
+      ctx.stroke();
+      ctx.fillStyle = `rgba(255,246,228,${0.4 * alpha})`;
+      for (let y = 24; y < CH - 40; y += 42) {
+        for (let x = 20 + ((y / 42) % 2) * 21; x < CW; x += 42) {
+          for (let p = 0; p < 6; p++) {
+            const a = (p / 6) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.ellipse(x + Math.cos(a) * 6, y + Math.sin(a) * 6, 5, 2.4, a, 0, 7);
+            ctx.fill();
+          }
+        }
+      }
+      ctx.fillStyle = `rgba(255,246,228,${0.5 * alpha})`;
+      for (let x = 0; x < CW; x += 16) {
+        ctx.beginPath();
+        ctx.arc(x + 8, CH - 30, 8, 0, Math.PI);
+        ctx.fill();
+      }
+      for (let x = 0; x < CW; x += 9 + r() * 10) {
+        ctx.fillStyle = `rgba(60,30,10,${0.05 + r() * 0.1})`;
+        ctx.fillRect(x, 0, 3 + r() * 5, CH - 22);
+      }
+    };
+    // Schwere Übergardinen links und rechts, mit Kordel gerafft.
+    const drapes = (rgb, width = 52) => {
+      for (const side of [0, 1]) {
+        const x0 = side ? CW - width : 0;
+        for (let i = 0; i < width; i += 2) {
+          const v = 0.5 + 0.5 * Math.sin(i * 0.55);
+          ctx.fillStyle = `rgb(${rgb.map((k) => Math.round(k * (0.55 + v * 0.45))).join(',')})`;
+          const waist = Math.abs(i - (side ? width : 0)) * 0.35;
+          ctx.fillRect(x0 + i, 0, 2, CH * 0.55);
+          ctx.fillRect(x0 + i + (side ? waist * 0.4 : -waist * 0.4), CH * 0.55, 2, CH * 0.45);
+        }
+        ctx.fillStyle = '#c8a050';
+        ctx.fillRect(x0 + (side ? 0 : width - 12), CH * 0.54, 12, 6);
+      }
+    };
+    // Tapete mit Streifen oder Streumuster.
+    const wallpaper = (base, ink, striped) => {
+      ctx.fillStyle = base;
+      ctx.fillRect(0, 0, CW, CH);
+      ctx.fillStyle = ink;
+      if (striped) for (let x = 6; x < CW; x += 22) ctx.fillRect(x, 0, 6, CH);
+      else {
+        for (let y = 14; y < CH; y += 30) {
+          for (let x = 12 + ((y / 30) % 2) * 15; x < CW; x += 30) {
+            ctx.beginPath();
+            ctx.ellipse(x, y, 4, 6, 0, 0, 7);
+            ctx.fill();
+          }
+        }
+      }
+    };
+    const frame = (x, y, w, h, inside) => {
+      ctx.fillStyle = '#6a4a1a';
+      ctx.fillRect(x - 6, y - 6, w + 12, h + 12);
+      ctx.fillStyle = inside;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(255,230,180,0.15)';
+      ctx.fillRect(x, y, w, h * 0.3);
+    };
+    const tableLamp = (x, y) => {
+      glow(x, y - 30, 4, 120, 'rgba(255,214,140,0.55)', 'rgba(255,214,140,0)');
+      ctx.fillStyle = '#3a2410';
+      ctx.fillRect(x - 3, y - 20, 6, 40);
+      ctx.fillStyle = '#e8b868';
+      ctx.beginPath();
+      ctx.moveTo(x - 28, y - 18);
+      ctx.lineTo(x - 16, y - 52);
+      ctx.lineTo(x + 16, y - 52);
+      ctx.lineTo(x + 28, y - 18);
+      ctx.fill();
+    };
+    // Blick ins Zimmer: Tapete, Bild, Möbel im Gegenlicht, Licht von einer Lampe.
+    const room = (v, top = 0) => {
+      const paper = [
+        ['#7a5a32', 'rgba(60,36,14,0.45)', true],
+        ['#6a3a2a', 'rgba(150,90,50,0.35)', false],
+        ['#6a5a3a', 'rgba(50,36,18,0.4)', true],
+        ['#8a6a42', 'rgba(110,60,30,0.35)', false],
+      ][v];
+      wallpaper(...paper);
+      glow(CW * 0.5, top + 40, 10, CH * 0.9, 'rgba(255,220,150,0.45)', 'rgba(20,10,0,0.35)');
+      if (v === 0) frame(80, top + 70, 96, 70, '#4a3a22');
+      if (v === 1) {
+        frame(50, top + 60, 50, 64, '#3a2a1a');
+        frame(150, top + 80, 56, 44, '#5a4a2a');
+      }
+      if (v === 3) {
+        // Spiegel mit hellem Widerschein
+        ctx.fillStyle = '#8a6a2a';
+        ctx.beginPath();
+        ctx.ellipse(CW / 2, top + 120, 48, 64, 0, 0, 7);
+        ctx.fill();
+        ctx.fillStyle = '#d8b880';
+        ctx.beginPath();
+        ctx.ellipse(CW / 2, top + 120, 40, 56, 0, 0, 7);
+        ctx.fill();
+      }
+      // Möbel unten: Vertiko, Sofalehne, Klavier
+      ctx.fillStyle = 'rgba(28,14,6,0.92)';
+      if (v === 0 || v === 3) ctx.fillRect(40, CH - 120, 176, 120);
+      else if (v === 1) {
+        ctx.beginPath();
+        ctx.moveTo(20, CH);
+        ctx.lineTo(20, CH - 80);
+        ctx.quadraticCurveTo(128, CH - 120, 236, CH - 80);
+        ctx.lineTo(236, CH);
+        ctx.fill();
+      } else {
+        ctx.fillRect(10, CH - 140, 236, 140);
+        ctx.fillStyle = 'rgba(230,220,200,0.5)';
+        ctx.fillRect(10, CH - 140, 236, 6);
+      }
+      if (v !== 1) tableLamp(v === 2 ? 190 : 70, CH - 120);
+      if (v === 2) figure(110, top + 70, 0.75, 0.75);
+    };
+
+    for (let row = 0; row < rows; row++) {
+      for (let v = 0; v < cols; v++) {
+        ctx.save();
+        ctx.translate(v * CW, row * CH);
+        ctx.beginPath();
+        ctx.rect(0, 0, CW, CH);
+        ctx.clip();
+        if (row === 0) {
+          // Spitzengardine vor warmem Zimmerlicht
+          glow(CW * 0.5, CH * 0.42, 10, CH * 0.62, '#f2c27a', '#5a3418');
+          ctx.fillStyle = 'rgba(40,20,8,0.5)';
+          ctx.fillRect(0, 0, CW, CH);
+          glow(CW * 0.5, CH * 0.42, 10, CH * 0.62, 'rgba(240,190,120,0.7)', 'rgba(0,0,0,0)');
+          if (v === 1) {
+            // Topfpflanze auf dem Fensterbrett
+            ctx.fillStyle = 'rgba(30,22,8,0.85)';
+            ctx.fillRect(100, CH - 60, 56, 50);
+            for (let i = 0; i < 14; i++) {
+              const a = -Math.PI / 2 + (r() - 0.5) * 2.4;
+              ctx.beginPath();
+              ctx.ellipse(128 + Math.cos(a) * 50, CH - 70 + Math.sin(a) * 60, 26, 9, a, 0, 7);
+              ctx.fill();
+            }
+          }
+          if (v === 2) figure(150, 90, 0.8, 0.7);
+          if (v === 3) glow(70, CH * 0.62, 5, 110, 'rgba(255,230,170,0.8)', 'rgba(255,230,170,0)');
+          lace(1);
+        } else if (row === 1) {
+          room(v);
+          drapes(pick([[120, 40, 30], [96, 56, 28], [110, 70, 30], [80, 34, 44]]));
+        } else if (row === 2) {
+          // Rollo aus Leinen, halb (oder weit) herabgelassen, darunter das Zimmer.
+          const drop = v === 3 ? CH * 0.68 : CH * (0.38 + r() * 0.1);
+          room(v, drop - 60);
+          const g = ctx.createLinearGradient(0, 0, 0, drop);
+          g.addColorStop(0, '#c89a5a');
+          g.addColorStop(1, '#f0cc8a');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, CW, drop);
+          ctx.fillStyle = 'rgba(80,50,20,0.15)';
+          for (let y = 18; y < drop; y += 18) ctx.fillRect(0, y, CW, 2);
+          ctx.fillStyle = '#6a4a22';
+          ctx.fillRect(0, drop - 8, CW, 8);
+          ctx.strokeStyle = '#6a4a22';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(CW / 2, drop + 12, 9, 0, 7);
+          ctx.stroke();
+        } else {
+          // Zugezogene dünne Vorhänge, von innen durchleuchtet.
+          const tone = [
+            [235, 160, 80],
+            [220, 120, 70],
+            [228, 168, 96],
+            [200, 128, 80],
+          ][v];
+          for (let x = 0; x < CW; x += 2) {
+            const half = x < CW / 2 ? x : CW - x;
+            const f = 0.72 + 0.28 * Math.sin(half * 0.22 + (x < CW / 2 ? 0 : 1.3));
+            ctx.fillStyle = `rgb(${tone.map((k) => Math.round(k * f)).join(',')})`;
+            ctx.fillRect(x, 0, 2, CH);
+          }
+          glow(CW * 0.5, CH * 0.4, 10, CH * 0.7, 'rgba(255,230,180,0.35)', 'rgba(40,16,4,0.45)');
+          if (v === 1) {
+            // Spalt in der Mitte, dahinter heller
+            ctx.fillStyle = 'rgba(255,236,190,0.75)';
+            ctx.fillRect(CW / 2 - 5, 0, 10, CH);
+          }
+          if (v === 2) figure(90, 80, 0.8, 0.6);
+          ctx.fillStyle = 'rgba(60,30,10,0.5)';
+          ctx.fillRect(0, 0, CW, 10);
+        }
+        ctx.restore();
+      }
+    }
+
+    // Linearer Mittelwert aller Bildpunkte (sRGB → linear).
+    const px = ctx.getImageData(0, 0, c.width, c.height).data;
+    const lin = (k) => {
+      const s = k / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const sum = [0, 0, 0];
+    let n = 0;
+    for (let i = 0; i < px.length; i += 16) {
+      for (let k = 0; k < 3; k++) sum[k] += lin(px[i + k]);
+      n++;
+    }
+    const map = new THREE.CanvasTexture(c);
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.anisotropy = 8;
+    return { map, avg: new THREE.Color(sum[0] / n, sum[1] / n, sum[2] / n) };
+  });
+}

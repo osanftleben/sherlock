@@ -153,8 +153,8 @@ export const uhrmacher = {
     } } },
     // Was Krause beschreibt: die Durchfahrt neben der Werkstatt und die kaputte Laterne davor.
     // Nur Stimmung, kein Hinweis. Nach Krauses Aussage liest Holmes beides anders.
-    { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['!c_glocke'], action: { say: 'Eine Tordurchfahrt zum Hof, breit genug für einen Bierwagen. Unter dem Gewölbe ist es so finster, dass ich die eigene Hand kaum sehe. Bis zu Kesslers Ladentür sind es vier Schritte.' } },
-    { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['c_glocke'], action: { say: 'Hier kam Krauses Herr heraus. Wer Kesslers Laden verlässt, steht unter der Laterne über der Tür, und die brennt. Vier Schritte weiter, unter diesem Gewölbe, sieht ihn niemand mehr. Er hat hier gewartet, bis die Straße leer war.' } },
+    { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['!c_glocke'], action: { say: 'Eine Tordurchfahrt zum Hof, breit genug für einen Bierwagen. Unter dem Gewölbe ist es so finster, dass ich die eigene Hand kaum sehe. Bis zu Kesslers Ladentür sind es keine zehn Schritte.' } },
+    { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['c_glocke'], action: { say: 'Hier kam Krauses Herr heraus. Wer Kesslers Laden verlässt, steht unter der Laterne über der Tür, und die brennt. Ein paar Schritte weiter, unter diesem Gewölbe, sieht ihn niemand mehr. Er hat hier gewartet, bis die Straße leer war.' } },
     { location: 'berlin', anchor: 'kaputteLaterne', label: 'Kaputte Laterne', radius: 0.6, range: 4, when: ['!c_glocke'], action: { say: 'Eine Scheibe eingeschlagen, der Brenner kalt, die Scherben liegen noch auf dem Gehweg. Zwischen den brennenden Laternen ist das hier das dunkelste Stück der Rosenthaler Straße.' } },
     { location: 'berlin', anchor: 'kaputteLaterne', label: 'Kaputte Laterne', radius: 0.6, range: 4, when: ['c_glocke'], action: { say: 'Krauses kaputte Laterne. Hier blieb der Mann stehen und ließ seine Uhr schlagen. Wer die Stunde im Dunkeln hören kann, muss kein Streichholz anreißen, das ihm ins Gesicht leuchtet.' } },
 
@@ -302,7 +302,7 @@ export const uhrmacher = {
         a: {
           give: ['f_lemke'],
           obs: 'Livree mit Messingknöpfen, die er selbst poliert, den Daumen am Ärmelaufschlag. Ein Mann, der seit zwanzig Jahren jeden kennt, der durch diese Tür geht, und jeden grüßt, als täte er es zum ersten Mal.',
-          text: 'N’Abend, der Herr. Jeschlossen is, aber der Herr Prokurist is noch drin, wejen die Revision. Ick sag ihm Bescheid, dass Se wejen Herrn Kessler kommen. Der arme Mann. Hat mir mal ’ne Feder für zehn Pfennich einjesetzt.',
+          text: 'N’Abend, der Herr. Jeschlossen is eijentlich. Sonst jeh ick um achte, aber heute wart ick, bis der Herr Prokurist mit die Bücher fertig is, wejen die Revision. Wejen Herrn Kessler komm Se? Der arme Mann. Hat mir mal ’ne Feder für zehn Pfennich einjesetzt.',
           opts: [{ t: 'Sehr freundlich. Ich habe noch ein paar Fragen.', go: 'hub' }],
         },
         hub: {

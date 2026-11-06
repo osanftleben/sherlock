@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, merge, pediment, roofPrism, std } from '../kit.js';
-import { WINDOW_ATLAS, pavement, railing, rng, shopDisplay, shopShutter, windowAtlas } from '../textures.js';
+import { WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, windowAtlas } from '../textures.js';
 
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
 export const BAY_W = 3.4;
@@ -9,6 +9,9 @@ export const FLOOR = { ground: 4.4, noble: 3.9, upper: 3.5, attic: 2.9 };
 const ERKER_OUT = 0.75;
 // Höhe der Balkongitter unter dem Handlauf.
 const RAIL_H = 0.92;
+// Dunkle Fenster: wie hell die Gardine dahinter erscheint und wie stark das Glas spiegelt.
+const SHADE_ALBEDO = 0.07;
+const SHADE_REFLECT = 6;
 export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a288, 0x8a7a68, 0x9a9488];
 
 function bayParts(type) {
@@ -147,19 +150,20 @@ class FacadeBatcher {
   constructor() {
     this.types = {};
     for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic', 'dormer']) {
-      this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {}, rooms: [] };
+      this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {}, rooms: [], shades: [] };
     }
   }
 
   // glass: false lässt die Scheibe weg, wenn der Aufrufer sie selbst baut (Schaufenster).
   // kind: Ladensorte eines erleuchteten Schaufensters, bestimmt die gemalte Auslage.
-  // room: { cell, bright } eines erleuchteten Wohnungsfensters, Bild aus dem windowAtlas.
+  // room: { cell, bright } eines Wohnungsfensters, Bild aus dem windowAtlas. Erleuchtet
+  // zeigt es Gardine oder Zimmer, dunkel nur einen Schimmer davon hinter spiegelndem Glas.
   place(type, matrix, color, lit, glass = true, kind = null, room = null) {
     const t = this.types[type];
     t.walls.push({ matrix, color });
     if (!glass) return;
     if (lit && kind) (t.kinds[kind] ??= []).push(matrix);
-    else if (lit && room) t.rooms.push({ matrix, ...room });
+    else if (room) (lit ? t.rooms : t.shades).push({ matrix, ...room });
     else (lit ? t.lit : t.dark).push(matrix);
   }
 
@@ -187,12 +191,13 @@ class FacadeBatcher {
         mesh.frustumCulled = false;
         scene.add(mesh);
       }
-      if (t.rooms.length) {
+      for (const [list, mat] of [[t.rooms, roomMaterial(litGlass)], [t.shades, shadeMaterial()]]) {
+        if (!list.length) continue;
         // Eigene Kopie der Scheibe, weil nur diese Instanzen eine Atlaszelle tragen.
         const geo = t.parts.glass.clone();
-        geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(t.rooms.map((w) => w.cell)), 1));
-        const mesh = new THREE.InstancedMesh(geo, roomMaterial(litGlass), t.rooms.length);
-        t.rooms.forEach((w, i) => {
+        geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(list.map((w) => w.cell)), 1));
+        const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+        list.forEach((w, i) => {
           mesh.setMatrixAt(i, w.matrix);
           mesh.setColorAt(i, color.setScalar(w.bright));
         });
@@ -203,18 +208,10 @@ class FacadeBatcher {
   }
 }
 
-// Ein Material für alle erleuchteten Wohnungsfenster. Jede Instanz liest über aCell ihre
-// Zelle aus dem Atlas. Die Grundfarbe gleicht den Atlas so aus, dass er im Mittel so hell
-// ist wie die bisherige einfarbige Scheibe: Aus der Ferne (kleinste Mipmap) sieht das
-// Fenster aus wie vorher, aus der Nähe zeigt es Gardine oder Zimmer.
-let roomMat = null;
-function roomMaterial(litGlass) {
-  if (roomMat) return roomMat;
-  const { map, avg } = windowAtlas();
+// Lässt jede Instanz über das Attribut aCell ihre Zelle aus dem windowAtlas lesen.
+function readAtlasCell(material, key) {
   const { cols, rows } = WINDOW_ATLAS;
-  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-  roomMat = new THREE.MeshBasicMaterial({ map, color: new THREE.Color().setScalar(lum(litGlass.color) / lum(avg)) });
-  roomMat.onBeforeCompile = (shader) => {
+  material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aCell;')
       .replace(
@@ -224,8 +221,38 @@ function roomMaterial(litGlass) {
         vMapUv = (cellXY + 0.01 + 0.98 * vMapUv) / vec2(${cols}.0, ${rows}.0);`,
       );
   };
-  roomMat.customProgramCacheKey = () => 'windowAtlas';
+  material.customProgramCacheKey = () => key;
+  return material;
+}
+
+// Ein Material für alle erleuchteten Wohnungsfenster. Die Grundfarbe gleicht den Atlas so
+// aus, dass er im Mittel so hell ist wie die bisherige einfarbige Scheibe: Aus der Ferne
+// (kleinste Mipmap) sieht das Fenster aus wie vorher, aus der Nähe zeigt es Gardine oder Zimmer.
+let roomMat = null;
+function roomMaterial(litGlass) {
+  if (roomMat) return roomMat;
+  const { map, avg } = windowAtlas();
+  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  roomMat = readAtlasCell(new THREE.MeshBasicMaterial({ map, color: new THREE.Color().setScalar(lum(litGlass.color) / lum(avg)) }), 'windowAtlas');
   return roomMat;
+}
+
+// Dunkle Wohnungsfenster: Glas, das die Nachtstraße spiegelt (nightReflection), am stärksten
+// im flachen Blick die Straße entlang. Dahinter ahnt man die Gardine desselben Stockwerks,
+// nur so hell, wie Laternen und Himmel sie treffen.
+let shadeMat = null;
+function shadeMaterial() {
+  if (shadeMat) return shadeMat;
+  const { map } = windowAtlas();
+  shadeMat = readAtlasCell(std({
+    map,
+    color: new THREE.Color().setScalar(SHADE_ALBEDO),
+    roughness: 0.08,
+    metalness: 0,
+    envMap: nightReflection(),
+    envMapIntensity: SHADE_REFLECT,
+  }), 'windowAtlasDark');
+  return shadeMat;
 }
 
 export const FACING = { south: 0, north: Math.PI, east: Math.PI / 2, west: -Math.PI / 2 };
@@ -263,6 +290,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const batcher = new FacadeBatcher();
   const kindRand = rng(1894);
   const winRand = rng(1895);
+  const shadeRand = rng(1897);
   const massing = new Bag();
   const reliefRand = rng(1896);
   const reliefBag = new Bag();
@@ -362,7 +390,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     // Gauben auf der steilen Vorderseite des Dachs; ihr Fuß steckt im Dach.
     for (const d of dormers) {
       const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(d.bay * BAY_W, H + 0.6, -0.45));
-      batcher.place('dormer', m, col, d.on, true, null, d.on ? d.room : null);
+      batcher.place('dormer', m, col, d.on, true, null, d.room);
     }
 
     for (const [bag, into] of [[wall, reliefBag], [iron, ironBag]]) {
@@ -395,6 +423,13 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       cell: styles[floor] * WINDOW_ATLAS.cols + Math.floor(winRand() * WINDOW_ATLAS.cols),
       bright: 0.8 + winRand() * 0.35,
     });
+    // Dunkle Fenster zeigen die Art ihres Stockwerks, gewählt mit eigenem Zufall (shadeRand),
+    // damit die Bilder der erleuchteten Fenster bleiben, wie sie sind. Manche Gardine ist
+    // kaum zu sehen, manche deutlicher.
+    const shade = (floor) => ({
+      cell: styles[floor] * WINDOW_ATLAS.cols + Math.floor(shadeRand() * WINDOW_ATLAS.cols),
+      bright: 0.25 + shadeRand(),
+    });
     const plan = relief ? planRelief(bays, types, lit) : { erker: null, balconies: [], dormers: [] };
     const inErker = (i, f) => plan.erker && i >= plan.erker.start && i < plan.erker.start + plan.erker.n && f < types.length - 1;
     for (let i = 0; i < bays; i++) {
@@ -408,14 +443,14 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         const mix = shopMix(p.x, p.z);
         kind = mix[Math.floor(kindRand() * mix.length)];
       }
-      batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' && lit ? room(0) : null);
+      batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
       let y = FLOOR.ground;
       types.forEach((type, f) => {
         // Achsen im Erker rücken mit ihm vor die Fassade.
         const out = inErker(i, f) ? ERKER_OUT : 0;
         const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, out));
         const on = rand() < lit;
-        batcher.place(type, m, col, on, true, null, on ? room(f + 1) : null);
+        batcher.place(type, m, col, on, true, null, on ? room(f + 1) : shade(f + 1));
         y += FLOOR[type];
       });
     }

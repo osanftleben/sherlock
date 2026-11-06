@@ -1818,3 +1818,71 @@ export function railing() {
     return t;
   });
 }
+
+// Was dunkle Fensterscheiben spiegeln, als Rundumbild (equirektangular, Mitte = Horizont).
+// In einer schmalen Straße füllen die Häuser gegenüber das Spiegelbild bis etwa 45° nach
+// oben und unten: Fassaden mit Fensterreihen, einzelne erleuchtet, unten Läden und
+// Laternen, darüber ein Streifen Himmel mit dem Widerschein der Stadt, ganz unten das Pflaster.
+export function nightReflection() {
+  return cached('night-reflection', () => {
+    const w = 1024;
+    const h = 512;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    const r = rng(41);
+    const sky = ctx.createLinearGradient(0, 0, 0, 170);
+    sky.addColorStop(0, '#06080e');
+    sky.addColorStop(1, '#2c2a34');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, 170);
+    const street = ctx.createLinearGradient(0, 330, 0, h);
+    street.addColorStop(0, '#1e1a16');
+    street.addColorStop(1, '#08080a');
+    ctx.fillStyle = street;
+    ctx.fillRect(0, 330, w, h - 330);
+    for (let x = 0; x < w; ) {
+      const bw = 90 + r() * 110;
+      const top = 110 + r() * 40;
+      const tone = 22 + r() * 12;
+      ctx.fillStyle = `rgb(${tone + 4},${tone},${tone - 4})`;
+      ctx.fillRect(x, top, bw + 1, 330 - top);
+      // Fensterreihen: meist dunkel mit schwachem Glanz, einige erleuchtet
+      for (let wy = top + 14; wy < 280; wy += 34) {
+        for (let wx = x + 10; wx < x + bw - 14; wx += 24) {
+          const lit = r() < 0.2;
+          ctx.fillStyle = lit ? (r() < 0.5 ? '#e8a858' : '#c8803e') : '#0c0d12';
+          ctx.fillRect(wx, wy, 11, 20);
+        }
+      }
+      // Läden im Erdgeschoss
+      for (let wx = x + 8; wx < x + bw - 30; wx += 44) {
+        if (r() < 0.45) {
+          ctx.fillStyle = r() < 0.5 ? '#d8a060' : '#b88048';
+          ctx.fillRect(wx, 292, 30, 30);
+        }
+      }
+      x += bw;
+    }
+    // Laternen vor den Häusern, darunter ihr Widerschein auf dem nassen Pflaster
+    for (let x = 30; x < w; x += 120 + r() * 60) {
+      const y = 286;
+      const glow = ctx.createRadialGradient(x, y, 1, x, y, 30);
+      glow.addColorStop(0, 'rgba(255,226,160,1)');
+      glow.addColorStop(0.25, 'rgba(255,184,96,0.6)');
+      glow.addColorStop(1, 'rgba(255,160,70,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(x - 30, y - 30, 60, 60);
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(x - 2, y + 6, 4, 330 - y - 6);
+      const streak = ctx.createLinearGradient(0, 330, 0, 450);
+      streak.addColorStop(0, 'rgba(255,170,80,0.4)');
+      streak.addColorStop(1, 'rgba(255,170,80,0)');
+      ctx.fillStyle = streak;
+      ctx.fillRect(x - 6, 330, 12, 120);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}

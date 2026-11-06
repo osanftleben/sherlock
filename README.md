@@ -108,7 +108,9 @@ anschließen. Was mehrere Räume brauchen, gehört nach `fittings.js`.
 und in `shopMix` (`world/berlin/index.js`) einem Straßenzug zuteilen. Dunkle Läden zeigen einen Rollladen.
 Erleuchtete Wohnungsfenster zeigen Bilder aus `windowAtlas()` (Zeilen = Arten wie Spitzengardine oder
 Rollo, Spalten = Varianten). `facades.js` wählt je Stockwerk eines Hauses eine Art. Der Atlas wird so
-abgedunkelt, dass ein Fenster aus der Ferne so hell wirkt wie eine einfarbige Scheibe.
+abgedunkelt, dass ein Fenster aus der Ferne so hell wirkt wie eine einfarbige Scheibe. Dunkle Fenster
+zeigen dieselbe Art nur als Schimmer hinter Glas, das ein gemaltes Bild der Nachtstraße spiegelt
+(`nightReflection()`); Stärke und Helligkeit stehen in `SHADE_REFLECT` und `SHADE_ALBEDO`.
 
 **Erker, Balkone, Gauben:** Häuser aus `row()` bekommen sie nach eigenem Zufall (`planRelief` in
 `facades.js`); Häuser aus `block()` nur mit `relief: true`. Die Schauplätze der Fälle bleiben deshalb

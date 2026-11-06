@@ -161,7 +161,13 @@ export const uhrmacher = {
     { location: 'destille', anchor: 'karten', label: 'Kartentisch', radius: 0.5, action: { say: 'Skat, drei Blätter und ein offener Stich. Das Geld liegt beim Gegner. Auf Rathens Seite nur ein Zettel: „Schulde dem Überbringer zwanzig Mark. Ehrenwort. v. R.“ Ein Ehrenwort, das schon gut im Umlauf ist.' } },
 
     // Apotheke
-    { location: 'apotheke', anchor: 'jars', label: 'Standgefäße', radius: 1.2, range: 3.6, action: { say: 'Tinct. Opii, Sal Mirabile, Chinin. Eine ganze Wand von Dingen, die heilen oder töten, je nach Löffel.' } },
+    { location: 'apotheke', anchor: 'jars', label: 'Standgefäße', radius: 1.2, range: 3.6, action: { say: 'Tinct. Opii, Sal mirabile, Chinin. Eine ganze Wand von Dingen, die heilen oder töten, je nach Löffel. Die roten Schilder heißen: stark wirkend, nur auf Rezept. Chloralhydrat hat ein rotes.' } },
+    { location: 'apotheke', anchor: 'rezeptbuch', label: 'Rezeptbuch', radius: 0.22, action: { say: 'Seidels Rezeptbuch, aufgeschlagen, in gestochener Handschrift: Datum, Name, Mittel, Menge. Ich könnte darin blättern. Aber ein Apotheker, den man fragt, erzählt mehr als einer, den man bestiehlt.' } },
+    { location: 'apotheke', anchor: 'waage', label: 'Tarierwaage', radius: 0.25, action: { say: 'Eine Handwaage, die auf ein Zehntelgramm genau wiegt. Seidel justiert sie jeden Morgen, man sieht es an den blanken Stellen der Schrauben. Wer Gift in Zehntelgramm abgibt, merkt sich auch, an wen.' } },
+    { location: 'apotheke', anchor: 'giftschrank', label: 'Giftschrank', radius: 0.5, range: 3.2, action: { say: 'Venena, weiß auf schwarz, hinter Glas und zwei Schlössern: Morphium, Strychnin, Arsenik. Den Schlüssel trägt Seidel an der Uhrkette. Chloral steht nicht hier, sondern draußen bei den roten Schildern. Für den Mörder war das bequemer.' } },
+    { location: 'apotheke', anchor: 'wanduhr', label: 'Wanduhr', radius: 0.35, range: 3.5, action: { say: 'Die Uhr, die Kessler vor vier Jahren gerichtet hat. Sie geht auf die Sekunde, und am Aufzugsloch ist das Messing blank. Seidel zieht sie jeden Sonntag auf, wie ein Mann, der seinen Versprechen nachkommt.' } },
+    { location: 'apotheke', anchor: 'globus_rot', label: 'Schaugefäß', radius: 0.3, action: { say: 'Gefärbtes Wasser in einem Glaskolben, rot und gegenüber grün: seit Jahrhunderten das Zeichen der Apotheke. Und der einzige Inhalt hier, den man bedenkenlos trinken könnte.' } },
+    { location: 'apotheke', anchor: 'globus_gruen', label: 'Schaugefäß', radius: 0.3, action: { say: 'Grün wie das Gift, das es nicht enthält. Nachts leuchtet es bis auf die Straße, für den, der eine Arznei braucht, und für den, der eine sucht.' } },
 
     // Pension
     { location: 'pension', anchor: 'violine', label: 'Violine', radius: 0.35, action: { play: 'violin', say: 'Sie hat nicht den Ton meiner Stradivari, die liegt in der Baker Street, bei einem Mann, der mich für tot hält. Aber sie tut es.' } },

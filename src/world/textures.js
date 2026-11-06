@@ -834,6 +834,207 @@ export function stockList() {
   });
 }
 
+// Fliesenboden der Offizin: Schachbrett aus Cremeweiß und Schiefergrau, abgetreten.
+export function tileFloor() {
+  return cached('tiles', () => {
+    const size = 512;
+    const color = canvas(size);
+    const c = color.getContext('2d');
+    const r = rng(311);
+    const n = 12;
+    const t = size / n;
+    c.fillStyle = '#2a2622';
+    c.fillRect(0, 0, size, size);
+    for (let row = 0; row < n; row++) {
+      for (let col = 0; col < n; col++) {
+        const light = (row + col) % 2 === 0;
+        const v = (r() - 0.5) * 14;
+        c.fillStyle = light ? `rgb(${172 + v},${164 + v},${144 + v})` : `rgb(${64 + v},${64 + v},${62 + v})`;
+        c.fillRect(col * t + 1.5, row * t + 1.5, t - 3, t - 3);
+      }
+    }
+    grain(c, size, 14, 312);
+    blotches(c, size, 10, 30, 90, 'rgba(60,40,20,0.08)', 313);
+    return { map: tex(color) };
+  });
+}
+
+// Etiketten der Standgefäße als Atlas: 4 Spalten, 8 Zeilen.
+// Gewöhnliche Mittel schwarz auf weiß, Separanda rot auf weiß, Venena weiß auf schwarz.
+export const JAR_LABELS = [
+  ['Tinct. Opii', 's'], ['Sal mirabile', 'n'], ['Chinin. sulf.', 'n'], ['Rad. Valerian.', 'n'],
+  ['Fol. Digital.', 's'], ['Flor. Chamom.', 'n'], ['Sem. Lini', 'n'], ['Pulv. Ipecac.', 'n'],
+  ['Kal. bromat.', 'n'], ['Natr. bicarb.', 'n'], ['Magnes. ust.', 'n'], ['Rad. Rhei', 'n'],
+  ['Ol. Ricini', 'n'], ['Extr. Bellad.', 's'], ['Camphora', 'n'], ['Acid. boric.', 'n'],
+  ['Zinc. oxyd.', 'n'], ['Sulf. depur.', 'n'], ['Fol. Sennae', 'n'], ['Hb. Menth. pip.', 'n'],
+  ['Rad. Liquirit.', 'n'], ['Spir. aether.', 'n'], ['Bals. peruv.', 'n'], ['Ferr. reduct.', 'n'],
+  ['Chloral. hydrat.', 's'], ['Codein. phosph.', 's'], ['Bism. subnitr.', 'n'], ['Lith. carbon.', 'n'],
+  ['Morph. hydrochl.', 'v'], ['Strychn. nitr.', 'v'], ['Acid. arsenic.', 'v'], ['Hydrarg. bichl.', 'v'],
+];
+
+export function jarLabels() {
+  return cached('jarlabels', () => {
+    const cw = 256;
+    const ch = 96;
+    const c = canvas(cw * 4, ch * 8);
+    const ctx = c.getContext('2d');
+    JAR_LABELS.forEach(([name, kind], i) => {
+      const x = (i % 4) * cw;
+      const y = Math.floor(i / 4) * ch;
+      const ink = kind === 's' ? '#8a1a14' : kind === 'v' ? '#ece6d6' : '#1a1612';
+      ctx.fillStyle = kind === 'v' ? '#141210' : '#d6caa8';
+      ctx.fillRect(x, y, cw, ch);
+      // Kartusche mit Doppelrand und eingezogenen Ecken
+      ctx.strokeStyle = kind === 'v' ? '#c8a860' : ink;
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(x + 22, y + 10);
+      ctx.lineTo(x + cw - 22, y + 10);
+      ctx.quadraticCurveTo(x + cw - 22, y + ch / 2 - 10, x + cw - 8, y + ch / 2);
+      ctx.quadraticCurveTo(x + cw - 22, y + ch / 2 + 10, x + cw - 22, y + ch - 10);
+      ctx.lineTo(x + 22, y + ch - 10);
+      ctx.quadraticCurveTo(x + 22, y + ch / 2 + 10, x + 8, y + ch / 2);
+      ctx.quadraticCurveTo(x + 22, y + ch / 2 - 10, x + 22, y + 10);
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 32, y + 19, cw - 64, ch - 38);
+      ctx.fillStyle = ink;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      let size = 40;
+      ctx.font = `bold ${size}px "EB Garamond", serif`;
+      while (ctx.measureText(name).width > cw - 76 && size > 18) {
+        size -= 2;
+        ctx.font = `bold ${size}px "EB Garamond", serif`;
+      }
+      ctx.fillText(name, x + cw / 2, y + ch / 2 + 2);
+    });
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Schild über dem Repositorium: schwarzer Adler im Goldmedaillon, Schrift zu beiden Seiten.
+export function eagleSign() {
+  return cached('eaglesign', () => {
+    const w = 1280;
+    const h = 192;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#16120e';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#c8a860';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(10, 10, w - 20, h - 20);
+    ctx.fillStyle = '#c8a860';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Jede Schrift bekommt das Feld zwischen Rand und Medaillon und wird notfalls kleiner gesetzt.
+    const field = (w / 2 - 80 - 20 - 30) - 40;
+    const fit = (text, size) => {
+      ctx.font = `${size}px "UnifrakturMaguntia", serif`;
+      while (ctx.measureText(text).width > field && size > 24) {
+        size -= 2;
+        ctx.font = `${size}px "UnifrakturMaguntia", serif`;
+      }
+    };
+    fit('Apotheke', 80);
+    ctx.fillText('Apotheke', (30 + w / 2 - 100) / 2, h / 2 + 4);
+    fit('zum Schwarzen Adler', 64);
+    ctx.fillText('zum Schwarzen Adler', (w / 2 + 100 + w - 30) / 2, h / 2 + 4);
+    // Medaillon
+    const cx = w / 2;
+    const cy = h / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 80, 0, 7);
+    ctx.fillStyle = '#c8a860';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 72, 0, 7);
+    ctx.fillStyle = '#e2c880';
+    ctx.fill();
+    eagle(ctx, cx, cy + 4, 1);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Heraldischer Adler, schwarz, Kopf nach links gewendet.
+function eagle(ctx, cx, cy, s) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(s, s);
+  ctx.fillStyle = '#14100c';
+  // Schwingen: gespreizte Federn
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      const a = -0.9 + i * 0.32;
+      ctx.save();
+      ctx.translate(side * 10, -14);
+      ctx.rotate(side * (Math.PI / 2 + a));
+      ctx.beginPath();
+      ctx.ellipse(0, -26 - i * 1.5, 6, 28 - i * 2, 0, 0, 7);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.beginPath();
+    ctx.moveTo(side * 6, -26);
+    ctx.quadraticCurveTo(side * 34, -46, side * 58, -40);
+    ctx.lineTo(side * 54, -26);
+    ctx.quadraticCurveTo(side * 30, -30, side * 8, -8);
+    ctx.fill();
+  }
+  // Leib und Schwanz
+  ctx.beginPath();
+  ctx.ellipse(0, -2, 13, 26, 0, 0, 7);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-12, 18);
+  ctx.lineTo(-20, 44);
+  ctx.lineTo(-7, 38);
+  ctx.lineTo(0, 48);
+  ctx.lineTo(7, 38);
+  ctx.lineTo(20, 44);
+  ctx.lineTo(12, 18);
+  ctx.fill();
+  // Fänge
+  ctx.strokeStyle = '#14100c';
+  ctx.lineWidth = 3;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.moveTo(side * 8, 16);
+    ctx.lineTo(side * 18, 28);
+    ctx.lineTo(side * 24, 26);
+    ctx.moveTo(side * 18, 28);
+    ctx.lineTo(side * 22, 34);
+    ctx.stroke();
+  }
+  // Kopf mit Schnabel und Zunge
+  ctx.beginPath();
+  ctx.arc(-4, -32, 9, 0, 7);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(-11, -36);
+  ctx.quadraticCurveTo(-22, -36, -20, -28);
+  ctx.lineTo(-12, -30);
+  ctx.fill();
+  ctx.strokeStyle = '#8a1a14';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-14, -30);
+  ctx.lineTo(-20, -24);
+  ctx.stroke();
+  ctx.fillStyle = '#e2c880';
+  ctx.beginPath();
+  ctx.arc(-6, -34, 1.8, 0, 7);
+  ctx.fill();
+  ctx.restore();
+}
+
 export function clockFace(hour = 9, minute = 40, size = 256) {
   const c = canvas(size);
   const ctx = c.getContext('2d');

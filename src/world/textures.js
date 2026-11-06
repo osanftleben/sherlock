@@ -1141,6 +1141,287 @@ export function laceCurtain() {
   });
 }
 
+// Gemalte Auslagen gewöhnlicher Läden, wie man sie abends durch die Scheibe sieht:
+// Rückwand mit Borden im Lampenlicht, Waren, unten die Auslage, oben Goldschrift.
+export const SHOP_KINDS = ['baecker', 'fleischer', 'kolonial', 'tuche', 'buch', 'zigarren', 'hut'];
+const SHOP_NAMES = {
+  baecker: 'Bäckerei',
+  fleischer: 'Fleischerei',
+  kolonial: 'Colonialwaaren',
+  tuche: 'Manufacturwaaren',
+  buch: 'Buchhandlung',
+  zigarren: 'Cigarren',
+  hut: 'Hüte & Mützen',
+};
+
+export function shopDisplay(kind) {
+  return cached(`shop-${kind}`, () => {
+    const S = 512;
+    const c = canvas(S);
+    const ctx = c.getContext('2d');
+    const r = rng(SHOP_KINDS.indexOf(kind) * 97 + 5);
+    const pick = (list) => list[Math.floor(r() * list.length)];
+    const wall = { baecker: '#b88a52', fleischer: '#a8a296', kolonial: '#7a5a34', tuche: '#6a4a3a', buch: '#5a3a26', zigarren: '#4a2e1c', hut: '#7a6a58' }[kind];
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, S, S);
+    if (kind === 'fleischer') {
+      // weiße Kacheln
+      ctx.strokeStyle = 'rgba(120,110,100,0.5)';
+      ctx.lineWidth = 2;
+      for (let y = 0; y < S; y += 32) for (let x = 0; x < S; x += 32) ctx.strokeRect(x, y, 32, 32);
+    }
+    const shelves = [170, 285];
+    const shelf = (y) => {
+      ctx.fillStyle = '#3a2414';
+      ctx.fillRect(0, y, S, 12);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, y + 12, S, 10);
+    };
+    const box = (x, y, w, h, fill, label) => {
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y - h, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(x, y - h, w * 0.18, h);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(x + w * 0.85, y - h, w * 0.15, h);
+      if (label) {
+        ctx.fillStyle = label;
+        ctx.fillRect(x + w * 0.15, y - h * 0.65, w * 0.7, h * 0.3);
+      }
+    };
+    const blob = (x, y, rx, ry, fill, rot = 0) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, rot, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,240,210,0.18)';
+      ctx.beginPath();
+      ctx.ellipse(x - rx * 0.3, y - ry * 0.35, rx * 0.45, ry * 0.3, rot, 0, 7);
+      ctx.fill();
+    };
+    // Unten die Auslage, ein Stoff- oder Holzbrett
+    const bed = { baecker: '#e8dcc0', fleischer: '#9a968e', kolonial: '#4a3018', tuche: '#5a1a1a', buch: '#2a3a2a', zigarren: '#3a2414', hut: '#2a2a3a' }[kind];
+
+    if (kind === 'baecker') {
+      for (const y of shelves) {
+        shelf(y);
+        for (let x = 20; x < S - 40; x += 58 + r() * 10) blob(x + 25, y - 22, 26, 18, pick(['#a0602a', '#b8783a', '#8a4e22']));
+      }
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      for (let x = 18; x < S; x += 36) blob(x, 432 + (x % 72 ? 0 : 6), 15, 11, '#c88a48');
+      for (let x = 30; x < S; x += 70) {
+        ctx.strokeStyle = '#9a5a26';
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        ctx.arc(x, 478, 18, 0.3, Math.PI * 2 - 0.3);
+        ctx.stroke();
+      }
+    } else if (kind === 'fleischer') {
+      ctx.fillStyle = '#5a5a5a';
+      ctx.fillRect(0, 96, S, 8);
+      for (let x = 18; x < S; x += 30 + r() * 12) {
+        const len = 60 + r() * 120;
+        ctx.fillStyle = pick(['#7a2a1a', '#8a3a22', '#5a2414', '#a85a3a']);
+        ctx.fillRect(x, 104, 13 + r() * 8, len);
+        ctx.beginPath();
+        ctx.arc(x + 9, 104 + len, 9, 0, Math.PI);
+        ctx.fill();
+      }
+      shelf(330);
+      for (let x = 30; x < S; x += 90) blob(x + 20, 300, 40, 26, pick(['#b8645a', '#c87a6a', '#a04a3a']));
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      for (let x = 20; x < S; x += 80) {
+        ctx.fillStyle = '#eae6dc';
+        ctx.beginPath();
+        ctx.ellipse(x + 30, 445, 38, 12, 0, 0, 7);
+        ctx.fill();
+        blob(x + 30, 438, 26, 12, pick(['#b8443a', '#c86a5a', '#d8a090']));
+      }
+    } else if (kind === 'kolonial') {
+      for (const y of shelves) {
+        shelf(y);
+        for (let x = 10; x < S - 30; x += 40) box(x, y, 34, 50 + r() * 26, pick(['#2a4a6a', '#6a2a1a', '#2a5a3a', '#a07a2a', '#1a1a1a']), '#e8dcb8');
+      }
+      // Zuckerhüte in blauem Papier
+      for (const x of [60, 450]) {
+        ctx.fillStyle = '#e8e8e0';
+        ctx.beginPath();
+        ctx.moveTo(x - 22, 400);
+        ctx.lineTo(x, 330);
+        ctx.lineTo(x + 22, 400);
+        ctx.fill();
+        ctx.fillStyle = '#2a4a8a';
+        ctx.fillRect(x - 24, 372, 48, 28);
+      }
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      // Säcke mit aufgerolltem Rand
+      for (let x = 30; x < S; x += 96) {
+        ctx.fillStyle = '#b8a070';
+        ctx.fillRect(x, 420, 70, 92);
+        ctx.fillStyle = '#d8c090';
+        ctx.fillRect(x - 4, 412, 78, 16);
+        blob(x + 35, 424, 30, 9, pick(['#4a2a14', '#e8e0c8', '#c8a040', '#6a4a20']));
+      }
+    } else if (kind === 'tuche') {
+      for (const y of shelves) {
+        shelf(y);
+        for (let x = 8; x < S - 20; x += 30) {
+          const h = 70 + r() * 20;
+          box(x, y, 26, h, pick(['#2a2a4a', '#5a2a2a', '#3a4a3a', '#8a7a5a', '#d8d0c0', '#4a3a5a', '#7a5a3a']));
+        }
+      }
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      // drapierte Stoffbahn
+      const g = ctx.createLinearGradient(0, 0, S, 0);
+      for (let i = 0; i <= 10; i++) g.addColorStop(i / 10, i % 2 ? '#4a6a8a' : '#2a4a6a');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(180, 300);
+      ctx.quadraticCurveTo(256, 420, 340, 300);
+      ctx.lineTo(380, 512);
+      ctx.lineTo(140, 512);
+      ctx.fill();
+    } else if (kind === 'buch') {
+      for (const y of shelves) {
+        shelf(y);
+        for (let x = 4; x < S - 8; x += 9 + r() * 6) {
+          const w = 8 + r() * 6;
+          box(x, y, w, 60 + r() * 34, pick(['#5a1a1a', '#1a2a4a', '#2a3a1a', '#6a4a1a', '#3a2a2a', '#8a7a5a']));
+        }
+      }
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      // aufgestellte Bücher mit hellem Titelfeld
+      for (let x = 30; x < S; x += 95) {
+        ctx.save();
+        ctx.translate(x + 30, 470);
+        ctx.rotate(-0.12);
+        ctx.fillStyle = pick(['#6a1a1a', '#1a3a5a', '#3a4a1a']);
+        ctx.fillRect(-30, -80, 60, 80);
+        ctx.fillStyle = '#e0d4b0';
+        ctx.fillRect(-20, -66, 40, 22);
+        ctx.restore();
+      }
+    } else if (kind === 'zigarren') {
+      for (const y of shelves) {
+        shelf(y);
+        for (let x = 12; x < S - 40; x += 52) {
+          box(x, y, 46, 22, '#8a5a2a', pick(['#c83a2a', '#e8c860', '#2a6a4a']));
+          box(x + 2, y - 22, 42, 20, '#7a4a22', '#e8dcb0');
+        }
+      }
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      for (let x = 40; x < S; x += 110) {
+        // Pfeife
+        ctx.strokeStyle = '#2a1a10';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.moveTo(x, 450);
+        ctx.lineTo(x + 50, 440);
+        ctx.stroke();
+        ctx.fillStyle = '#5a3018';
+        ctx.fillRect(x + 46, 420, 18, 26);
+        // Tabaktopf
+        box(x + 70, 490, 28, 40, '#c8b890', '#3a2a1a');
+      }
+    } else if (kind === 'hut') {
+      shelf(200);
+      ctx.fillStyle = bed;
+      ctx.fillRect(0, 400, S, S - 400);
+      const hat = (x, y, type) => {
+        ctx.fillStyle = '#3a2a1a';
+        ctx.fillRect(x - 2, y, 4, 400 - y);
+        if (type === 0) {
+          ctx.fillStyle = '#141414';
+          ctx.fillRect(x - 22, y - 50, 44, 50);
+          ctx.fillRect(x - 34, y - 4, 68, 8);
+        } else if (type === 1) {
+          ctx.fillStyle = '#2a2018';
+          ctx.beginPath();
+          ctx.arc(x, y, 26, Math.PI, 0);
+          ctx.fill();
+          ctx.fillRect(x - 34, y - 3, 68, 7);
+        } else {
+          ctx.fillStyle = pick(['#6a2a4a', '#2a4a6a', '#8a6a3a']);
+          ctx.beginPath();
+          ctx.ellipse(x, y, 42, 10, 0, 0, 7);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(x, y - 4, 20, Math.PI, 0);
+          ctx.fill();
+          ctx.strokeStyle = '#e8e0d0';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(x + 10, y - 18);
+          ctx.quadraticCurveTo(x + 40, y - 50, x + 50, y - 20);
+          ctx.stroke();
+        }
+      };
+      for (let x = 50; x < S; x += 100) hat(x, 190, Math.floor(r() * 3));
+      for (let x = 100; x < S; x += 100) hat(x, 330, Math.floor(r() * 3));
+    }
+
+    // Lampenlicht von oben, Ränder dunkler
+    const light = ctx.createRadialGradient(S / 2, S * 0.3, 20, S / 2, S * 0.45, S * 0.75);
+    light.addColorStop(0, 'rgba(255,220,150,0.25)');
+    light.addColorStop(0.6, 'rgba(0,0,0,0)');
+    light.addColorStop(1, 'rgba(10,5,0,0.55)');
+    ctx.fillStyle = light;
+    ctx.fillRect(0, 0, S, S);
+
+    // Goldschrift oben auf der Scheibe
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '56px "UnifrakturMaguntia", serif';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = 'rgba(25,14,4,0.85)';
+    ctx.strokeText(SHOP_NAMES[kind], S / 2, 52, S - 40);
+    const gold = ctx.createLinearGradient(0, 28, 0, 76);
+    gold.addColorStop(0, '#f6dc96');
+    gold.addColorStop(1, '#a87a2a');
+    ctx.fillStyle = gold;
+    ctx.fillText(SHOP_NAMES[kind], S / 2, 52, S - 40);
+
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Geschlossener Laden: hölzerne Klappläden vor dem Schaufenster, mit Eisenriegel.
+export function shopShutter() {
+  return cached('shutter', () => {
+    const S = 256;
+    const c = canvas(S);
+    const ctx = c.getContext('2d');
+    const r = rng(23);
+    for (let x = 0; x < S; x += 32) {
+      const v = 0.85 + r() * 0.3;
+      ctx.fillStyle = `rgb(${Math.round(42 * v)},${Math.round(52 * v)},${Math.round(40 * v)})`;
+      ctx.fillRect(x, 0, 32, S);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(x, 0, 2, S);
+      ctx.fillStyle = 'rgba(255,255,255,0.06)';
+      ctx.fillRect(x + 2, 0, 3, S);
+    }
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, S * 0.48, S, 12);
+    ctx.fillStyle = '#2a2a2a';
+    ctx.beginPath();
+    ctx.arc(S / 2, S * 0.48 + 6, 9, 0, 7);
+    ctx.fill();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
 // Schwerer, zugezogener Samtvorhang (dunkelgrün), senkrechte Falten.
 export function velvetDrape() {
   return cached('velvet', () => {

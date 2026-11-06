@@ -103,6 +103,10 @@ abschließen. Sperre und Kulisse entfernen, an derselben Stelle mit `block` und 
 `world/interiors/index.js` eintragen und in `berlin/index.js` mit `doorSpot` und `loc.exits` an ein Haus
 anschließen. Was mehrere Räume brauchen, gehört nach `fittings.js`.
 
+**Neue Ladenart:** Die Auslagen der übrigen Läden sind gemalte Bilder aus `shopDisplay(kind)` in
+`world/textures.js`. Eine neue Art dort in `SHOP_KINDS` und `SHOP_NAMES` eintragen, ihre Waren zeichnen
+und in `shopMix` (`world/berlin/index.js`) einem Straßenzug zuteilen. Dunkle Läden zeigen einen Rollladen.
+
 ## Geschichtlicher Hintergrund
 
 Belegte Details: Bahnhof Börse (heute Hackescher Markt), Stadtbahn seit 1882, Litfaßsäulen,

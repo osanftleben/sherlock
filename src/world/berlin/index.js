@@ -63,7 +63,16 @@ export function buildBerlin() {
   const roofMat = std({ ...slate(), roughness: 0.65 });
   const brickMat = std({ ...brick(), roughness: 0.88 });
   const ironMat = std({ color: 0x0f1211, roughness: 0.55, metalness: 0.5 });
-  const facades = createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass, roofMat });
+  // Ladensorten je Straße, damit man die Straßen an ihren Läden unterscheidet:
+  // Rosenthaler Straße Alltagsbedarf, Sophienstraße Handwerk und Bücher,
+  // Oranienburger Straße feinere Waren, am Markt gemischt.
+  const shopMix = (x, z) => {
+    if (Math.abs(x) <= 12 && z < -24) return ['kolonial', 'kolonial', 'kolonial', 'baecker', 'baecker', 'fleischer', 'fleischer', 'zigarren', 'tuche'];
+    if (x > 9 && z > -112 && z < -88) return ['buch', 'buch', 'hut', 'zigarren', 'baecker', 'kolonial', 'tuche'];
+    if (x < -32 && z > -22 && z < 6) return ['tuche', 'tuche', 'tuche', 'buch', 'buch', 'hut', 'hut', 'zigarren', 'kolonial'];
+    return ['baecker', 'baecker', 'zigarren', 'zigarren', 'kolonial', 'kolonial', 'fleischer', 'hut', 'buch'];
+  };
+  const facades = createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass, roofMat, shopMix });
   const { block, row } = facades;
 
   // --- Rosenthaler Straße ---------------------------------------------------

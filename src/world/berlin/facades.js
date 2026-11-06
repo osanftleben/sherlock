@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, merge, pediment, roofPrism, std } from '../kit.js';
-import { pavement } from '../textures.js';
+import { pavement, rng, shopDisplay, shopShutter } from '../textures.js';
 
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
 export const BAY_W = 3.4;
@@ -60,14 +60,14 @@ function bayParts(type) {
       sill(ww, 1.3);
       wall.box(trimC, ww + 0.34, 0.14, 0.14, W / 2, 3.68, 0.07);
     } else if (type === 'shop' || type === 'display') {
+      // Große Spiegelscheibe ohne Mittelpfosten, damit die Goldschrift frei steht.
       // display: Schaufenster ohne Rückwand, dahinter baut der Aufrufer eine Auslage.
       const ww = 2.7;
       hole(ww, 0.7, 2.75, type === 'shop');
-      glass.push(box(ww - 0.06, 2.7, 0.02, W / 2, 0.7 + 1.37, -D + 0.05));
+      // Scheibe mit UV 0..1, damit die gemalte Auslage (shopDisplay) die ganze Fläche füllt.
+      glass.push(new THREE.BoxGeometry(ww - 0.06, 2.7, 0.02).translate(W / 2, 0.7 + 1.37, -D + 0.05));
       wall.box(wood, ww + 0.1, 0.1, 0.07, W / 2, 0.72, -D + 0.1);
       wall.box(wood, ww + 0.1, 0.1, 0.07, W / 2, 3.42, -D + 0.1);
-      // Mittelpfosten nur bei gewöhnlichen Läden; die Auslagen haben eine große Spiegelscheibe.
-      if (type === 'shop') wall.box(wood, 0.08, 2.75, 0.07, W / 2, 2.07, -D + 0.1);
       wall.box(wood, ww + 0.1, 0.5, 0.1, W / 2, 0.45, 0.04);
     } else {
       const ww = 1.7;
@@ -121,20 +121,26 @@ class FacadeBatcher {
   constructor() {
     this.types = {};
     for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic']) {
-      this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [] };
+      this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {} };
     }
   }
 
   // glass: false lässt die Scheibe weg, wenn der Aufrufer sie selbst baut (Schaufenster).
-  place(type, matrix, color, lit, glass = true) {
+  // kind: Ladensorte eines erleuchteten Schaufensters, bestimmt die gemalte Auslage.
+  place(type, matrix, color, lit, glass = true, kind = null) {
     const t = this.types[type];
     t.walls.push({ matrix, color });
-    if (glass) (lit ? t.lit : t.dark).push(matrix);
+    if (!glass) return;
+    if (lit && kind) (t.kinds[kind] ??= []).push(matrix);
+    else (lit ? t.lit : t.dark).push(matrix);
   }
 
   build(scene, wallMat, darkGlass, litGlass) {
     const color = new THREE.Color();
-    for (const t of Object.values(this.types)) {
+    // Geschlossene Läden haben Klappläden, erleuchtete zeigen ihre Auslage.
+    const shutter = std({ map: shopShutter(), roughness: 0.85 });
+    const displayTint = new THREE.Color(0.95, 0.85, 0.7);
+    for (const [name, t] of Object.entries(this.types)) {
       if (t.walls.length) {
         const mesh = new THREE.InstancedMesh(t.parts.wall, wallMat, t.walls.length);
         t.walls.forEach((w, i) => {
@@ -144,7 +150,9 @@ class FacadeBatcher {
         mesh.frustumCulled = false;
         scene.add(mesh);
       }
-      for (const [list, mat] of [[t.dark, darkGlass], [t.lit, litGlass]]) {
+      const lists = [[t.dark, name === 'shop' ? shutter : darkGlass], [t.lit, litGlass]];
+      for (const [kind, list] of Object.entries(t.kinds)) lists.push([list, new THREE.MeshBasicMaterial({ map: shopDisplay(kind), color: displayTint })]);
+      for (const [list, mat] of lists) {
         if (!list.length) continue;
         const mesh = new THREE.InstancedMesh(t.parts.glass, mat, list.length);
         list.forEach((m, i) => mesh.setMatrixAt(i, m));
@@ -184,9 +192,11 @@ function trimMasses(masses, slabs) {
 
 // Baukasten für Häuserzeilen. block() und row() setzen Häuser, finish() baut danach alles,
 // was erst feststeht, wenn alle Häuser stehen: Hauskörper, Dächer, Gehwege.
-export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass, roofMat }) {
+// shopMix(x, z): Liste der Ladensorten an dieser Stelle (mehrfach genannt = häufiger).
+export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass, roofMat, shopMix = null }) {
   const { scene } = loc;
   const batcher = new FacadeBatcher();
+  const kindRand = rng(1894);
   const massing = new Bag();
   const masses = [];
   const slabs = [];
@@ -210,7 +220,15 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     for (let i = 0; i < bays; i++) {
       const tGround = ground[i] || (rand() < 0.32 ? 'shop' : 'ground');
       const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
-      batcher.place(tGround, gx, col, tGround === 'shop' ? rand() < 0.8 : rand() < 0.2, !ownGlass.includes(i));
+      const lit = tGround === 'shop' ? rand() < 0.8 : rand() < 0.2;
+      let kind = null;
+      if (tGround === 'shop' && lit && shopMix) {
+        // Ladensorte aus eigenem Zufall, damit rand unverändert bleibt.
+        const p = new THREE.Vector3().setFromMatrixPosition(gx);
+        const mix = shopMix(p.x, p.z);
+        kind = mix[Math.floor(kindRand() * mix.length)];
+      }
+      batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind);
       let y = FLOOR.ground;
       for (const type of types) {
         const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, 0));

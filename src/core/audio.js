@@ -5,6 +5,7 @@ export class Audio {
     this.env = 'street';
     this.nextHoof = 8;
     this.nextBell = 45;
+    this.nextDrop = 0;
   }
 
   // Muss aus einer Nutzeraktion heraus aufgerufen werden (Autoplay-Regeln).
@@ -27,27 +28,39 @@ export class Audio {
 
     // Wind
     this.windGain = ctx.createGain();
-    this.windGain.gain.value = 0.16;
+    this.windGain.gain.value = 0.09;
     const windFilter = ctx.createBiquadFilter();
     windFilter.type = 'lowpass';
-    windFilter.frequency.value = 340;
+    windFilter.frequency.value = 260;
     const lfo = ctx.createOscillator();
     lfo.frequency.value = 0.07;
     const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 130;
+    lfoGain.gain.value = 80;
     lfo.connect(lfoGain).connect(windFilter.frequency);
     lfo.start();
     this.loop(windFilter);
     windFilter.connect(this.windGain).connect(this.master);
 
-    // Nieselregen
+    // Nieselregen: nur ein Hauch Rauschen, der Rest sind einzelne Tropfen
     this.rainGain = ctx.createGain();
-    this.rainGain.gain.value = 0.035;
+    this.rainGain.gain.value = 0.004;
     const rainFilter = ctx.createBiquadFilter();
     rainFilter.type = 'highpass';
-    rainFilter.frequency.value = 3500;
+    rainFilter.frequency.value = 4500;
     this.loop(rainFilter);
     rainFilter.connect(this.rainGain).connect(this.master);
+    // Tropfen laufen über fünf feste Panner; drinnen dämpfen Wand und Fenster sie ab.
+    this.dropGain = ctx.createGain();
+    this.dropMuffle = ctx.createBiquadFilter();
+    this.dropMuffle.type = 'lowpass';
+    this.dropMuffle.frequency.value = 16000;
+    this.dropGain.connect(this.dropMuffle).connect(this.master);
+    this.dropPans = [-0.8, -0.4, 0, 0.4, 0.8].map((v) => {
+      const p = ctx.createStereoPanner();
+      p.pan.value = v;
+      p.connect(this.dropGain);
+      return p;
+    });
 
     // Grollen der Stadtbahn
     this.trainGain = ctx.createGain();
@@ -74,11 +87,13 @@ export class Audio {
     if (!this.ctx) return;
     const outdoors = env === 'street';
     const t = this.ctx.currentTime;
-    this.windGain.gain.setTargetAtTime(outdoors ? 0.16 : 0.02, t, 0.4);
-    this.rainGain.gain.setTargetAtTime(outdoors ? 0.035 : 0.002, t, 0.4);
+    this.windGain.gain.setTargetAtTime(outdoors ? 0.09 : 0.012, t, 0.4);
+    this.rainGain.gain.setTargetAtTime(outdoors ? 0.004 : 0.0007, t, 0.4);
+    this.dropGain.gain.setTargetAtTime(outdoors ? 1 : 0.35, t, 0.4);
+    this.dropMuffle.frequency.setTargetAtTime(outdoors ? 16000 : 1800, t, 0.4);
   }
 
-  burst({ freq = 800, q = 1, dur = 0.08, gain = 0.2, type = 'bandpass', when = 0 }) {
+  burst({ freq = 800, q = 1, dur = 0.08, gain = 0.2, type = 'bandpass', when = 0, attack = 0, out = this.master }) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + when;
@@ -90,13 +105,19 @@ export class Audio {
     f.frequency.value = freq;
     f.Q.value = q;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(gain, t);
+    if (attack > 0) {
+      // Weicher Einsatz statt harten Schlags
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(gain, t + attack);
+    } else {
+      g.gain.setValueAtTime(gain, t);
+    }
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(this.master);
+    src.connect(f).connect(g).connect(out);
     src.start(t, Math.random() * 2, dur + 0.02);
   }
 
-  tone({ freq, dur = 1, gain = 0.1, type = 'sine', when = 0, attack = 0.005 }) {
+  tone({ freq, dur = 1, gain = 0.1, type = 'sine', when = 0, attack = 0.005, out = this.master }) {
     if (!this.ctx) return;
     const ctx = this.ctx;
     const t = ctx.currentTime + when;
@@ -107,7 +128,7 @@ export class Audio {
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(gain, t + attack);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.master);
+    osc.connect(g).connect(out);
     osc.start(t);
     osc.stop(t + dur + 0.05);
     return osc;
@@ -193,9 +214,32 @@ export class Audio {
     }
   }
 
+  // Regen als dichte, zufällige Folge harter, kurzer Einschläge auf Pflaster,
+  // Dach und Fensterblech. Manchmal treffen zwei, drei Tropfen fast gleichzeitig.
+  rain(dt) {
+    const rate = this.env === 'street' ? 55 : 10;
+    this.nextDrop -= dt;
+    while (this.nextDrop < 0) {
+      this.drop();
+      this.nextDrop += -Math.log(1 - Math.random()) / rate;
+    }
+  }
+
+  drop() {
+    const out = this.dropPans[Math.floor(Math.random() * this.dropPans.length)];
+    const hits = Math.random() < 0.15 ? 2 + Math.floor(Math.random() * 2) : 1;
+    let when = Math.random() * 0.03;
+    for (let i = 0; i < hits; i++) {
+      const loud = Math.random() ** 2.5;
+      this.burst({ freq: 1200 + Math.random() * 6000, q: 1.5 + Math.random() * 4, dur: 0.004 + Math.random() * 0.01, gain: 0.03 + loud * 0.15, when, out });
+      when += 0.004 + Math.random() * 0.012;
+    }
+  }
+
   // trainDistance in Metern (Infinity, wenn kein Zug in der Nähe ist).
   update(dt, trainDistance) {
     if (!this.ctx) return;
+    this.rain(dt);
     if (this.env === 'street') {
       this.nextHoof -= dt;
       if (this.nextHoof < 0) {

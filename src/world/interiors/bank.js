@@ -98,6 +98,8 @@ export function buildBank() {
 
   loc.anchor('wendt', 0.2, 0, -2.0, 0);
   loc.anchor('kassierer', -3.95, 0, 1.0, Math.PI / 2);
+  // Neben der Tür, den Blick in den Raum: Wer hereinkommt, geht an ihm vorbei.
+  loc.anchor('portier', 1.45, 0, 2.75, -Math.PI / 2 - 0.5);
   return room.finish();
 }
 

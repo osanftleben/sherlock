@@ -38,6 +38,7 @@ export const uhrmacher = {
     c_rathen: { title: 'Rathens Bein', text: 'Von Rathen trägt eine Kugel von Mars-la-Tour im Knie und kommt ohne Stock keine drei Schritte weit. Er raucht billige Stumpen.' },
     c_aussage: { title: 'Wendts Aussage', text: 'Wendt behauptet, seine Repetieruhr liege noch bei Kessler, er habe sie seit Mittwoch nicht gesehen. Den Freitagabend habe er in der Bank verbracht und sei nie in der Werkstatt gewesen.' },
     c_havanna: { title: 'Wendts Havanna', text: 'Auf Wendts Schreibtisch steht eine Kiste H. Upmann. Die Asche im Becher ist weiß, fest und lang.' },
+    c_portier: { title: 'Der Portier', text: 'Portier Lemke schloss am Freitag um acht ab und ging. Wendt behielt den Schlüssel zur Hofpforte, um später selbst zu gehen; wann, weiß niemand. Seit Mittwoch fragte Wendt ihn nach der Zeit, die Uhr sei beim Uhrmacher. Heute früh schlug sie in Wendts Weste.' },
     c_kette: { title: 'Die Uhrkette', text: 'Wendts Uhrkette spannt sich straff in die Westentasche: An ihrem Ende hängt ein Gewicht. Trotzdem liest er die Zeit von der Wanduhr ab, statt die Tasche zu berühren.' },
   },
 
@@ -51,6 +52,7 @@ export const uhrmacher = {
     d_repetier: { title: 'Uhr Nr. 17 ging spazieren', pairs: [['c_buch', 'c_glocke']], text: 'Eine Repetieruhr schlägt die Zeit auf Knopfdruck, damit man sie im Dunkeln hören kann. Der Mann unter der kaputten Laterne trug die Uhr Nr. 17 bei sich.' },
     d_asche: { title: 'Die Asche gehört Wendt', pairs: [['c_asche', 'c_havanna']], text: 'Dieselbe weiße Asche, dieselbe Zigarre. Über den Unterschied der Tabakaschen habe ich eine Monographie geschrieben; hier genügt ein Blick.' },
     d_luege: { title: 'Wendt lügt', pairs: [['c_aussage', 'c_haken'], ['c_aussage', 'c_kette']], text: 'Die Uhr soll noch bei Kessler liegen, aber der Haken ist leer und Wendts Kette trägt ein Gewicht. Er hat sie selbst geholt, und das nur am Freitagabend.' },
+    d_alibi: { title: 'Wendts Alibi hat ein Loch', pairs: [['c_aussage', 'c_portier']], text: 'Sein einziger Zeuge ging um acht. Danach saß der Prokurist allein in der Bank, mit dem Schlüssel zur Hofpforte in der Tasche, und bis zur Rosenthaler Straße sind es zehn Minuten. Und die Uhr, die angeblich noch bei Kessler liegt, schlug heute früh in seiner Weste.' },
     d_motiv: { title: 'Das Motiv', pairs: [['c_loesch', 'c_extrablatt']], text: 'Am Montag kommt die Revision. Der Zettel in der Uhr war der Beweis einer Unterschlagung, und Kessler drohte mit der Polizei. Dem Täter blieben drei Tage.' },
     d_beweis: { title: 'Der Beweis in der Weste', pairs: [['c_ritz', 'c_kette']], text: 'In Wendts Weste hängt eine Uhr, in deren Gehäuse Kessler „17/92“ geritzt hat. Ein Griff genügt, und seine Aussage ist widerlegt.' },
   },
@@ -65,6 +67,7 @@ export const uhrmacher = {
     { name: 'Egon von Rathen', role: 'Leutnant a. D., spielt und hat Schulden bei Kessler.' },
     { name: 'Reinhold Wendt', role: 'Prokurist im Bankhaus Lindner & Sohn, Kunde bei Kessler.', when: ['f_wendt'] },
     { name: 'Apotheker Seidel', role: 'Apotheke zum Schwarzen Adler.', when: ['f_seidel'] },
+    { name: 'Portier Lemke', role: 'Hütet die Tür des Bankhauses Lindner & Sohn. Geht um acht nach Hause.', when: ['f_lemke'] },
   ],
 
   // Das erste Ziel, dessen Bedingung noch nicht erfüllt ist, steht im Notizbuch und bei Dr. Voss.
@@ -92,6 +95,7 @@ export const uhrmacher = {
     { id: 'brandt', location: 'destille', anchor: 'brandt', name: 'Otto Brandt', dialog: 'brandt', look: { outfit: 'jacket', coat: 0x4a3a26, vest: 0x2a241c, shirt: 0xc8c0aa, neck: 'scarf', tie: 0x7a2a1e, trousers: 0x2a241a, hat: 'cap', hatColor: 0x2a2418, hair: 0x4a3622, beard: 'stubble', glass: true, height: 1.72 } },
     { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { outfit: 'frock', coat: 0x2a2a30, vest: 0x5a1e22, neck: 'cravat', tie: 0xd8d2c4, trousers: 0x3a3a40, hair: 0x5a5048, hairStyle: 'parted', moustache: 'kaiser', eyewear: 'monocle', cane: 'silver', build: 'slim', height: 1.8 } },
     { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { outfit: 'frock', coat: 0x16181c, vest: 0x2a2a2e, trousers: 0x202024, hair: 0x2a241e, hairStyle: 'parted', beard: 'mutton', moustache: 'brush', eyewear: 'spectacles', chain: true, height: 1.8 } },
+    { id: 'lemke', location: 'bank', anchor: 'portier', name: 'Portier Lemke', dialog: 'lemke', look: { outfit: 'overcoat', coat: 0x2c3a5c, buttons: 0xc8a048, trousers: 0x1c2030, neck: 'none', hat: 'peaked', hatColor: 0x222a40, moustache: 'walrus', hair: 0x8a8278, hairStyle: 'receding', build: 'stout', height: 1.74 } },
     { id: 'kassierer', location: 'bank', anchor: 'kassierer', name: 'Kassierer', look: { outfit: 'jacket', coat: 0x26262a, vest: 0x3a3a3c, shirt: 0xd8d2c4, neck: 'tie', tie: 0x1a1a1e, hair: 0x6a5a48, hairStyle: 'parted', moustache: 'brush', eyewear: 'spectacles', build: 'slim', height: 1.7 }, say: '„Der Herr Prokurist ist sehr beschäftigt, die Revision, Sie verstehen.“ Er senkt den Blick wieder auf seine Kolonnen. Seine Feder hat seit einer Viertelstunde keine Zahl mehr geschrieben.' },
     { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, neck: 'scarf', tie: 0x3a3428, hat: 'cap', beard: 'full', glass: true, build: 'stout', pose: 'sit' }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
     { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: 'walrus', hair: 0x5a5048, glass: true, pose: 'sit' }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
@@ -289,6 +293,32 @@ export const uhrmacher = {
       },
     },
 
+    lemke: {
+      who: 'Portier Lemke',
+      start: [{ req: ['f_lemke'], node: 'hub' }, { node: 'a' }],
+      nodes: {
+        a: {
+          give: ['f_lemke'],
+          obs: 'Livree mit Messingknöpfen, die er selbst poliert, den Daumen am Ärmelaufschlag. Ein Mann, der seit zwanzig Jahren jeden kennt, der durch diese Tür geht, und jeden grüßt, als täte er es zum ersten Mal.',
+          text: 'N’Abend, der Herr. Jeschlossen is, aber der Herr Prokurist is noch drin, wejen die Revision. Ick sag ihm Bescheid, dass Se wejen Herrn Kessler kommen. Der arme Mann. Hat mir mal ’ne Feder für zehn Pfennich einjesetzt.',
+          opts: [{ t: 'Sehr freundlich. Ich habe noch ein paar Fragen.', go: 'hub' }],
+        },
+        hub: {
+          text: 'Na, wat jibt’s?',
+          opts: [
+            { t: 'Wann sind Sie am Freitag gegangen?', go: 'freitag', req: ['c_aussage', '!c_portier'] },
+            { t: 'Hatte Herr Wendt am Freitag keine Uhr dabei?', go: 'uhr', req: ['f_lemke_freitag', '!c_portier'] },
+            { t: 'Erzählen Sie noch einmal von der Uhr.', go: 'uhr', req: ['c_portier'] },
+            { t: 'Wie ist Herr Wendt so?', go: 'wendt', once: true },
+            { t: 'Gute Nacht, Lemke.', end: true },
+          ],
+        },
+        freitag: { give: ['f_lemke_freitag'], text: 'Um achte, wie immer. Licht im Schalterraum aus, Vordertür zu. Der Herr Prokurist saß noch über die Bücher und hat sich den Schlüssel zur Hofpforte jeben lassen, er wollte später selber jehen. Wann? Weeß ick nich. Um halb neune war ick in Pankow bei Muttern.', opts: [{ t: 'Hatte er keine Uhr dabei?', go: 'uhr' }, { t: 'Danke, Lemke.', go: 'hub' }] },
+        uhr: { give: ['c_portier'], sound: 'repeater', text: 'Die Uhr? Die war doch beim Uhrmacher, seit Mittwoch. Dreimal am Tag hat er mir jefragt, wie spät dit is, Freitag um sieben noch. Aber heute früh, wie er rinkommt, steht er im Flur und denn macht’s in seiner Weste: pling, pling. Ick sach noch: Na, Herr Prokurist, is se wieder da? Hat er jetan, als ob er nüscht hört.', opts: [{ t: 'Das ist sehr aufschlussreich.', go: 'hub' }] },
+        wendt: { text: 'Fleißig. Erster da, letzter weg, seit Wochen schon. Früher hat er mir zu Weihnachten ’ne Zigarre jeschenkt, ’ne echte Havanna. Dies Jahr wird’s wohl nüscht, so wie der aussieht.', opts: [{ t: 'Verstehe.', go: 'hub' }] },
+      },
+    },
+
     seidel: {
       who: 'Apotheker Seidel',
       start: [{ req: ['f_seidel'], node: 'hub' }, { node: 'a' }],
@@ -411,6 +441,7 @@ export const uhrmacher = {
             { t: 'Darf ich Ihre Zigarren bewundern?', go: 'zigarre', req: ['!c_havanna'] },
             { t: 'Was hat es mit der Revision auf sich?', go: 'revision', once: true },
             { t: 'Sie schlafen schlecht, Herr Prokurist.', go: 'schlaf', once: true, req: ['c_rezept'] },
+            { t: 'Ihr Portier ging am Freitag um acht.', go: 'portier', once: true, req: ['c_portier'] },
             { t: 'Danke für Ihre Zeit.', end: true },
           ],
         },
@@ -419,6 +450,7 @@ export const uhrmacher = {
         zeit: { give: ['c_kette'], text: 'Einen Augenblick. Es ist … zehn Minuten vor zehn.', obs: 'Seine Hand zuckt zur Westentasche, hält auf halbem Weg inne und greift nach dem Federhalter. Er hebt die Augen zur Wanduhr. Die Kette bleibt straff. Etwas hängt an ihr, und er will es mir nicht zeigen.', opts: [{ t: 'Verbindlichen Dank.', go: 'hub' }] },
         zigarre: { give: ['c_havanna'], text: 'H. Upmann, bedienen Sie sich. Mein einziges Laster, wie meine Frau sagt.', obs: 'Im Aschenbecher liegt ein Stück Asche, lang, weiß und fest.', opts: [{ t: 'Sehr freundlich, später vielleicht.', go: 'hub' }] },
         revision: { text: 'Eine Beruhigungsmaßnahme für das Publikum. Seit den Zusammenbrüchen des vergangenen Jahres zuckt jeder Einleger zusammen, wenn eine Tür knarrt. Bei uns ist alles in bester Ordnung, und am Montag wird das jeder sehen.', opts: [{ t: 'Daran zweifle ich nicht.', go: 'hub' }] },
+        portier: { text: 'Lemke? Gewiss, um acht geht er. Danach war ich allein hier, mit den Büchern. Ist Fleiß neuerdings verdächtig, Herr Sigerson?', obs: 'Er streicht über die Weste, als wolle er sie glätten. Die Kette ist noch immer straff.', opts: [{ t: 'Fleiß nicht.', go: 'hub' }] },
         schlaf: { text: 'Das sieht man mir an? Die Geschäfte. Dr. Lessing verschreibt mir etwas dagegen, Seidel hat es vorrätig. Ich nehme es selten. Sehr selten. Warum fragen Sie?', opts: [{ t: 'Reine Teilnahme.', go: 'hub' }] },
       },
     },

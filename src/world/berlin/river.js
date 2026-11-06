@@ -48,11 +48,29 @@ export function buildRiver(loc, FOG, bank) {
         uniform vec3 boat;
         varying vec3 vW; varying float vD;
         float n(vec2 p){ return sin(p.x)*sin(p.y); }
+        float hash(vec2 c){ return fract(sin(dot(c, vec2(127.1, 311.7))) * 43758.5453); }
+        // Regenring: ein Tropfen je Zelle (Kante size), an zufälliger Stelle, alle 1,6 bis 3 s.
+        // Der Ring wächst in 0,9 s auf 0,3 der Zelle (bleibt also in ihr) und verblasst dabei.
+        float ring(vec2 p, float size, float seed){
+          vec2 c = floor(p / size);
+          float h = hash(c + seed);
+          float age = mod(time + h * 7.0, 1.6 + h * 1.4) / 0.9;
+          vec2 ctr = (c + 0.3 + 0.4 * vec2(h, fract(h * 13.7))) * size;
+          float r = length(p - ctr);
+          float width = 0.035 + fwidth(r) * 1.5;
+          float rad = age * 0.3 * size;
+          float k = (1.0 - age) * step(age, 1.0) * 0.035 / width;
+          // Außenring und ein schwächerer innerer, der ihm nachläuft.
+          return k * (exp(-pow((r - rad) / width, 2.0)) + 0.5 * exp(-pow((r - rad * 0.55) / width, 2.0)));
+        }
         // x des Lichts in Tiefe zl, das auf der Linie Auge–Wasserpunkt liegt.
         float along(float zl, float zv){ return cameraPosition.x + (vW.x - cameraPosition.x) * (zl - zv) / max(vW.z - zv, 0.5); }
         void main(){
           vec2 p = vW.xz;
+          // Nieselregen: zwei versetzte Raster, nur in der Nähe (in der Ferne flimmerten sie nur).
+          float rain = (ring(p, 1.5, 0.0) + ring(p + 0.75, 1.9, 17.0)) * (1.0 - smoothstep(8.0, 30.0, vD));
           float w = n(p*vec2(0.7,2.4)+vec2(time*0.5,time*0.2)) + 0.5*n(p*vec2(1.7,5.1)-vec2(time*0.7,0.0)) + 0.25*n(p*vec2(3.9,9.0)+time);
+          w += rain * 1.4;
           float wx = n(p*vec2(2.3,0.9)+vec2(time*0.4,-time*0.3));
           float glint = smoothstep(0.55,1.3,w);
           float zv = min(cameraPosition.z, 36.0);
@@ -79,7 +97,7 @@ export function buildRiver(loc, FOG, bank) {
           float F = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
           vec3 refl = mix(fogColor * 1.1, bankDark, m.r) + bankWin * m.g * 1.6;
 
-          vec3 c = deep * (1.0 - F) + refl * F + sheen*glint*0.12 + warm*(lamp*0.75 + lantern*0.6);
+          vec3 c = deep * (1.0 - F) + refl * F + sheen*(glint*0.12 + rain*0.5) + warm*(lamp*0.75 + lantern*0.6);
           float f = 1.0 - exp(-pow(vD*0.0125, 2.0));
           gl_FragColor = vec4(mix(c, fogColor, f), 1.0);
           #include <tonemapping_fragment>
@@ -91,7 +109,16 @@ export function buildRiver(loc, FOG, bank) {
   water.position.set(0, WATER_Y, QUAY + 40);
   scene.add(water);
   const barge = buildBarge(scene);
-  loc.onUpdate((dt, t) => {
+  // Für den Klang: Abstand zur Quaimauer und zum Kahn, Seite (-1 links, 1 rechts) vom Hörer aus.
+  loc.river = { distance: Infinity, barge: Infinity, pan: 0, bargePan: 0 };
+  loc.onUpdate((dt, t, { camera, player }) => {
+    const { x, z } = camera.position;
+    const yaw = player.yaw;
+    const side = (dx, dz) => (Math.cos(yaw) * dx - Math.sin(yaw) * dz) / Math.max(Math.hypot(dx, dz), 1e-3);
+    loc.river.distance = Math.max(0, QUAY + 1 - z);
+    loc.river.pan = side(0, 1);
+    loc.river.barge = Math.hypot(BARGE.x - x, BARGE.z - z);
+    loc.river.bargePan = side(BARGE.x - x, BARGE.z - z);
     water.material.uniforms.time.value = t;
     // Der Kahn hebt sich und rollt kaum merklich mit den Wellen.
     barge.position.y = WATER_Y + Math.sin(t * 0.9) * 0.03;

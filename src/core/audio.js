@@ -71,6 +71,34 @@ export class Audio {
     this.loop(trainFilter);
     trainFilter.connect(this.trainGain).connect(this.master);
 
+    // Wasser an der Quaimauer: gedämpftes Rauschen, dessen Pegel langsam schwillt, dazu einzelne
+    // Schwapper (update). Alles läuft über waterOut, dessen Pegel die Nähe zum Quai setzt.
+    this.waterPan = ctx.createStereoPanner();
+    this.waterOut = ctx.createGain();
+    this.waterOut.gain.value = 0;
+    this.waterOut.connect(this.waterPan).connect(this.master);
+    const waterFilter = ctx.createBiquadFilter();
+    waterFilter.type = 'bandpass';
+    waterFilter.frequency.value = 420;
+    waterFilter.Q.value = 0.8;
+    const swell = ctx.createGain();
+    swell.gain.value = 0.05;
+    const swellLfo = ctx.createOscillator();
+    swellLfo.frequency.value = 0.23;
+    const swellDepth = ctx.createGain();
+    swellDepth.gain.value = 0.03;
+    swellLfo.connect(swellDepth).connect(swell.gain);
+    swellLfo.start();
+    this.loop(waterFilter);
+    waterFilter.connect(swell).connect(this.waterOut);
+    // Kahn: Knarren der Leinen und dumpfes Anstoßen des Rumpfs.
+    this.bargePan = ctx.createStereoPanner();
+    this.bargeOut = ctx.createGain();
+    this.bargeOut.gain.value = 0;
+    this.bargeOut.connect(this.bargePan).connect(this.master);
+    this.nextSlap = 0;
+    this.nextCreak = 4;
+
     this.setEnvironment(this.env);
   }
 
@@ -247,10 +275,62 @@ export class Audio {
     }
   }
 
-  // trainDistance in Metern (Infinity, wenn kein Zug in der Nähe ist).
-  update(dt, trainDistance) {
+  // Eine Welle schwappt gegen die Mauer.
+  slap() {
+    const loud = Math.random();
+    this.burst({ freq: 260 + Math.random() * 380, q: 1.1, dur: 0.3 + Math.random() * 0.35, gain: 0.06 + loud * 0.08, attack: 0.05 + Math.random() * 0.05, out: this.waterOut });
+    if (loud > 0.6) this.burst({ freq: 1400 + Math.random() * 900, q: 2, dur: 0.12, gain: 0.015, when: 0.08, attack: 0.02, out: this.waterOut });
+  }
+
+  // Eine Leine knarrt, wenn der Kahn sich hebt; manchmal stößt der Rumpf dumpf an die Treppe.
+  creak() {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const dur = 0.5 + Math.random() * 0.5;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    const f0 = 70 + Math.random() * 40;
+    osc.frequency.setValueAtTime(f0, t);
+    osc.frequency.linearRampToValueAtTime(f0 * (0.75 + Math.random() * 0.15), t + dur);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 700 + Math.random() * 500;
+    f.Q.value = 5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(f).connect(g).connect(this.bargeOut);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
+    if (Math.random() < 0.35) this.burst({ freq: 110, q: 2, dur: 0.3, gain: 0.25, when: dur * 0.6, attack: 0.02, out: this.bargeOut });
+  }
+
+  // trainDistance in Metern (Infinity, wenn kein Zug in der Nähe ist); river aus river.js
+  // (Abstand und Seite von Quaimauer und Kahn), fehlt in Innenräumen.
+  update(dt, trainDistance, river) {
     if (!this.ctx) return;
     this.rain(dt);
+    const outdoors = this.env === 'street';
+    const now = this.ctx.currentTime;
+    const nearWater = outdoors && river ? Math.max(0, 1 - river.distance / 18) ** 2 : 0;
+    const nearBarge = outdoors && river ? Math.max(0, 1 - river.barge / 30) ** 2 : 0;
+    this.waterOut.gain.setTargetAtTime(nearWater, now, 0.3);
+    this.bargeOut.gain.setTargetAtTime(nearBarge, now, 0.3);
+    if (river) {
+      this.waterPan.pan.setTargetAtTime(river.pan * 0.7, now, 0.1);
+      this.bargePan.pan.setTargetAtTime(river.bargePan * 0.8, now, 0.1);
+    }
+    this.nextSlap -= dt;
+    if (this.nextSlap < 0) {
+      if (nearWater > 0.01) this.slap();
+      this.nextSlap = 0.5 + Math.random() * 1.4;
+    }
+    this.nextCreak -= dt;
+    if (this.nextCreak < 0) {
+      if (nearBarge > 0.01) this.creak();
+      this.nextCreak = 5 + Math.random() * 10;
+    }
     if (this.env === 'street') {
       this.nextHoof -= dt;
       if (this.nextHoof < 0) {

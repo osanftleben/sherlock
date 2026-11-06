@@ -106,6 +106,14 @@ Die Szene wird in einen 4×-MSAA-Puffer im Format R11G11B10F gerechnet (`view.js
 Leuchten, aber halb so breit wie RGBA16F. Schon Löschen und Auflösen des Puffers sind auf schwachen
 Grafikchips teuer; mit dem kompakten Format sinkt die GPU-Zeit in 1080p um gut 1 ms.
 
+**Spree:** Der Wasserspiegel steht als `WATER_Y` in `world/berlin/river.js` (2,7 m unter der Quaikante);
+Quaimauer, Treppe, Kahn und die Kaimauer am Gegenufer richten sich danach. Das Wasser spiegelt das
+Gegenufer ohne zweiten Renderdurchgang: `horizon.js` trägt beim Bauen Häuser und erleuchtete Fenster in
+eine kleine Spiegelkarte ein (`BankMirror`), und der Wasser-Shader verfolgt den gespiegelten Sehstrahl bis
+zur Uferlinie (`BANK_Z`). Wer dort etwas baut, trägt es mit `mirror.fill(...)` ein. Lichtbahnen der
+Quai-Laternen, Kahnlaterne und Regenringe rechnet derselbe Shader. Abstand und Richtung zu Quai und Kahn
+meldet `river.js` als `loc.river` an `core/audio.js` (Plätschern, Knarren der Leinen).
+
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Dahinter stehen Kulissen (Abschnitt „Kulissen hinter den Baustellen“ samt Laternen), die nur den Blick
 abschließen. Sperre und Kulisse entfernen, an derselben Stelle mit `block` und `row` weiterbauen und

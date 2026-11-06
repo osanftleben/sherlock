@@ -5,7 +5,6 @@ export class Audio {
     this.env = 'street';
     this.nextHoof = 8;
     this.nextBell = 45;
-    this.nextTick = 0;
   }
 
   // Muss aus einer Nutzeraktion heraus aufgerufen werden (Autoplay-Regeln).
@@ -208,13 +207,6 @@ export class Audio {
     if (this.nextBell < 0) {
       this.bell();
       this.nextBell = 90 + Math.random() * 60;
-    }
-    if (this.env === 'workshop') {
-      this.nextTick -= dt;
-      if (this.nextTick < 0) {
-        this.burst({ freq: 3400 + Math.random() * 1800, q: 7, dur: 0.02, gain: 0.08 + Math.random() * 0.1 });
-        this.nextTick = 0.12 + Math.random() * 0.2;
-      }
     }
     const near = this.env === 'street' ? Math.max(0, 1 - trainDistance / 150) : 0;
     this.trainGain.gain.setTargetAtTime(near * near * 0.8, this.ctx.currentTime, 0.3);

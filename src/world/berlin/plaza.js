@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, merge, std } from '../kit.js';
-import { clockFace, posterWall, signTexture, softDisc } from '../textures.js';
+import { clockFace, posterWall, signTexture, softDisc, uraniaPanels } from '../textures.js';
 import { idleFigure, makeFigure } from '../figures.js';
 import { makeDroschke } from './traffic.js';
 
@@ -49,14 +49,30 @@ export function buildPlaza(loc, r, ironMat) {
   // Litfaßsäule
   const lx = -16;
   const lz = -3;
-  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 3.1, 24, 1, true), std({ map: posterWall(), roughness: 0.9, emissive: 0x332a1c, emissiveMap: posterWall() }));
-  column.position.set(lx, 1.85, lz);
+  // Plakatfläche 3 m hoch; leicht selbstleuchtend, damit man das Extrablatt auch weitab der
+  // Laternen lesen kann, aber nicht so hell, dass die Säule wie eine Lampe wirkt.
+  const posters = posterWall();
+  const column = new THREE.Mesh(new THREE.CylinderGeometry(0.86, 0.86, 3.0, 40, 1, true), std({ map: posters, roughness: 0.9, emissive: 0x2a2216, emissiveMap: posters }));
+  column.position.set(lx, 1.9, lz);
   scene.add(column);
+  // Gusseisen: profilierter Sockel, Ringe an den Plakatkanten, Fries mit Zahnschnitt,
+  // Kranzgesims und eine flache Kuppel mit Knauf.
+  const IRON = 0x1a2019;
   const capBag = new Bag();
-  capBag.add(cyl(0.95, 0.98, 0.3, lx, 0.15, lz, 24), 0x1a2019);
-  capBag.add(cyl(0.9, 0.9, 0.3, lx, 3.45, lz, 24), 0x1a2019);
-  capBag.add(cyl(0.2, 1.0, 0.7, lx, 3.95, lz, 24), 0x1a2019);
-  capBag.add(cyl(0.03, 0.09, 0.3, lx, 4.42, lz, 8), 0x1a2019);
+  capBag.add(cyl(1.02, 1.08, 0.12, lx, 0.06, lz, 40), IRON);
+  capBag.add(cyl(0.94, 1.0, 0.24, lx, 0.24, lz, 40), IRON);
+  for (const y of [0.38, 3.42]) capBag.add(new THREE.TorusGeometry(0.88, 0.035, 6, 40).rotateX(Math.PI / 2).translate(lx, y, lz), IRON);
+  capBag.add(cyl(0.9, 0.9, 0.3, lx, 3.58, lz, 40), IRON);
+  for (let i = 0; i < 36; i++) {
+    const a = (i / 36) * Math.PI * 2;
+    capBag.add(new THREE.BoxGeometry(0.07, 0.09, 0.06).translate(0, 3.78, 0.92).rotateY(a).translate(lx, 0, lz), IRON);
+  }
+  capBag.add(cyl(1.04, 0.92, 0.16, lx, 3.9, lz, 40), IRON);
+  capBag.add(cyl(1.06, 1.06, 0.05, lx, 4.0, lz, 40), IRON);
+  capBag.add(new THREE.SphereGeometry(0.98, 40, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.5, 1).translate(lx, 4.02, lz), IRON);
+  capBag.add(cyl(0.06, 0.11, 0.22, lx, 4.6, lz, 12), IRON);
+  capBag.add(new THREE.SphereGeometry(0.11, 12, 8).translate(lx, 4.79, lz), IRON);
+  capBag.add(cyl(0.01, 0.03, 0.32, lx, 5.04, lz, 6), IRON);
   addMesh(scene, capBag.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }));
   loc.collide(lx - 0.7, lx + 0.7, lz - 0.7, lz + 0.7);
   loc.anchor('litfass', lx, 1.7, lz);
@@ -69,30 +85,66 @@ export function buildPlaza(loc, r, ironMat) {
     action: { say: 'Eine Erfindung des Berliner Druckers Ernst Litfaß: Die Stadt hat ihre Reklame gezähmt, indem sie ihr eine Säule gab. Wintergarten, Zirkus Renz, Lagerbier. Auch Extrablätter hängen hier.' },
   });
 
-  // Urania-Säule: öffentliche Normaluhr, seit diesem Jahr neu in der Stadt.
+  // Urania-Säule: öffentliche Normaluhr, seit diesem Jahr neu in der Stadt. Auf einem
+  // Granitsockel der von innen beleuchtete Schaukasten mit Thermometer, Barometer, Wetterkarte
+  // und Sternkarte, darüber die Uhrtrommel mit vier Zifferblättern und eine Weltkugel.
   const ux = 14;
   const uz = -10;
+  const GREEN = 0x223021;
   const urania = new Bag();
-  urania.add(cyl(0.3, 0.42, 0.4, ux, 0.2, uz, 12), 0x223021);
-  urania.add(cyl(0.16, 0.2, 3.2, ux, 2, uz, 12), 0x223021);
-  urania.add(cyl(0.35, 0.35, 0.8, ux, 3.9, uz, 12), 0x223021);
-  urania.add(cyl(0.04, 0.3, 0.45, ux, 4.5, uz, 12), 0x223021);
+  urania.add(cyl(0.34, 0.42, 0.35, ux, 0.62, uz, 16), GREEN);
+  urania.add(cyl(0.17, 0.21, 0.5, ux, 1.04, uz, 16), GREEN);
+  urania.box(GREEN, 0.84, 1.3, 0.84, ux, 1.93, uz);
+  for (const y of [1.27, 2.62]) urania.box(GREEN, 0.96, 0.1, 0.96, ux, y, uz);
+  for (const [cx, cz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) urania.add(cyl(0.05, 0.05, 1.36, ux + cx * 0.44, 1.94, uz + cz * 0.44, 8), GREEN);
+  urania.box(GREEN, 1.04, 0.12, 1.04, ux, 2.73, uz);
+  urania.add(new THREE.CylinderGeometry(0.12, 0.7, 0.36, 4).rotateY(Math.PI / 4).translate(ux, 2.97, uz), GREEN);
+  urania.add(cyl(0.1, 0.13, 0.62, ux, 3.45, uz, 12), GREEN);
+  urania.add(cyl(0.38, 0.38, 0.7, ux, 4.1, uz, 20), GREEN);
+  for (const y of [3.75, 4.45]) urania.add(new THREE.TorusGeometry(0.39, 0.03, 6, 20).rotateX(Math.PI / 2).translate(ux, y, uz), GREEN);
+  urania.add(cyl(0.44, 0.4, 0.1, ux, 4.52, uz, 20), GREEN);
+  urania.add(cyl(0.06, 0.12, 0.2, ux, 4.66, uz, 10), GREEN);
+  urania.add(cyl(0.01, 0.03, 0.4, ux, 5.32, uz, 6), GREEN);
   addMesh(scene, urania.build(), std({ vertexColors: true, roughness: 0.4, metalness: 0.5 }));
+  addMesh(scene, new THREE.BoxGeometry(0.9, 0.45, 0.9).translate(ux, 0.225, uz), std({ color: 0x5c5c58, roughness: 0.8 }));
+  // Weltkugel mit Äquator und Meridian, vergoldet.
+  const globe = new Bag();
+  globe.add(new THREE.SphereGeometry(0.24, 16, 12).translate(ux, 4.98, uz), 0xffffff);
+  globe.add(new THREE.TorusGeometry(0.255, 0.014, 6, 24).rotateX(Math.PI / 2).translate(ux, 4.98, uz), 0xffffff);
+  globe.add(new THREE.TorusGeometry(0.255, 0.014, 6, 24).translate(ux, 4.98, uz), 0xffffff);
+  addMesh(scene, globe.build(), std({ color: 0xa88a40, roughness: 0.35, metalness: 0.8 }));
+  // Vier Tafeln aus einer Textur: Thermometer nach Westen zum Platz, dann im Uhrzeigersinn.
+  const panels = [];
+  for (let i = 0; i < 4; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 2;
+    const p = new THREE.PlaneGeometry(0.62, 0.93);
+    const uv = p.attributes.uv;
+    for (let k = 0; k < uv.count; k++) uv.setX(k, (i + uv.getX(k)) / 4);
+    p.translate(0, 0, 0.425).rotateY(a).translate(ux, 1.93, uz);
+    panels.push(p);
+  }
+  addMesh(scene, merge(panels), new THREE.MeshBasicMaterial({ map: uraniaPanels(), color: new THREE.Color(0.92, 0.84, 0.68) }));
   const face = clockFace(9, 40, 128);
   for (let i = 0; i < 4; i++) {
-    const p = new THREE.Mesh(new THREE.CircleGeometry(0.28, 20), new THREE.MeshBasicMaterial({ map: face, color: new THREE.Color(1.2, 1.1, 0.85) }));
+    const p = new THREE.Mesh(new THREE.CircleGeometry(0.3, 24), new THREE.MeshBasicMaterial({ map: face, color: new THREE.Color(1.2, 1.1, 0.85) }));
     const a = (i / 4) * Math.PI * 2;
-    p.position.set(ux + Math.sin(a) * 0.36, 3.9, uz + Math.cos(a) * 0.36);
+    p.position.set(ux + Math.sin(a) * 0.385, 4.1, uz + Math.cos(a) * 0.385);
     p.rotation.y = a;
     scene.add(p);
   }
-  loc.collide(ux - 0.4, ux + 0.4, uz - 0.4, uz + 0.4);
+  // Der Schaukasten ist von innen beleuchtet: ein schwacher Schein ringsum und auf dem Pflaster.
+  const uGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xffd090, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  uGlow.position.set(ux, 1.95, uz);
+  uGlow.scale.setScalar(2.6);
+  scene.add(uGlow);
+  addPool(scene, ux, uz, 4.5, 0xc0a070, 0.2);
+  loc.collide(ux - 0.5, ux + 0.5, uz - 0.5, uz + 0.5);
   loc.addHotspot({
-    pos: [ux, 2.6, uz],
-    radius: 1,
+    pos: [ux, 2.2, uz],
+    radius: 0.9,
     range: 3.6,
     label: 'Urania-Säule',
-    action: { say: 'Die neue Urania-Säule: Normaluhr, Wetterdaten, Sternkarte. Zwanzig Minuten vor zehn, 4 Grad, Luftdruck fallend. Berlin liebt es, wenn man ihm die genaue Zeit sagt.' },
+    action: { say: 'Die neue Urania-Säule: oben die Normaluhr, darunter im erleuchteten Kasten Thermometer, Barometer, Wetterkarte und der Sternhimmel über Berlin. Zwanzig Minuten vor zehn, 4 Grad, Luftdruck fallend. Berlin liebt es, wenn man ihm die genaue Zeit sagt.' },
   });
 
   // Café Achteck: die grüne Berliner Bedürfnisanstalt.
@@ -241,8 +293,9 @@ function buildKiosk(loc) {
   const front = R * Math.cos(Math.PI / 8);
   // Auslage: ein Ausschnitt der Anschläge von der Litfaßsäule, ausgehängte Blätter und Plakate.
   const papers = posterWall().clone();
-  papers.repeat.set(0.3, 0.8);
-  papers.offset.set(0.55, 0.1);
+  // Ausschnitt im Seitenverhältnis der Scheibe (0,86 : 0,7), oben mit den Überschriften.
+  papers.repeat.set(0.3, 0.42);
+  papers.offset.set(0.55, 0.45);
   papers.needsUpdate = true;
   const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.7), new THREE.MeshBasicMaterial({ map: papers, color: new THREE.Color(1.1, 0.9, 0.65) }));
   pane.position.set(x + Math.sin(a) * (front + 0.01), 1.4, z + Math.cos(a) * (front + 0.01));

@@ -452,46 +452,300 @@ export function signTexture(lines, {
 }
 
 // Litfaßsäule: abgewickelte Plakatwand mit Anschlägen der Zeit.
+// Seitenverhältnis wie die Plakatfläche der Säule (Umfang 5,34 m zu 3,1 m Höhe), sonst wird
+// alles in die Höhe gezogen. Große Anschläge kleben über alten, halb abgerissenen; oben und unten
+// kleine Zettel. Das Extrablatt (Hinweis in Fall 1) liegt bei u ≈ 0,19 und zeigt so zum Platz.
 export function posterWall() {
   return cached('posters', () => {
     const w = 2048;
-    const h = 512;
+    const h = 1190;
     const c = canvas(w, h);
     const ctx = c.getContext('2d');
     const r = rng(91);
-    ctx.fillStyle = '#6a6252';
+    const GROUND = '#57503f';
+    const FRAKTUR = '"UnifrakturMaguntia", serif';
+    const SERIF = '"EB Garamond", serif';
+    ctx.fillStyle = GROUND;
     ctx.fillRect(0, 0, w, h);
-    const posters = [
-      ['#d9c9a0', '#222', 'Wintergarten', 'Varieté · Täglich 8 Uhr'],
-      ['#b23a2c', '#f2e4c0', 'Extrablatt', 'Bankhaus Lindner & Sohn · Revision'],
-      ['#e5d8b0', '#233', 'Urania', 'Sternwarte · Invalidenstraße'],
-      ['#26384a', '#e9d9a8', 'Schultheiss', 'Lagerbier'],
-      ['#e0cfa0', '#402010', 'Kaufhaus', 'Mäntel für den Winter'],
-      ['#9a2f2a', '#f2e4c0', 'Königl. Oper', 'Der fliegende Holländer'],
-      ['#d9c9a0', '#222', 'Zirkus Renz', 'Karlstraße · Pferdedressur'],
-      ['#3c4a30', '#e9d9a8', 'Bekanntmachung', 'Kanalbau, Rosenthaler Str.'],
-    ];
-    const pw = w / posters.length;
-    posters.forEach(([bg, fg, title, sub], i) => {
-      const x = i * pw + 6;
-      const y = 14 + r() * 30;
-      const pwh = h - 60 - r() * 30;
+    // Reste älterer Anschläge, verblichen und überklebt.
+    for (let i = 0; i < 70; i++) {
+      ctx.fillStyle = `hsla(${25 + r() * 25}, ${12 + r() * 22}%, ${38 + r() * 22}%, ${0.35 + r() * 0.3})`;
+      ctx.fillRect(r() * w, r() * h, 60 + r() * 260, 60 + r() * 420);
+    }
+
+    // Ein Anschlag in Hauskoordinaten des Blatts: Grund, Rahmen, Zeilen, mitunter eine abgerissene Ecke.
+    const sheet = (x, y, pw, ph, bg, fg, lines, { frame = true, torn = 0 } = {}) => {
       ctx.save();
       ctx.translate(x, y);
-      ctx.rotate((r() - 0.5) * 0.02);
+      ctx.rotate((r() - 0.5) * 0.025);
       ctx.fillStyle = bg;
-      ctx.fillRect(0, 0, pw - 12, pwh);
+      ctx.fillRect(0, 0, pw, ph);
+      // Kleisterfalten: blasse Streifen quer übers Papier.
+      for (let k = 0; k < 3; k++) {
+        ctx.fillStyle = `rgba(255,250,235,${0.04 + r() * 0.05})`;
+        ctx.fillRect(0, r() * ph, pw, 2 + r() * 5);
+      }
       ctx.fillStyle = fg;
+      ctx.strokeStyle = fg;
+      if (frame) {
+        ctx.lineWidth = Math.max(2, pw * 0.012);
+        ctx.strokeRect(pw * 0.05, pw * 0.05, pw * 0.9, ph - pw * 0.1);
+      }
       ctx.textAlign = 'center';
-      ctx.font = '56px "UnifrakturMaguntia", serif';
-      ctx.fillText(title, (pw - 12) / 2, 130, pw - 30);
-      ctx.font = '25px "EB Garamond", serif';
-      ctx.fillText(sub, (pw - 12) / 2, 200, pw - 24);
-      ctx.fillRect(30, 240, pw - 72, 3);
+      ctx.textBaseline = 'middle';
+      for (const [text, font, size, at] of lines) {
+        if (text === '—') {
+          ctx.fillRect(pw * 0.2, ph * at, pw * 0.6, Math.max(2, size * 0.08));
+          continue;
+        }
+        ctx.font = `${size}px ${font === 'f' ? FRAKTUR : SERIF}`;
+        ctx.fillText(text, pw / 2, ph * at, pw * 0.86);
+      }
+      if (torn) {
+        // Abgerissene Ecke unten rechts oder oben links, mit gezacktem Rand.
+        const down = r() < 0.6;
+        const tw = pw * (0.25 + r() * 0.35) * torn;
+        const th = ph * (0.15 + r() * 0.25) * torn;
+        ctx.fillStyle = GROUND;
+        ctx.beginPath();
+        if (down) {
+          ctx.moveTo(pw + 2, ph - th);
+          for (let s = 0; s <= 8; s++) ctx.lineTo(pw - (tw * s) / 8 + (r() - 0.5) * 8, ph - th + (th * s) / 8 + (r() - 0.5) * 10);
+          ctx.lineTo(pw + 2, ph + 2);
+        } else {
+          ctx.moveTo(-2, th);
+          for (let s = 0; s <= 8; s++) ctx.lineTo((tw * s) / 8 + (r() - 0.5) * 8, th - (th * s) / 8 + (r() - 0.5) * 10);
+          ctx.lineTo(-2, -2);
+        }
+        ctx.closePath();
+        ctx.fill();
+      }
       ctx.restore();
+    };
+
+    // Große Anschläge, von links nach rechts. [Breite, Grund, Schrift, Zeilen, abgerissen]
+    const posters = [
+      [226, '#d9c9a0', '#222', [['Wintergarten', 'f', 50, 0.16], ['Varieté', 's', 34, 0.3], ['—', 0, 30, 0.38], ['Täglich 8 Uhr abends', 's', 22, 0.48], ['Kunstreiter · Gymnastiker', 's', 19, 0.6], ['Kunstradfahrer · Jongleure', 's', 19, 0.68]], 0],
+      [306, '#b23a2c', '#f2e4c0', [['Extrablatt', 'f', 76, 0.14], ['—', 0, 40, 0.24], ['Bankhaus', 's', 34, 0.33], ['Lindner & Sohn', 'f', 52, 0.42], ['Außerordentliche Revision', 's', 28, 0.55], ['angeordnet durch den Aufsichtsrat', 's', 21, 0.63], ['Beginn: Montag, 14. November', 's', 25, 0.74], ['—', 0, 40, 0.84]], 0],
+      [214, '#e5d8b0', '#1e2c3a', [['Urania', 'f', 58, 0.15], ['Sternwarte', 's', 30, 0.28], ['Invalidenstraße 57', 's', 20, 0.36], ['—', 0, 30, 0.44], ['Wissenschaftliches', 's', 22, 0.54], ['Theater', 's', 22, 0.6], ['Eine Reise zum Mond', 's', 21, 0.72]], 0.6],
+      [236, '#26384a', '#e9d9a8', [['Schultheiss', 'f', 54, 0.22], ['—', 0, 30, 0.33], ['Lagerbier', 's', 36, 0.45], ['hell und dunkel', 's', 22, 0.56], ['Brauerei am Kreuzberg', 's', 19, 0.8]], 0],
+      [222, '#e0cfa0', '#402010', [['Kaufhaus', 'f', 52, 0.14], ['N. Israel', 's', 32, 0.26], ['—', 0, 30, 0.34], ['Mäntel', 's', 30, 0.45], ['für den Winter', 's', 24, 0.53], ['Spandauer Straße', 's', 19, 0.8]], 0.8],
+      [258, '#9a2f2a', '#f2e4c0', [['Königl. Oper', 'f', 50, 0.15], ['—', 0, 30, 0.25], ['Der fliegende', 's', 30, 0.36], ['Holländer', 'f', 48, 0.45], ['Romantische Oper von', 's', 20, 0.58], ['Richard Wagner', 's', 24, 0.65], ['Sonntag 7 Uhr', 's', 22, 0.8]], 0],
+      [246, '#d9c9a0', '#222', [['Zirkus Renz', 'f', 48, 0.14], ['Karlstraße', 's', 26, 0.25], ['—', 0, 30, 0.32], ['Große Pferdedressur', 's', 24, 0.43], ['Clowns · Akrobaten', 's', 22, 0.52], ['Pantomime', 's', 30, 0.66]], 0.5],
+      [228, '#3c4a30', '#e9d9a8', [['Bekanntmachung', 'f', 38, 0.12], ['—', 0, 30, 0.2], ['Kanalbau in der', 's', 22, 0.3], ['Rosenthaler Straße', 's', 24, 0.37], ['Die Straße bleibt', 's', 20, 0.5], ['bis auf Weiteres', 's', 20, 0.56], ['gesperrt.', 's', 20, 0.62], ['Der Magistrat', 's', 20, 0.82]], 0],
+    ];
+    let x = 6;
+    const spans = [];
+    for (const [pw, bg, fg, lines, torn] of posters) {
+      const y = 170 + r() * 90;
+      const ph = 640 + r() * 160;
+      sheet(x, y, pw, ph, bg, fg, lines, { torn });
+      spans.push({ x, pw, top: y, bottom: y + ph });
+      x += pw + 4 + r() * 8;
+    }
+
+    // Kleine Zettel über und unter den großen Anschlägen.
+    const bills = [
+      ['Zimmer', 'zu vermieten'], ['Verloren', 'Dackel, braun'], ['Tanzstunde', 'Mittwochs'], ['Klavier-', 'unterricht'],
+      ['Gesucht', 'Laufbursche'], ['Kohlen', 'frei Haus'], ['Schlafstelle', 'für Herren'], ['Näherin', 'empfiehlt sich'],
+      ['Vortrag', 'Elektricität'], ['Gefunden', 'Regenschirm'], ['Bierhalle', 'Concert'], ['Wäscherei', 'Gebr. Stahl'],
+    ];
+    const tones = ['#e2d6b6', '#d6c9a6', '#e8dcc0', '#c9b98e', '#d9cfb8'];
+    spans.forEach((s, i) => {
+      const [a, b] = bills[i % bills.length];
+      const bw = 96 + r() * 50;
+      sheet(s.x + r() * (s.pw - bw), 18 + r() * 60, bw, 70 + r() * 40, tones[Math.floor(r() * tones.length)], '#2a2218', [[a, 'f', 22, 0.36], [b, 's', 15, 0.7]], { frame: false });
+      const [c2, d2] = bills[(i + 5) % bills.length];
+      const bw2 = 90 + r() * 60;
+      sheet(s.x + r() * (s.pw - bw2), s.bottom + 14 + r() * 30, bw2, 80 + r() * 40, tones[Math.floor(r() * tones.length)], '#2a2218', [[c2, 'f', 22, 0.36], [d2, 's', 15, 0.7]], { frame: false, torn: r() < 0.4 ? 0.7 : 0 });
     });
+
+    // Unten Spritzwasser und Straßenschmutz.
+    const dirt = ctx.createLinearGradient(0, h - 170, 0, h);
+    dirt.addColorStop(0, 'rgba(30,26,20,0)');
+    dirt.addColorStop(1, 'rgba(30,26,20,0.7)');
+    ctx.fillStyle = dirt;
+    ctx.fillRect(0, h - 170, w, 170);
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Schaukasten der Urania-Säule, vier Tafeln nebeneinander (je 256 × 384): Thermometer bei
+// 4 Grad, Barometer fallend auf Regen, Wetterkarte mit einem Tief über der Ostsee, Sternkarte.
+// So steht es auch in Holmes’ Bemerkung zur Säule (plaza.js).
+export function uraniaPanels() {
+  return cached('urania', () => {
+    const PW = 256;
+    const PH = 384;
+    const c = canvas(PW * 4, PH);
+    const ctx = c.getContext('2d');
+    const r = rng(1888);
+    const SERIF = '"EB Garamond", serif';
+    const INK = '#2a2218';
+    const head = (x, text) => {
+      ctx.fillStyle = INK;
+      ctx.font = `30px ${SERIF}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x + PW / 2, 34);
+      ctx.fillRect(x + 40, 54, PW - 80, 2);
+    };
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = '#e9e0c8';
+      ctx.fillRect(i * PW, 0, PW, PH);
+      ctx.strokeStyle = '#6a5a40';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(i * PW + 6, 6, PW - 12, PH - 12);
+    }
+
+    // Thermometer: Celsius links, Réaumur rechts, Quecksilber bis 4 Grad.
+    head(0, 'Thermometer');
+    const tx = PW / 2;
+    const yAt = (deg) => 320 - ((deg + 20) / 50) * 230;
+    ctx.fillStyle = '#d8d4cc';
+    ctx.fillRect(tx - 7, yAt(30) - 6, 14, yAt(-20) - yAt(30) + 12);
+    ctx.beginPath();
+    ctx.arc(tx, 336, 15, 0, Math.PI * 2);
+    ctx.fillStyle = '#a0201a';
+    ctx.fill();
+    ctx.fillRect(tx - 4, yAt(4), 8, 336 - yAt(4));
+    ctx.fillStyle = INK;
+    ctx.font = `16px ${SERIF}`;
+    for (let d = -20; d <= 30; d += 10) {
+      ctx.fillRect(tx - 28, yAt(d), 16, 2);
+      ctx.textAlign = 'right';
+      ctx.fillText(`${d}`, tx - 34, yAt(d));
+      ctx.fillRect(tx + 12, yAt(d * 0.8), 16, 2);
+      ctx.textAlign = 'left';
+      ctx.fillText(`${Math.round(d * 0.8)}`, tx + 34, yAt(d * 0.8));
+    }
+    ctx.textAlign = 'center';
+    ctx.font = `17px ${SERIF}`;
+    ctx.fillText('Celsius     Réaumur', tx, 72);
+    ctx.font = `22px ${SERIF}`;
+    ctx.fillText('+ 4°', tx + 70, yAt(4));
+
+    // Barometer: Zifferblatt von Sturm bis Sehr trocken, Zeiger auf Regen.
+    const bx = PW + PW / 2;
+    const by = 200;
+    head(PW, 'Barometer');
+    ctx.beginPath();
+    ctx.arc(bx, by, 95, 0, Math.PI * 2);
+    ctx.fillStyle = '#f2ead6';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = INK;
+    ctx.stroke();
+    const words = ['Sturm', 'Regen', 'Veränderlich', 'Schön', 'Trocken'];
+    ctx.fillStyle = INK;
+    ctx.font = `15px ${SERIF}`;
+    words.forEach((word, i) => {
+      const a = -Math.PI * 0.75 + (i / 4) * Math.PI * 1.5;
+      ctx.fillText(word, bx + Math.sin(a) * 68, by - Math.cos(a) * 68);
+      ctx.fillRect(bx + Math.sin(a) * 88 - 1, by - Math.cos(a) * 88 - 1, 3, 3);
+    });
+    const needle = -Math.PI * 0.75 + 0.3 * Math.PI * 1.5 * 0.9;
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx + Math.sin(needle) * 82, by - Math.cos(needle) * 82);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(bx, by, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `20px ${SERIF}`;
+    ctx.fillText('748 mm, fallend', bx, 330);
+
+    // Wetterkarte: Küstenlinie, Isobaren um ein Tief im Nordosten, Stationen mit Wind.
+    const mx = PW * 2;
+    head(mx, 'Wetterkarte');
+    ctx.font = `15px ${SERIF}`;
+    ctx.fillText('12. November, 8 Uhr früh', mx + PW / 2, 76);
+    ctx.strokeStyle = '#4a6a80';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(mx + 20, 150);
+    ctx.bezierCurveTo(mx + 70, 120, mx + 110, 160, mx + 150, 128);
+    ctx.bezierCurveTo(mx + 180, 108, mx + 210, 118, mx + 238, 104);
+    ctx.stroke();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.5;
+    for (let k = 0; k < 4; k++) {
+      ctx.beginPath();
+      ctx.ellipse(mx + 180, 112, 28 + k * 30, 20 + k * 24, -0.3, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.font = `bold 34px ${SERIF}`;
+    ctx.fillText('T', mx + 180, 114);
+    ctx.font = `14px ${SERIF}`;
+    for (let k = 0; k < 9; k++) {
+      const sx = mx + 30 + r() * 196;
+      const sy = 170 + r() * 160;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx - 16, sy - 6 - r() * 10);
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(mx + 150, 230, 6, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillText('Berlin', mx + 150, 248);
+
+    // Sternkarte: der Himmel über Berlin am Abend, Großer Wagen und Kassiopeia.
+    const sx0 = PW * 3;
+    ctx.fillStyle = '#16203a';
+    ctx.fillRect(sx0, 0, PW, PH);
+    ctx.strokeStyle = '#c8b070';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(sx0 + 6, 6, PW - 12, PH - 12);
+    ctx.fillStyle = '#e8d8a0';
+    ctx.font = `28px ${SERIF}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Sternhimmel', sx0 + PW / 2, 34);
+    ctx.font = `15px ${SERIF}`;
+    ctx.fillText('über Berlin, 10 Uhr abends', sx0 + PW / 2, 62);
+    const cx = sx0 + PW / 2;
+    const cy = 220;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 110, 0, Math.PI * 2);
+    ctx.fillStyle = '#0c1428';
+    ctx.fill();
+    ctx.strokeStyle = '#c8b070';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    for (let k = 0; k < 90; k++) {
+      const a = r() * Math.PI * 2;
+      const d = Math.sqrt(r()) * 104;
+      ctx.fillStyle = `rgba(240,232,200,${0.4 + r() * 0.6})`;
+      ctx.fillRect(cx + Math.cos(a) * d, cy + Math.sin(a) * d, 1.5 + r() * 2, 1.5 + r() * 2);
+    }
+    const figure = (pts) => {
+      ctx.strokeStyle = 'rgba(200,176,112,0.8)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      pts.forEach(([px, py], k) => (k ? ctx.lineTo(cx + px, cy + py) : ctx.moveTo(cx + px, cy + py)));
+      ctx.stroke();
+      ctx.fillStyle = '#f4ead0';
+      for (const [px, py] of pts) ctx.fillRect(cx + px - 2.5, cy + py - 2.5, 5, 5);
+    };
+    figure([[-70, 30], [-48, 18], [-28, 22], [-10, 30], [-6, 58], [24, 62], [26, 34], [-10, 30]]);
+    figure([[10, -70], [28, -52], [44, -66], [62, -48], [80, -62]]);
+    ctx.fillStyle = '#f4ead0';
+    ctx.beginPath();
+    ctx.arc(cx, cy - 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = `13px ${SERIF}`;
+    ctx.fillText('Polarstern', cx, cy + 12);
+
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
     return t;
   });
 }

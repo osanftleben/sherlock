@@ -3,11 +3,15 @@ import { fogPuff } from '../textures.js';
 
 export function buildWeather(loc, r) {
   const { scene } = loc;
-  // Bodennebel, der dem Spieler folgt.
-  const fogMat = new THREE.SpriteMaterial({ map: fogPuff(), color: 0x6c7a90, transparent: true, opacity: 0.11, depthWrite: false, fog: false });
+  // Bodennebel, der dem Spieler folgt. Jede Schwade blendet nah an der Kamera und am Rand ihres
+  // Kastens aus: Sonst verschwände sie schlagartig, sobald ihr Mittelpunkt hinter die Kamera
+  // treibt oder sie auf die andere Seite springt, und in dunklen Durchfahrten sähe das aus wie
+  // Licht, das über die Wände wandert. Unter Dach (loc.dry) gibt es keinen Bodennebel.
+  const FOG_OPACITY = 0.11;
+  const fogMat = new THREE.SpriteMaterial({ map: fogPuff(), color: 0x6c7a90, transparent: true, opacity: FOG_OPACITY, depthWrite: false, fog: false });
   const puffs = [];
   for (let i = 0; i < 26; i++) {
-    const s = new THREE.Sprite(fogMat);
+    const s = new THREE.Sprite(fogMat.clone());
     const size = 16 + r() * 18;
     s.scale.set(size, size * 0.45, 1);
     s.position.set((r() - 0.5) * 110, 1.3 + r() * 2.5, (r() - 0.5) * 110);
@@ -67,17 +71,30 @@ export function buildWeather(loc, r) {
   rain.frustumCulled = false;
   scene.add(rain);
 
+  const ahead = new THREE.Vector3();
+  const rel = new THREE.Vector3();
+  let cover = 1;
   loc.onUpdate((dt, t, { camera }) => {
     rain.material.uniforms.time.value = t;
     rain.material.uniforms.origin.value.copy(camera.position);
+    const c = camera.position;
+    const roofed = (loc.dry ?? []).some((d) => c.x > d.minX && c.x < d.maxX && c.z > d.minZ && c.z < d.maxZ && c.y < (d.top ?? 4.5));
+    cover += ((roofed ? 0 : 1) - cover) * (1 - Math.exp(-dt * 3));
+    camera.getWorldDirection(ahead);
     for (const p of puffs) {
       p.s.position.x += p.vx * dt;
-      const dx = p.s.position.x - camera.position.x;
-      const dz = p.s.position.z - camera.position.z;
+      const dx = p.s.position.x - c.x;
+      const dz = p.s.position.z - c.z;
       if (dx > 55) p.s.position.x -= 110;
       if (dx < -55) p.s.position.x += 110;
       if (dz > 55) p.s.position.z -= 110;
       if (dz < -55) p.s.position.z += 110;
+      // Tiefe vor der Kamera: unter 2 m unsichtbar, ab 12 m voll. Am Kastenrand (55 m) ebenso aus.
+      const depth = rel.subVectors(p.s.position, c).dot(ahead);
+      const edge = Math.max(Math.abs(p.s.position.x - c.x), Math.abs(p.s.position.z - c.z));
+      const fade = THREE.MathUtils.smoothstep(depth, 2, 12) * (1 - THREE.MathUtils.smoothstep(edge, 40, 54));
+      p.s.material.opacity = FOG_OPACITY * fade * cover;
+      p.s.visible = p.s.material.opacity > 0.002;
     }
   });
 }

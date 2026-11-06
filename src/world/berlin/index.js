@@ -94,6 +94,25 @@ export function buildBerlin() {
   row({ x: -64.6, z: -14, face: 'south', bays: 10 });
   row({ x: -32, z: -2, face: 'north', bays: 41 });
 
+  // --- Kulissen hinter den Baustellen ------------------------------------------
+  // Die Straßen laufen hinter den Sperren weiter und enden an einer Querstraße, damit die
+  // Stadt dort nicht sichtbar aufhört. Begehbar ist das nicht, die Sperren halten den
+  // Spieler auf. Eigener Zufall, damit die übrigen Häuser so bleiben, wie sie sind.
+  // Wird das nächste Viertel gebaut, weichen diese Kulissen den echten Straßen.
+  const rb = rng(1893);
+  // Rosenthaler Straße nach Norden, Querstraße bei z = -243 bis -231
+  row({ x: -9, z: -190.6, face: 'east', bays: 12, rand: rb });
+  row({ x: 9, z: -230.8, face: 'west', bays: 12, rand: rb });
+  // Querzeilen nur so breit, wie man sie durch die Straßenschlucht sieht.
+  row({ x: -23.8, z: -243, face: 'south', bays: 14, rand: rb });
+  // Sophienstraße nach Osten, Querstraße bei x = 172 bis 184
+  row({ x: 131.4, z: -105, face: 'south', bays: 12, rand: rb });
+  row({ x: 170.8, z: -95, face: 'north', bays: 12, rand: rb });
+  row({ x: 184.2, z: -115.3, face: 'west', bays: 9, rand: rb });
+  // Oranienburger Straße nach Westen bis an die Synagoge
+  row({ x: -187, z: -14, face: 'south', bays: 5, rand: rb });
+  row({ x: -171.4, z: -2, face: 'north', bays: 5, rand: rb });
+
   facades.finish();
 
   // Fahrbahn: von z = -430 bis unter die Quaikante (44.6), damit sie nicht über der Spree liegt.
@@ -133,6 +152,14 @@ export function buildBerlin() {
   // Am Platz und unter dem Viadukt
   for (const [x, z] of [[-29.4, -21.6], [29.4, -21.6], [-29.4, 14], [29.4, 14], [-14, -21.6], [14, -21.6], [-8, 15], [8, 15], [29.4, -4]]) lampAt(x, z);
   for (let x = -130; x <= 130; x += 20) lampAt(x, 43);
+  // Hinter den Sperren: Die Laternen gehen weiter, bis der Nebel sie schluckt.
+  for (const [x, z] of [[6.6, -208], [-6.6, -220], [-18, -240.6], [18, -240.6]]) lampAt(x, z);
+  for (const [x, z] of [[132, -97.4], [143, -102.6], [154, -97.4], [165, -102.6], [181.8, -88], [181.8, -112]]) lampAt(x, z);
+  lampAt(-176, -11.6);
+  for (let x = 150; x <= 210; x += 20) {
+    lampAt(x, 43);
+    lampAt(-x, 43);
+  }
   buildLamps(loc, lampPositions, ironMat);
 
   // Straßenmöblierung und Bäume
@@ -140,7 +167,8 @@ export function buildBerlin() {
 
   // Baustellen an den Rändern der begehbaren Welt.
   // Wird das nächste Viertel gebaut, verschwinden diese Sperren einfach.
-  const barrier = (cx, cz, along, width) => {
+  // away: Seite, auf der der Aushub liegt (-1 spiegelt ihn), immer abseits des Spielers.
+  const barrier = (cx, cz, along, width, away = 1) => {
     const b = new Bag();
     const w = width;
     const add = (ox, oz, sx, sy, sz, y, c) => (along === 'x'
@@ -149,9 +177,59 @@ export function buildBerlin() {
     add(0, 0, w, 0.16, 0.08, 1.05, 0xa8362c);
     add(0, 0, w, 0.16, 0.08, 0.55, 0xd6cfba);
     for (let o = -w / 2; o <= w / 2; o += 3) add(o, 0, 0.1, 1.2, 0.1, 0.6, 0x2c2015);
-    // Erdhaufen und Bretter
-    for (let i = 0; i < 6; i++) add((i / 5 - 0.5) * w * 0.8, -2 - r() * 2, 2.2, 1.1 + r() * 0.7, 2.2, 0.5, 0x2b241c);
-    addMesh(scene, b.build(), std({ vertexColors: true, roughness: 1 }));
+    // Aushub hinter der Absperrung: Erdhaufen, Bretter, Tonrohre für den Kanal.
+    // Je Haufen genau zwei Zahlen aus r wie früher, damit sich der Zufall des Viertels
+    // dahinter (Verkehr, Wetter) nicht verschiebt. Alles Weitere aus eigenem Zufall.
+    const rs = rng(Math.round(cx * 31 + cz * 7) >>> 0);
+    const place = (geo, ox, oz) => {
+      if (away < 0) {
+        geo.rotateY(Math.PI);
+        ox = -ox;
+        oz = -oz;
+      }
+      if (along !== 'x') geo.rotateY(Math.PI / 2);
+      geo.translate(along === 'x' ? cx + ox : cx + oz, 0, along === 'x' ? cz + oz : cz + ox);
+      return geo;
+    };
+    for (let i = 0; i < 6; i++) {
+      const ox = (i / 5 - 0.5) * w * 0.8;
+      const oz = -2 - r() * 2;
+      const h = 0.9 + r() * 0.7;
+      // Halbkugel, zum Kegel hin abgeflacht und unregelmäßig verbeult: Berliner Sand.
+      const mound = new THREE.SphereGeometry(1, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+      const p = mound.attributes.position;
+      const seed = rs() * 100;
+      // Beule aus der Lage des Punkts, damit doppelte Punkte an Naht und Spitze gleich bleiben.
+      const noise = (x, y, z) => {
+        const v = Math.sin(x * 12.99 + y * 37.72 + z * 78.23 + seed) * 43758.55;
+        return v - Math.floor(v);
+      };
+      for (let k = 0; k < p.count; k++) {
+        const y = p.getY(k);
+        const bump = y > 0.02 ? 1 + (noise(p.getX(k), y, p.getZ(k)) - 0.5) * 0.35 : 1;
+        p.setXYZ(k, p.getX(k) * bump, Math.pow(y, 1.6) * bump, p.getZ(k) * bump);
+      }
+      mound.computeVertexNormals();
+      mound.scale(1.7 + rs() * 0.8, h * 1.1, 1.4 + rs() * 0.6);
+      mound.rotateY(rs() * Math.PI);
+      b.add(place(mound, ox, oz), new THREE.Color(0x6e5a40).multiplyScalar(0.8 + rs() * 0.3));
+    }
+    for (let i = 0; i < 3; i++) {
+      // Bretter, schräg an den Zaun gelehnt
+      const plank = box(0.28, 2.2, 0.04, 0, 1.0, 0);
+      plank.rotateX(-0.35 - rs() * 0.2);
+      plank.rotateY((rs() - 0.5) * 0.4);
+      b.add(place(plank, (rs() - 0.5) * w * 0.9, -0.45), 0x4a3522);
+    }
+    for (let i = 0; i < 3; i++) {
+      // Tonrohre
+      const pipe = new THREE.CylinderGeometry(0.32, 0.32, 1.1, 12, 1, true);
+      pipe.rotateZ(Math.PI / 2);
+      pipe.rotateY(rs() * Math.PI);
+      pipe.translate(0, 0.32, 0);
+      b.add(place(pipe, (rs() - 0.5) * w * 0.7, -1.2 - rs() * 2.6), 0x7a4a30);
+    }
+    addMesh(scene, b.build(), std({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }));
     if (along === 'x') loc.collide(cx - w / 2, cx + w / 2, cz - 0.4, cz + 0.4);
     else loc.collide(cx - 0.4, cx + 0.4, cz - w / 2, cz + w / 2);
     loc.addHotspot({
@@ -167,10 +245,10 @@ export function buildBerlin() {
     scene.add(warn);
   };
   barrier(0, -188, 'x', 20);
-  barrier(127, -100, 'z', 12);
+  barrier(127, -100, 'z', 12, -1);
   barrier(-168, -8, 'z', 14);
   barrier(-145, 38, 'z', 14);
-  barrier(145, 38, 'z', 14);
+  barrier(145, 38, 'z', 14, -1);
 
   // Eingänge
   const doorSpot = (id, at, label, to, height = 1.5) => {

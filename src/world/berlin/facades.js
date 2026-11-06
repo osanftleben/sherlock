@@ -190,22 +190,24 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const roofs = [];
   const curbs = [];
 
-  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3 }, bays) => {
+  // rand: eigener Zufall, z. B. für Kulissen, damit der gemeinsame Zufall r des Viertels
+  // unberührt bleibt und alle übrigen Häuser so aussehen wie bisher.
+  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r }, bays) => {
     const rot = FACING[face];
     const R = new THREE.Matrix4().makeRotationY(rot);
     const T = new THREE.Matrix4().makeTranslation(x, 0, z);
     const base = new THREE.Matrix4().multiplyMatrices(T, R);
     const W = bays * BAY_W;
-    const col = color ?? FACADES[Math.floor(r() * FACADES.length)];
+    const col = color ?? FACADES[Math.floor(rand() * FACADES.length)];
     const types = floors === 3 ? ['noble', 'upper', 'attic'] : ['noble', 'upper', 'upper', 'attic'];
     for (let i = 0; i < bays; i++) {
-      const tGround = ground[i] || (r() < 0.32 ? 'shop' : 'ground');
+      const tGround = ground[i] || (rand() < 0.32 ? 'shop' : 'ground');
       const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
-      batcher.place(tGround, gx, col, tGround === 'shop' ? r() < 0.8 : r() < 0.2);
+      batcher.place(tGround, gx, col, tGround === 'shop' ? rand() < 0.8 : rand() < 0.2);
       let y = FLOOR.ground;
       for (const type of types) {
         const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, 0));
-        batcher.place(type, m, col, r() < lit);
+        batcher.place(type, m, col, rand() < lit);
         y += FLOOR[type];
       }
     }
@@ -247,7 +249,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     for (let i = 0; i < Math.max(2, bays / 3); i++) {
       const ch = new Bag();
-      ch.box(0x4a3a30, 0.7, 2.2, 0.5, 1 + r() * (W - 2), H + 2.6, -2 - r() * (depth - 4));
+      ch.box(0x4a3a30, 0.7, 2.2, 0.5, 1 + rand() * (W - 2), H + 2.6, -2 - rand() * (depth - 4));
       const g = ch.build();
       g.applyMatrix4(base);
       massing.parts.push(g);
@@ -277,14 +279,14 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   };
 
   // Reihe zusammenhängender Häuser mit wechselnder Breite und Höhe.
-  const row = ({ x, z, face, bays }) => {
+  const row = ({ x, z, face, bays, rand = r }) => {
     const rot = FACING[face];
     const dx = Math.cos(rot);
     const dz = -Math.sin(rot);
     let done = 0;
     while (done < bays) {
-      const n = Math.min(bays - done, 5 + Math.floor(r() * 4));
-      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: r() < 0.3 ? 3 : 4 }, n);
+      const n = Math.min(bays - done, 5 + Math.floor(rand() * 4));
+      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: rand() < 0.3 ? 3 : 4, rand }, n);
       done += n;
     }
   };

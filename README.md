@@ -94,7 +94,9 @@ voller innerer Auflösung: GPU-Zeit je Durchgang (Szene, Leuchten, Schlussbild),
 Zeichenaufrufe und Dreiecke.
 
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
-Sie entfernen, an derselben Stelle mit `block` und `row` weiterbauen und `loc.map` ergänzen.
+Dahinter stehen Kulissen (Abschnitt „Kulissen hinter den Baustellen“ samt Laternen), die nur den Blick
+abschließen. Sperre und Kulisse entfernen, an derselben Stelle mit `block` und `row` weiterbauen und
+`loc.map` ergänzen.
 
 **Neuer Innenraum:** Ein Modul wie `world/interiors/bank.js` mit einer `build…`-Funktion anlegen, in
 `world/interiors/index.js` eintragen und in `berlin/index.js` mit `doorSpot` und `loc.exits` an ein Haus

@@ -517,7 +517,12 @@ class Game {
 }
 
 const game = new Game();
-game.init().catch((err) => {
+game.init().then(() => {
+  // Entwicklerwerkzeug: http://localhost:5173/?pruefen prüft den Fall gegen die Orte.
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('pruefen')) {
+    import('./dev/checkCase.js').then((m) => m.showCheck(game));
+  }
+}).catch((err) => {
   console.error(err);
   document.getElementById('ui').textContent = `Das Spiel konnte nicht starten: ${err.message}`;
 });

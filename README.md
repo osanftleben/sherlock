@@ -48,6 +48,7 @@ src/
     index.js         Liste der Fälle
     uhrmacher.js     Fall 1, reine Daten
   ui/ui.js           Oberfläche als DOM über dem Canvas
+  dev/checkCase.js   Fallprüfung, nur im Entwicklungsmodus
 ```
 
 Das Projekt braucht keine Bild- oder Audiodateien. Texturen und Klänge entstehen im Code.
@@ -58,6 +59,17 @@ Das Projekt braucht keine Bild- oder Audiodateien. Texturen und Klänge entstehe
 Ein Fall besteht nur aus Daten: Hinweise, Schlüsse (Hinweispaare), Figuren, Hotspots und Dialoge.
 Figuren und Hotspots hängen an benannten Ankern der Orte (`loc.anchor(...)`). Noch fehlt die
 Fallauswahl: `main.js` lädt nur `FIRST_CASE`, und `applyCase` kann einen Fall nicht wieder entfernen.
+
+**Fall prüfen:** Bei laufendem `npm run dev` die Adresse http://localhost:5173/?pruefen öffnen. Eine
+Tafel oben rechts und die Browser-Konsole zeigen das Ergebnis:
+
+- *Fehler:* Anker, Dialogziele oder Bedingungen, die ins Leere zeigen. Fundstellen, die von keinem
+  begehbaren Standpunkt aus in Reichweite liegen. Hinweise, Schlüsse oder Ziele, die sich beim
+  simulierten Durchspielen nie gewinnen lassen, und eine Anklage, die nie angeboten wird.
+- *Warnungen:* Fundstellen, die überall hinter Geometrie liegen, stehende Figuren in Möbeln und
+  Hinweise, die zu keinem Schluss gehören.
+
+Optik und Texte prüft das nicht. Bedingungen der Form `!id` wertet die Simulation eher zu großzügig.
 
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin.js` (`barrier(...)`).
 Sie entfernen, an derselben Stelle mit `block` und `row` weiterbauen und `loc.map` ergänzen.

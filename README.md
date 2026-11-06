@@ -87,7 +87,7 @@ Optik und Texte prüft das nicht. Bedingungen der Form `!id` wertet die Simulati
 **Darstellung messen:** Bei laufendem `npm run dev` die Adresse http://localhost:5173/?messen=1080
 öffnen (Browserfenster sichtbar lassen). Gemessen wird an festen Standpunkten in 1920 × 1080 bei
 voller innerer Auflösung: GPU-Zeit je Durchgang (Szene, Leuchten, Schlussbild), Bildrate,
-Zeichenaufrufe und Dreiecke. Ziel und Verfahren stehen in `docs/ARCHITEKTUR.md`.
+Zeichenaufrufe und Dreiecke.
 
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Sie entfernen, an derselben Stelle mit `block` und `row` weiterbauen und `loc.map` ergänzen.

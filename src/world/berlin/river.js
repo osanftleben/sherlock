@@ -1,18 +1,27 @@
 import * as THREE from 'three';
-import { Bag, addMesh, box, matte, merge, std } from '../kit.js';
-import { quayStone } from '../textures.js';
+import { Bag, addMesh, box, cyl, matte, merge, roofPrism, std } from '../kit.js';
+import { quayStone, softDisc } from '../textures.js';
 
 // Wasserspiegel der Spree unter der Quaikante (y = 0). Berliner Quais liegen zwei bis drei Meter
 // über dem Mittelwasser; die Mauer reicht noch einen guten Meter darunter.
 export const WATER_Y = -2.7;
 const WALL_FOOT = -4;
 
-// Quai und Spree.
-export function buildRiver(loc, FOG) {
+// Kahn an der Treppe: Mitte, Länge, Laterne am Heck (relativ zur Mitte, Höhe über dem Wasser).
+const BARGE = { x: 23, z: 48.7, length: 18, beam: 4 };
+const BARGE_LANTERN = new THREE.Vector3(-8.3, 3.3, 0);
+
+// Quai und Spree. `bank` ist die Spiegelkarte des Gegenufers aus horizon.js.
+export function buildRiver(loc, FOG, bank) {
   const { scene } = loc;
   // Quai und Spree
   const QUAY = 44;
   loc.collide(-300, 300, QUAY, QUAY + 40);
+  // Wasser: Grundton, Wellenglanz, Lichtbahnen der Quai-Laternen und der Kahnlaterne, dazu die
+  // Spiegelung des Gegenufers. Für sie wird der Sehstrahl am Wasser gespiegelt und bis zur
+  // Uferlinie verfolgt; die Wellen verschieben ihn, so werden aus Fenstern zitternde Lichtbahnen.
+  // Die Lichtbahnen liegen in der senkrechten Ebene durch Auge und Licht, laufen also strahlenförmig
+  // vom Betrachter weg. Steht er dicht an der Laternenreihe, wird er dafür ein Stück zurückgesetzt.
   const water = new THREE.Mesh(
     new THREE.PlaneGeometry(720, 80),
     new THREE.ShaderMaterial({
@@ -22,6 +31,12 @@ export function buildRiver(loc, FOG) {
         sheen: { value: new THREE.Color(0x4c6288) },
         warm: { value: new THREE.Color(1.1, 0.72, 0.28) },
         fogColor: { value: new THREE.Color(FOG) },
+        waterY: { value: WATER_Y },
+        bank: { value: bank.map },
+        bankFrame: { value: bank.frame },
+        bankDark: { value: bank.silhouette },
+        bankWin: { value: bank.window },
+        boat: { value: new THREE.Vector3(BARGE.x + BARGE_LANTERN.x, BARGE.z + BARGE_LANTERN.z, 1) },
       },
       vertexShader: `
         varying vec3 vW; varying float vD;
@@ -29,17 +44,42 @@ export function buildRiver(loc, FOG) {
           vec4 mv = viewMatrix * w; vD = -mv.z; gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `
         uniform float time; uniform vec3 deep; uniform vec3 sheen; uniform vec3 warm; uniform vec3 fogColor;
+        uniform float waterY; uniform sampler2D bank; uniform vec4 bankFrame; uniform vec3 bankDark; uniform vec3 bankWin;
+        uniform vec3 boat;
         varying vec3 vW; varying float vD;
         float n(vec2 p){ return sin(p.x)*sin(p.y); }
+        // x des Lichts in Tiefe zl, das auf der Linie Auge–Wasserpunkt liegt.
+        float along(float zl, float zv){ return cameraPosition.x + (vW.x - cameraPosition.x) * (zl - zv) / max(vW.z - zv, 0.5); }
         void main(){
           vec2 p = vW.xz;
           float w = n(p*vec2(0.7,2.4)+vec2(time*0.5,time*0.2)) + 0.5*n(p*vec2(1.7,5.1)-vec2(time*0.7,0.0)) + 0.25*n(p*vec2(3.9,9.0)+time);
+          float wx = n(p*vec2(2.3,0.9)+vec2(time*0.4,-time*0.3));
           float glint = smoothstep(0.55,1.3,w);
-          float lamp = 0.0;
-          float lane = mod(vW.x+10.0, 20.0)-10.0;
-          float fall = exp(-(vW.z-44.0)*0.1);
-          lamp = exp(-pow((lane + w*1.5)*1.1, 2.0)) * fall * (0.65 + 0.35*w);
-          vec3 c = deep + sheen*glint*0.2 + warm*lamp*0.75;
+          float zv = min(cameraPosition.z, 36.0);
+
+          // Quai-Laternen: x = 10 + 20 k bis ±210, Lichtbahn ab der Mauerkante.
+          float xl = along(44.0, zv);
+          float lane = mod(xl, 20.0) - 10.0;
+          float fall = exp(-(vW.z-44.0)*0.1) * step(abs(xl), 215.0);
+          float lamp = exp(-pow((lane + w*1.5)*1.1, 2.0)) * fall * (0.65 + 0.35*w);
+
+          // Kahnlaterne: Lichtbahn jenseits des Kahns.
+          float xb = along(boat.y, zv) - boat.x;
+          float lantern = exp(-pow((xb + w*0.7)*1.6, 2.0)) * exp(-(vW.z-boat.y)*0.12) * step(boat.y, vW.z) * (0.6 + 0.4*w) * boat.z;
+
+          // Gegenufer: gespiegelter Sehstrahl bis zur Uferlinie, Höhe darüber in Metern.
+          float e = max(cameraPosition.y - waterY, 0.3);
+          float dz = max(vW.z - cameraPosition.z, 0.5);
+          float ratio = (bankFrame.w - cameraPosition.z) / dz;
+          float reach = max(bankFrame.w - vW.z, 0.0);
+          float hb = e * (ratio - 1.0) + w * 0.08 * reach;
+          float xr = cameraPosition.x + (vW.x - cameraPosition.x) * ratio + wx * 0.02 * reach;
+          vec2 m = texture2D(bank, vec2((xr - bankFrame.x) / bankFrame.y, clamp(hb / bankFrame.z, 0.0, 0.999))).rg;
+          float cosv = e / sqrt(e*e + dz*dz);
+          float F = 0.02 + 0.98 * pow(1.0 - cosv, 5.0);
+          vec3 refl = mix(fogColor * 1.1, bankDark, m.r) + bankWin * m.g * 1.6;
+
+          vec3 c = deep * (1.0 - F) + refl * F + sheen*glint*0.12 + warm*(lamp*0.75 + lantern*0.6);
           float f = 1.0 - exp(-pow(vD*0.0125, 2.0));
           gl_FragColor = vec4(mix(c, fogColor, f), 1.0);
           #include <tonemapping_fragment>
@@ -50,7 +90,14 @@ export function buildRiver(loc, FOG) {
   water.rotation.x = -Math.PI / 2;
   water.position.set(0, WATER_Y, QUAY + 40);
   scene.add(water);
-  loc.onUpdate((dt, t) => { water.material.uniforms.time.value = t; });
+  const barge = buildBarge(scene);
+  loc.onUpdate((dt, t) => {
+    water.material.uniforms.time.value = t;
+    // Der Kahn hebt sich und rollt kaum merklich mit den Wellen.
+    barge.position.y = WATER_Y + Math.sin(t * 0.9) * 0.03;
+    barge.rotation.x = Math.sin(t * 0.7) * 0.008;
+    barge.rotation.z = Math.sin(t * 0.53 + 1) * 0.004;
+  });
 
   // Quaimauer aus Granitquadern bis unter das Wasser. Die UVs laufen in Metern / 4, die Kachel ist
   // 4 m hoch und beginnt an der Quaikante, damit der nasse Streifen auf der Wasserlinie liegt.
@@ -62,6 +109,7 @@ export function buildRiver(loc, FOG) {
     quay.box(0x101312, 0.06, 1.0, 0.06, x, 0.55, QUAY + 0.1);
   }
   buildLandingStairs(stone, quay, QUAY);
+  buildMooring(quay, QUAY);
   addMesh(scene, merge(stone), matte(quayStone(-WATER_Y)));
   addMesh(scene, quay.build(), std({ vertexColors: true, roughness: 0.6 }));
 }
@@ -119,4 +167,86 @@ function buildLandingStairs(stone, quay, QUAY) {
   rail(GAP[0], 1.0, GAP[1], 1.0);
   rail(GAP[1], 1.0, x - tread / 2, landing + 1.0);
   rail(x - tread / 2, landing + 1.0, end - 0.1, landing + 1.0);
+}
+
+// Seil zwischen zwei Punkten, in der Mitte um `sag` durchhängend.
+function rope(bag, a, b, sag = 0.12) {
+  const mid = a.clone().add(b).multiplyScalar(0.5);
+  mid.y -= sag;
+  const up = new THREE.Vector3(0, 1, 0);
+  for (const [p, q] of [[a, mid], [mid, b]]) {
+    const d = new THREE.Vector3().subVectors(q, p);
+    const g = new THREE.CylinderGeometry(0.022, 0.022, d.length(), 5);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, d.normalize()));
+    const c = p.clone().add(q).multiplyScalar(0.5);
+    g.translate(c.x, c.y, c.z);
+    bag.add(g, 0x2b261d);
+  }
+}
+
+// Poller auf dem Podest und auf dem Mauersims, Leinen zu Heck und Bug.
+function buildMooring(quay, QUAY) {
+  const landing = WATER_Y + 0.35;
+  const bollard = (x, y, z) => {
+    quay.add(cyl(0.13, 0.16, 0.42, x, y + 0.21, z, 8), 0x141615);
+    quay.add(cyl(0.19, 0.19, 0.06, x, y + 0.45, z, 8), 0x141615);
+    return new THREE.Vector3(x, y + 0.36, z);
+  };
+  const deck = WATER_Y + 0.62;
+  rope(quay, bollard(17, landing, QUAY + 2.1), new THREE.Vector3(BARGE.x - 7.2, deck, BARGE.z - BARGE.beam / 2 + 0.1));
+  rope(quay, bollard(31.4, 0.1, QUAY + 0.7), new THREE.Vector3(BARGE.x + 7.6, deck, BARGE.z - 1.5), 0.35);
+}
+
+// Beladener Spreekahn mit Plane über der Fracht, Wohnkajüte und Laterne am Heck. Der Kahn ist
+// eine Gruppe, die mit den Wellen schaukelt; Wasserlinie bei y = 0 der Gruppe.
+function buildBarge(scene) {
+  const { length, beam } = BARGE;
+  const a = length / 2;
+  const b = beam / 2;
+  const hullShape = (s = 1) => {
+    const sh = new THREE.Shape();
+    sh.moveTo(-(a - 1) * s, -b * s);
+    sh.lineTo((a - 3) * s, -b * s);
+    sh.quadraticCurveTo(a * s, -b * s, a * s, 0);
+    sh.quadraticCurveTo(a * s, b * s, (a - 3) * s, b * s);
+    sh.lineTo(-(a - 1) * s, b * s);
+    sh.quadraticCurveTo(-a * s, b * s, -a * s, 0);
+    sh.quadraticCurveTo(-a * s, -b * s, -(a - 1) * s, -b * s);
+    return sh;
+  };
+  const hull = (s, depth, y) => {
+    const g = new THREE.ExtrudeGeometry(hullShape(s), { depth, bevelEnabled: false, curveSegments: 6 });
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, y, 0);
+    return g;
+  };
+  const bag = new Bag();
+  // Rumpf von 1 m unter bis 0,6 m über Wasser, mit Scheuerleiste.
+  bag.add(hull(1, 1.6, -1), 0x2a2219);
+  bag.add(hull(1.015, 0.12, 0.42), 0x4a3c2a);
+  // Fracht unter der Plane, mit Leinen quer darüber.
+  bag.add(roofPrism(11, 1.3, beam - 0.5, 0.5, 0.6, 0), 0x4a5040);
+  for (let x = -4.5; x <= 5.5; x += 2) bag.box(0x1d1a14, 0.05, 0.06, beam - 0.3, x, 1.25, 0);
+  // Wohnkajüte am Heck mit Dach und Ofenrohr.
+  bag.box(0x5a4530, 2.2, 1.5, 3, -6.6, 1.35, 0);
+  bag.box(0x2a231c, 2.5, 0.08, 3.3, -6.6, 2.14, 0);
+  bag.add(cyl(0.06, 0.06, 0.8, -6.0, 2.55, 0.8, 6), 0x101010);
+  // Ruder und Laternenstange am Heck.
+  bag.box(0x17130f, 0.12, 1.8, 0.9, -a - 0.1, 0.1, 0);
+  bag.add(cyl(0.04, 0.05, 2.6, BARGE_LANTERN.x, 1.9, BARGE_LANTERN.z, 6), 0x101010);
+  bag.box(0x101010, 0.24, 0.04, 0.24, BARGE_LANTERN.x, BARGE_LANTERN.y + 0.16, BARGE_LANTERN.z);
+
+  const group = new THREE.Group();
+  group.position.set(BARGE.x, WATER_Y, BARGE.z);
+  addMesh(group, bag.build(), matte({ vertexColors: true }));
+  // Laternenglas und das Fenster der Kajüte zur Uferseite.
+  const lit = new THREE.MeshBasicMaterial({ color: new THREE.Color(4.2, 2.6, 1.1) });
+  addMesh(group, box(0.18, 0.28, 0.18, BARGE_LANTERN.x, BARGE_LANTERN.y, BARGE_LANTERN.z), lit);
+  addMesh(group, box(0.55, 0.4, 0.03, -6.6, 1.5, -1.51), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 0.68, 0.28) }));
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.position.copy(BARGE_LANTERN);
+  glow.scale.setScalar(1.6);
+  group.add(glow);
+  scene.add(group);
+  return group;
 }

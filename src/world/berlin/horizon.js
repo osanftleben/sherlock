@@ -17,25 +17,34 @@ export function buildHorizon(loc, r) {
   // Horizont gebaut wird (Verkehr, Wetter), denselben gemeinsamen Zufall bekommt wie bisher.
   const hr = rng(1900);
 
-  // Häuserzeile jenseits der Spree: Vorderseite bei z = 113.
+  // Häuserzeile jenseits der Spree: Vorderseite bei z = 113. Was dort steht, wird zugleich in
+  // die Spiegelkarte für das Wasser eingetragen (siehe unten).
   const far = new Bag();
   const windows = new Bag();
+  const mirror = new BankMirror();
   for (let x = -220; x < 220; x += 16 + r() * 8) {
     const h = 14 + r() * 8;
     far.box(0xffffff, 18, h, 10, x, h / 2, 118);
+    mirror.fill(x - 9, x + 9, 0, h, 0);
     for (let c = 0; c < 2 + Math.floor(hr() * 3); c++) {
       const cx = x - 7 + hr() * 14;
-      far.box(0xffffff, 0.9, 1.4 + hr(), 0.9, cx, h + 0.6, 116 + hr() * 4);
+      const ch = 1.4 + hr();
+      far.box(0xffffff, 0.9, ch, 0.9, cx, h + 0.6, 116 + hr() * 4);
+      mirror.fill(cx - 0.45, cx + 0.45, h, h + 0.6 + ch / 2, 0);
     }
-    // Fenster in Achsen zu 3,4 m und Geschossen zu 3,6 m; die meisten sind dunkel.
+    // Fenster in Achsen und Geschossen zu 3,6 m; die meisten sind dunkel.
     for (let fy = 3.2; fy < h - 2; fy += 3.6) {
       for (let ax = -7.2; ax <= 7.2; ax += 3.6) {
-        if (hr() < 0.2) windows.box(0xffffff, 1, 1.5, 0.05, x + ax, fy, 112.9);
+        if (hr() < 0.2) {
+          windows.box(0xffffff, 1, 1.5, 0.05, x + ax, fy, 112.9);
+          mirror.fill(x + ax - 0.5, x + ax + 0.5, fy - 0.75, fy + 0.75, 1);
+        }
       }
     }
   }
   // Kaimauer am Gegenufer, vom Wasser bis knapp über das Pflaster vor den Häusern.
-  far.box(0xffffff, 720,0.6 - WATER_Y, 1, 0, (0.3 + WATER_Y) / 2 - 0.05, 112.5);
+  far.box(0xffffff, 720, 0.6 - WATER_Y, 1, 0, (0.3 + WATER_Y) / 2 - 0.05, BANK_Z + 0.5);
+  mirror.fill(-360, 360, WATER_Y, 0.4, 0);
   addMesh(scene, far.build(), new THREE.MeshBasicMaterial({ color: SILHOUETTE, fog: false }));
   addMesh(scene, windows.build(), new THREE.MeshBasicMaterial({ color: FAR_WINDOW, fog: false }));
   // Früher lagen hier 60 Lichtpunkte nach dem gemeinsamen Zufall; der wird weiter so gezogen.
@@ -55,6 +64,50 @@ export function buildHorizon(loc, r) {
   addMesh(scene, merge(domeBag), new THREE.MeshBasicMaterial({ color: SILHOUETTE, fog: false }));
 
   buildSynagogue(scene, hr);
+  return mirror.build();
+}
+
+// Vorderkante des Gegenufers (Kaimauer), auf die das Wasser seine Spiegelung bezieht.
+export const BANK_Z = 112;
+const SILHOUETTE_LINEAR = new THREE.Color(SILHOUETTE);
+
+// Spiegelkarte des Gegenufers: x von -360 bis 360 m, Höhe vom Wasserspiegel bis 32 m darüber.
+// Rot = Baukörper, Grün = erleuchtetes Fenster. Der Wasser-Shader verfolgt den gespiegelten
+// Sehstrahl bis zur Uferlinie und liest hier ab, ob er Haus, Fenster oder Himmel trifft.
+class BankMirror {
+  constructor() {
+    this.w = 1024;
+    this.h = 64;
+    this.x0 = -360;
+    this.span = 720;
+    this.top = 32;
+    this.data = new Uint8Array(this.w * this.h * 4);
+  }
+
+  // y0, y1 in Weltkoordinaten (Straße = 0); channel 0 = Baukörper, 1 = Fenster.
+  fill(x0, x1, y0, y1, channel) {
+    const { w, h } = this;
+    const i0 = Math.max(0, Math.round(((x0 - this.x0) / this.span) * w));
+    const i1 = Math.min(w, Math.round(((x1 - this.x0) / this.span) * w));
+    const j0 = Math.max(0, Math.round(((y0 - WATER_Y) / this.top) * h));
+    const j1 = Math.min(h - 1, Math.round(((y1 - WATER_Y) / this.top) * h));
+    for (let j = j0; j < j1; j++) {
+      for (let i = i0; i < i1; i++) this.data[(j * w + i) * 4 + channel] = 255;
+    }
+  }
+
+  build() {
+    const t = new THREE.DataTexture(this.data, this.w, this.h);
+    t.magFilter = t.minFilter = THREE.LinearFilter;
+    t.needsUpdate = true;
+    return {
+      map: t,
+      // x0, Breite, Höhe der Karte, z der Uferlinie
+      frame: new THREE.Vector4(this.x0, this.span, this.top, BANK_Z),
+      silhouette: SILHOUETTE_LINEAR,
+      window: FAR_WINDOW,
+    };
+  }
 }
 
 // Neue Synagoge am Ende der Oranienburger Straße, die Schauseite nach Osten (x = -190): ein

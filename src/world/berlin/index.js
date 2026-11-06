@@ -147,8 +147,8 @@ export function buildBerlin() {
   scene.add(street);
 
   buildRailway(loc, r, brickMat);
-  buildHorizon(loc, r);
-  buildRiver(loc, FOG);
+  const farBank = buildHorizon(loc, r);
+  buildRiver(loc, FOG, farBank);
 
   // Laternen
   const lampPositions = [];

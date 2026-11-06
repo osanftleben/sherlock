@@ -5,6 +5,8 @@ import { WINDOW_ATLAS, pavement, rng, shopDisplay, shopShutter, windowAtlas } fr
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
 export const BAY_W = 3.4;
 export const FLOOR = { ground: 4.4, noble: 3.9, upper: 3.5, attic: 2.9 };
+// So weit springt ein Erker vor die Fassade.
+const ERKER_OUT = 0.75;
 export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a288, 0x8a7a68, 0x9a9488];
 
 function bayParts(type) {
@@ -25,10 +27,10 @@ function bayParts(type) {
     wall.box(0xffffff, ww, top, D, W / 2, wy + wh + top / 2, -D / 2);
     if (backing) wall.box(wood, ww, wh, 0.03, W / 2, wy + wh / 2, -D + 0.01);
   };
-  const sash = (ww, wy, wh, rows = 2) => {
-    const z = -D + 0.09;
+  const sash = (ww, wy, wh, rows = 2, d = D) => {
+    const z = -d + 0.09;
     // UV 0..1 über die ganze Scheibe für das gemalte Fensterbild (windowAtlas).
-    glass.push(new THREE.BoxGeometry(ww - 0.06, wh - 0.06, 0.02).translate(W / 2, wy + wh / 2, -D + 0.05));
+    glass.push(new THREE.BoxGeometry(ww - 0.06, wh - 0.06, 0.02).translate(W / 2, wy + wh / 2, -d + 0.05));
     wall.box(wood, 0.06, wh, 0.05, W / 2, wy + wh / 2, z);
     for (let i = 1; i < rows; i++) wall.box(wood, ww, 0.05, 0.05, W / 2, wy + (wh * i) / rows, z);
     wall.box(wood, ww, 0.06, 0.05, W / 2, wy + 0.03, z);
@@ -106,6 +108,27 @@ function bayParts(type) {
     frame(ww, wy, wh);
     sill(ww, wy);
     wall.box(trimC, ww + 0.4, 0.14, 0.16, W / 2, wy + wh + 0.13, 0.08);
+  } else if (type === 'dormer') {
+    // Dachgaube: Stirnwand mit Fenster, Wangen und Satteldach reichen nach hinten ins Dach.
+    const fw = 1.5;
+    const fh = 1.55;
+    const ww = 0.9;
+    const wy = 0.35;
+    const wh = 0.95;
+    const t = 0.14;
+    const side = (fw - ww) / 2;
+    const zinc = new THREE.Color(0.42, 0.44, 0.46);
+    wall.box(0xffffff, side, fh, t, W / 2 - fw / 2 + side / 2, fh / 2, -t / 2);
+    wall.box(0xffffff, side, fh, t, W / 2 + fw / 2 - side / 2, fh / 2, -t / 2);
+    wall.box(0xffffff, ww, wy, t, W / 2, wy / 2, -t / 2);
+    wall.box(0xffffff, ww, fh - wy - wh, t, W / 2, (wy + wh + fh) / 2, -t / 2);
+    wall.box(wood, ww, wh, 0.03, W / 2, wy + wh / 2, -t + 0.01);
+    sash(ww, wy, wh, 2, t);
+    wall.box(trimC, ww + 0.2, 0.06, 0.12, W / 2, wy - 0.03, 0.06);
+    // Wangen erst hinter der Stirnwand, sonst flackern die Stirnflächen gegeneinander.
+    for (const s of [-1, 1]) wall.box(zinc, 0.08, fh, 1.26, W / 2 + s * (fw / 2 - 0.04), fh / 2, -t - 0.63);
+    wall.box(trimC, fw + 0.2, 0.08, 0.16, W / 2, fh, 0.04);
+    wall.add(pediment(fw + 0.2, 0.45, 1.5, W / 2, fh + 0.04, -0.65), zinc);
   } else {
     const ww = 1.1;
     const wy = 0.7;
@@ -121,7 +144,7 @@ function bayParts(type) {
 class FacadeBatcher {
   constructor() {
     this.types = {};
-    for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic']) {
+    for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic', 'dormer']) {
       this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {}, rooms: [] };
     }
   }
@@ -239,10 +262,109 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const kindRand = rng(1894);
   const winRand = rng(1895);
   const massing = new Bag();
+  const reliefRand = rng(1896);
+  const reliefBag = new Bag();
+  const ironBag = new Bag();
   const masses = [];
   const slabs = [];
   const roofs = [];
   const curbs = [];
+
+  // Erker, Balkone und Gauben eines Hauses, aus eigenem Zufall (reliefRand), damit Häuser,
+  // Fenster und Läden bleiben, wie sie sind. Erker und Balkone halten eine Achse Abstand
+  // zu den Hausenden, damit sie an Ecken nicht in die Nachbarzeile ragen.
+  const planRelief = (bays, types, lit) => {
+    let erker = null;
+    if (bays >= 4 && reliefRand() < 0.4) {
+      const n = bays >= 6 && reliefRand() < 0.5 ? 2 : 1;
+      erker = { start: 1 + Math.floor(reliefRand() * (bays - 1 - n)), n };
+    }
+    const balconies = [];
+    if (bays >= 3 && reliefRand() < 0.35) {
+      const b = 1 + Math.floor(reliefRand() * (bays - 2));
+      for (const i of new Set([b, bays - 1 - b])) {
+        if (!erker || i < erker.start || i >= erker.start + erker.n) balconies.push(i);
+      }
+    }
+    const dormers = [];
+    if (reliefRand() < 0.6) {
+      for (let i = 1; i < bays - 1; i += 2) {
+        const on = reliefRand() < lit * 0.8;
+        const cell = Math.floor(reliefRand() * WINDOW_ATLAS.rows * WINDOW_ATLAS.cols);
+        dormers.push({ bay: i, on, room: { cell, bright: 0.8 + reliefRand() * 0.35 } });
+      }
+    }
+    return { erker, balconies, dormers };
+  };
+
+  // Baut den Plan in Hauskoordinaten: x längs der Fassade, z aus ihr heraus.
+  const buildRelief = ({ erker, balconies, dormers }, { base, types, col, cTrim, H }) => {
+    const wall = new Bag();
+    const iron = new Bag();
+    const IRON = 0x1a1c1b;
+    // Schmiedeeisernes Gitter entlang einer achsparallelen Strecke, Unterkante y.
+    const railing = (xa, za, xb, zb, y) => {
+      const len = Math.hypot(xb - xa, zb - za);
+      const alongX = Math.abs(xb - xa) > Math.abs(zb - za);
+      for (const yy of [y + 0.05, y + 0.92]) {
+        iron.box(IRON, alongX ? len : 0.05, 0.05, alongX ? 0.05 : len, (xa + xb) / 2, yy, (za + zb) / 2);
+      }
+      const k = Math.max(2, Math.round(len / 0.13));
+      for (let j = 0; j <= k; j++) iron.box(IRON, 0.025, 0.84, 0.025, xa + ((xb - xa) * j) / k, y + 0.48, za + ((zb - za) * j) / k);
+    };
+
+    if (erker) {
+      // Die Fensterachsen selbst sind schon vorgerückt (ERKER_OUT); hier kommen Seitenwände,
+      // Boden auf Konsolen, Gurtgesimse und oben eine Platte mit Gitter vor dem Dachgeschoss.
+      const E = ERKER_OUT;
+      const x0 = erker.start * BAY_W;
+      const x1 = (erker.start + erker.n) * BAY_W;
+      const mid = (x0 + x1) / 2;
+      const w = x1 - x0;
+      const bands = [];
+      let top = FLOOR.ground;
+      for (const t of types.slice(0, -1)) bands.push((top += FLOOR[t]));
+      const side = E - 0.34;
+      for (const sx of [x0 + 0.125, x1 - 0.125]) wall.box(col, 0.25, top - FLOOR.ground, side, sx, (FLOOR.ground + top) / 2, side / 2);
+      wall.box(cTrim, w + 0.1, 0.32, E + 0.12, mid, FLOOR.ground - 0.04, (E + 0.12) / 2);
+      for (const cx of erker.n === 2 ? [x0 + 0.45, mid, x1 - 0.45] : [x0 + 0.45, x1 - 0.45]) {
+        wall.box(cTrim, 0.3, 0.36, E, cx, FLOOR.ground - 0.38, E / 2);
+        wall.box(cTrim, 0.26, 0.3, E * 0.5, cx, FLOOR.ground - 0.71, E / 4);
+      }
+      for (const by of bands.slice(0, -1)) wall.box(cTrim, w + 0.02, 0.1, 0.1, mid, by, E + 0.04);
+      wall.box(cTrim, w + 0.16, 0.24, E + 0.2, mid, top + 0.06, (E + 0.2) / 2);
+      const ry = top + 0.18;
+      railing(x0 + 0.05, E + 0.12, x1 - 0.05, E + 0.12, ry);
+      railing(x0 + 0.05, 0.05, x0 + 0.05, E + 0.12, ry);
+      railing(x1 - 0.05, 0.05, x1 - 0.05, E + 0.12, ry);
+    }
+
+    // Balkon vor dem Fenster der Beletage: Steinplatte auf zwei Konsolen, Eisengitter.
+    for (const b of balconies) {
+      const cx = (b + 0.5) * BAY_W;
+      const y = FLOOR.ground + 0.3;
+      const w = 2.3;
+      const d = 0.85;
+      wall.box(cTrim, w, 0.16, d, cx, y - 0.08, d / 2);
+      for (const s of [-1, 1]) wall.box(cTrim, 0.22, 0.34, d - 0.1, cx + s * (w / 2 - 0.25), y - 0.33, (d - 0.1) / 2);
+      railing(cx - w / 2 + 0.05, d - 0.05, cx + w / 2 - 0.05, d - 0.05, y);
+      railing(cx - w / 2 + 0.05, 0.05, cx - w / 2 + 0.05, d - 0.05, y);
+      railing(cx + w / 2 - 0.05, 0.05, cx + w / 2 - 0.05, d - 0.05, y);
+    }
+
+    // Gauben auf der steilen Vorderseite des Dachs; ihr Fuß steckt im Dach.
+    for (const d of dormers) {
+      const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(d.bay * BAY_W, H + 0.6, -0.45));
+      batcher.place('dormer', m, col, d.on, true, null, d.on ? d.room : null);
+    }
+
+    for (const [bag, into] of [[wall, reliefBag], [iron, ironBag]]) {
+      if (!bag.parts.length) continue;
+      const g = bag.build();
+      g.applyMatrix4(base);
+      into.parts.push(g);
+    }
+  };
 
   // rand: eigener Zufall, z. B. für Kulissen, damit der gemeinsame Zufall r des Viertels
   // unberührt bleibt und alle übrigen Häuser so aussehen wie bisher.
@@ -250,7 +372,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   // recess: Tiefe, um die der Hauskörper im Erdgeschoss zurückweicht, damit hinter den
   // Schaufenstern Platz für eine Auslage ist. Hinter den übrigen Achsen deckt deren
   // Scheibe oder Tür die Lücke ab.
-  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0 }, bays) => {
+  // relief: Erker, Balkone und Dachgauben (nur Häuser aus row(), nicht die Schauplätze).
+  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0, relief = false }, bays) => {
     const rot = FACING[face];
     const R = new THREE.Matrix4().makeRotationY(rot);
     const T = new THREE.Matrix4().makeTranslation(x, 0, z);
@@ -265,6 +388,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       cell: styles[floor] * WINDOW_ATLAS.cols + Math.floor(winRand() * WINDOW_ATLAS.cols),
       bright: 0.8 + winRand() * 0.35,
     });
+    const plan = relief ? planRelief(bays, types, lit) : { erker: null, balconies: [], dormers: [] };
+    const inErker = (i, f) => plan.erker && i >= plan.erker.start && i < plan.erker.start + plan.erker.n && f < types.length - 1;
     for (let i = 0; i < bays; i++) {
       const tGround = ground[i] || (rand() < 0.32 ? 'shop' : 'ground');
       const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
@@ -279,7 +404,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' && lit ? room(0) : null);
       let y = FLOOR.ground;
       types.forEach((type, f) => {
-        const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, 0));
+        // Achsen im Erker rücken mit ihm vor die Fassade.
+        const out = inErker(i, f) ? ERKER_OUT : 0;
+        const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, out));
         const on = rand() < lit;
         batcher.place(type, m, col, on, true, null, on ? room(f + 1) : null);
         y += FLOOR[type];
@@ -334,6 +461,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       massing.parts.push(g);
     }
 
+    if (relief) buildRelief(plan, { base, types, col, cTrim, H });
+
     // Grundriss als Kollision: Ecken des Rechtecks in die Welt übertragen.
     const corners = [[0, 0], [W, 0], [0, -depth], [W, -depth]].map(([lx, lz]) =>
       new THREE.Vector3(lx, 0, lz).applyMatrix4(base));
@@ -368,7 +497,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     let done = 0;
     while (done < bays) {
       const n = Math.min(bays - done, 5 + Math.floor(rand() * 4));
-      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: rand() < 0.3 ? 3 : 4, rand }, n);
+      block({ x: x + dx * done * BAY_W, z: z + dz * done * BAY_W, face, floors: rand() < 0.3 ? 3 : 4, rand, relief: true }, n);
       done += n;
     }
   };
@@ -401,7 +530,11 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     // Dächer, Massen
     addMesh(scene, merge(roofs), roofMat);
-    addMesh(scene, massing.build(), std({ vertexColors: true, ...plasterTex, roughness: 0.95 }));
+    const massMat = std({ vertexColors: true, ...plasterTex, roughness: 0.95 });
+    addMesh(scene, massing.build(), massMat);
+    // Erker und Balkone in eigenen Meshes, damit die übrigen Häuser unverändert bleiben.
+    if (reliefBag.parts.length) addMesh(scene, reliefBag.build(), massMat);
+    if (ironBag.parts.length) addMesh(scene, ironBag.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }));
   };
 
   return { block, row, finish };

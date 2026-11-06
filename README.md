@@ -47,7 +47,7 @@ src/
   world/
     berlin/          das Viertel um den Hackeschen Markt
       index.js       Straßenzüge, Eingänge, Anker, Stadtplan
-      facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Gehwege
+      facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Erker, Balkone, Gauben, Gehwege
       railway.js     Stadtbahn, Bahnhof Börse, Zug
       plaza.js       Platz: Bäume, Litfaßsäule, Urania-Säule, Achteck
       shopwindows.js Schaufenster und Fenster der Schauplätze von Fall 1
@@ -109,6 +109,10 @@ und in `shopMix` (`world/berlin/index.js`) einem Straßenzug zuteilen. Dunkle L�
 Erleuchtete Wohnungsfenster zeigen Bilder aus `windowAtlas()` (Zeilen = Arten wie Spitzengardine oder
 Rollo, Spalten = Varianten). `facades.js` wählt je Stockwerk eines Hauses eine Art. Der Atlas wird so
 abgedunkelt, dass ein Fenster aus der Ferne so hell wirkt wie eine einfarbige Scheibe.
+
+**Erker, Balkone, Gauben:** Häuser aus `row()` bekommen sie nach eigenem Zufall (`planRelief` in
+`facades.js`); Häuser aus `block()` nur mit `relief: true`. Die Schauplätze der Fälle bleiben deshalb
+glatt, und nichts verdeckt ihre Schilder oder Fundstellen.
 
 ## Geschichtlicher Hintergrund
 

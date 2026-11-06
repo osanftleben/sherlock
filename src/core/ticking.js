@@ -3,10 +3,13 @@ import * as THREE from 'three';
 // Tickende Uhren. Jede Uhr im Raum ist eine eigene Schallquelle mit Richtung und
 // Abstand. Uhren melden sich über `userData.ticks` an ihrem 3D-Objekt an:
 //   { kind: 'pendulum', seed }  Regulator, tickt bei jeder Umkehr des sichtbaren Pendels
+//                               und schlägt alle paar Minuten die Gongfeder an
 //   { kind: 'wall', size }      runde Wanduhr, schneller und leiser, je kleiner desto heller
+// Der Direktschall fällt mit dem Abstand ab, der Raumhall bleibt überall etwa gleich.
 const PENDULUM_SPEED = 3.14; // muss zur Pendelanimation in interiors.js passen
 const AHEAD = 0.12; // so weit im Voraus werden Schläge eingeplant (Sekunden)
 const AUDIBLE = 14; // weiter entfernte Uhren werden gar nicht erst gespielt (Meter)
+const SEND = 0.12; // Anteil, der in den Raumhall geht
 
 const pos = new THREE.Vector3();
 const dir = new THREE.Vector3();
@@ -25,8 +28,9 @@ export class Ticking {
 
   // Sammelt alle Uhren einer Szene ein; vorherige Quellen werden abgebaut.
   setScene(scene) {
-    for (const c of this.clocks) c.panner?.disconnect();
+    for (const c of this.clocks) c.in?.disconnect();
     this.clocks = [];
+    this.nextStrike = null;
     scene.updateMatrixWorld(true);
     scene.traverse((o) => {
       const spec = o.userData.ticks;
@@ -45,7 +49,7 @@ export class Ticking {
         pitch: (pendulum ? 0.9 : 1.15 - size) + hash(r * 91) * 0.25,
         loud: pendulum ? 1 : 0.35 + size * 1.6,
         last: null,
-        panner: null,
+        in: null,
       });
     });
   }
@@ -69,11 +73,37 @@ export class Ticking {
     this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
     const d = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.reverb = this.makeReverb(0.9, 0.22);
+    this.reverb.connect(this.out);
   }
 
-  panner(c) {
-    if (c.panner) return c.panner;
-    const p = this.audio.ctx.createPanner();
+  // Künstliche Impulsantwort einer möblierten Stube: kurzer, dunkler Nachhall,
+  // abklingendes, tiefpassgefiltertes Rauschen, je Kanal anders.
+  makeReverb(seconds, decay) {
+    const { ctx } = this.audio;
+    const rate = ctx.sampleRate;
+    const len = Math.floor(rate * seconds);
+    const ir = ctx.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = ir.getChannelData(ch);
+      let lp = 0;
+      for (let i = 0; i < len; i++) {
+        const t = i / rate;
+        lp += (Math.random() * 2 - 1 - lp) * 0.55;
+        d[i] = lp * Math.exp(-t / decay) * Math.min(1, t / 0.006);
+      }
+    }
+    const conv = ctx.createConvolver();
+    conv.buffer = ir;
+    return conv;
+  }
+
+  // Eingang einer Uhr: verzweigt in den gerichteten Direktschall und den Raumhall.
+  input(c) {
+    if (c.in) return c.in;
+    const { ctx } = this.audio;
+    c.in = ctx.createGain();
+    const p = ctx.createPanner();
     p.panningModel = 'HRTF';
     p.distanceModel = 'inverse';
     p.refDistance = 0.7;
@@ -82,9 +112,11 @@ export class Ticking {
     p.positionX.value = c.pos.x;
     p.positionY.value = c.pos.y;
     p.positionZ.value = c.pos.z;
-    p.connect(this.out);
-    c.panner = p;
-    return p;
+    c.in.connect(p).connect(this.out);
+    const send = ctx.createGain();
+    send.gain.value = SEND;
+    c.in.connect(send).connect(this.reverb);
+    return c.in;
   }
 
   setListener(camera) {
@@ -127,6 +159,39 @@ export class Ticking {
         if (!far) this.tick(c, now + Math.max(0, this.beatTime(c, c.last) - t), c.last % 2 === 0);
       }
     }
+    this.strikes(t, now);
+  }
+
+  // Von Zeit zu Zeit schlagen die Regulatoren die halbe Stunde, kurz nacheinander.
+  strikes(t, now) {
+    const pendulums = this.clocks.filter((c) => c.pendulum);
+    if (!pendulums.length) return;
+    if (this.nextStrike === null) this.nextStrike = t + 20 + Math.random() * 25;
+    if (t < this.nextStrike) return;
+    pendulums.forEach((c, i) => this.gong(c, now + i * (0.15 + Math.random() * 0.25)));
+    this.nextStrike = t + 180 + Math.random() * 120;
+  }
+
+  // Gongfeder eines Regulators: tiefer Grundton mit unharmonischen Obertönen.
+  gong(c, t) {
+    const out = this.input(c);
+    this.hit(out, t, 1800, 2, 0.03, 0.12);
+    this.ring(out, t, 196, 5, 0.14);
+    this.ring(out, t, 541, 3, 0.06);
+    this.ring(out, t, 1061, 1.4, 0.022);
+  }
+
+  ring(out, t, freq, dur, gain) {
+    const ctx = this.audio.ctx;
+    const osc = ctx.createOscillator();
+    osc.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g).connect(out);
+    osc.start(t);
+    osc.stop(t + dur + 0.05);
   }
 
   hit(out, t, freq, q, dur, gain) {
@@ -146,7 +211,7 @@ export class Ticking {
 
   // Tick und Tack klingen leicht verschieden: Anker fällt mal links, mal rechts ein.
   tick(c, t, tock) {
-    const out = this.panner(c);
+    const out = this.input(c);
     const p = c.pitch * (tock ? 0.86 : 1);
     const g = c.loud * (0.85 + Math.random() * 0.3);
     // harter Anschlag der Ankerpalette

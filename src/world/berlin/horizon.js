@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, cyl, merge } from '../kit.js';
 import { rng } from '../textures.js';
+import { WATER_Y } from './river.js';
 
 // Was man von fern sieht: Häuser jenseits der Spree, Dom, Neue Synagoge.
 // Die fernen Silhouetten tragen keinen Nebel und sind dunkler als der Himmel: Der Nebel würde sie
@@ -33,6 +34,8 @@ export function buildHorizon(loc, r) {
       }
     }
   }
+  // Kaimauer am Gegenufer, vom Wasser bis knapp über das Pflaster vor den Häusern.
+  far.box(0xffffff, 720,0.6 - WATER_Y, 1, 0, (0.3 + WATER_Y) / 2 - 0.05, 112.5);
   addMesh(scene, far.build(), new THREE.MeshBasicMaterial({ color: SILHOUETTE, fog: false }));
   addMesh(scene, windows.build(), new THREE.MeshBasicMaterial({ color: FAR_WINDOW, fog: false }));
   // Früher lagen hier 60 Lichtpunkte nach dem gemeinsamen Zufall; der wird weiter so gezogen.

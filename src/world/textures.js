@@ -236,6 +236,63 @@ export function brick() {
   });
 }
 
+// Quaimauer aus Granitquadern. Eine Kachel ist 4 × 4 m groß, ihre Oberkante ist die Quaikante. Der
+// Streifen um die Wasserlinie (`water` Meter unter der Kante) ist nass und dunkel, darunter grünlich.
+export function quayStone(water = 2.7) {
+  return cached(`quay${water}`, () => {
+    const size = 512;
+    const px = size / 4;
+    const color = canvas(size);
+    const height = canvas(size);
+    const c = color.getContext('2d');
+    const h = height.getContext('2d');
+    const r = rng(47);
+    c.fillStyle = '#1c1c1e';
+    c.fillRect(0, 0, size, size);
+    h.fillStyle = '#000';
+    h.fillRect(0, 0, size, size);
+    // Schichten zu 0,5 m, Quader 0,9 bis 1,6 m lang; was rechts überragt, erscheint links wieder.
+    const row = px / 2;
+    for (let y = 0; y < size; y += row) {
+      let x = r() * px;
+      const end = x + size;
+      while (x < end) {
+        const w = Math.min(px * (0.9 + r() * 0.7), end - x);
+        const v = 70 + r() * 34;
+        c.fillStyle = `rgb(${v + 4},${v + 2},${v})`;
+        h.fillStyle = `rgb(${170 + r() * 70},0,0)`;
+        for (const ox of [0, -size]) {
+          c.fillRect(x + ox + 2, y + 2, w - 4, row - 4);
+          h.fillRect(x + ox + 2, y + 2, w - 4, row - 4);
+        }
+        x += w;
+      }
+    }
+    grain(c, size, 22, 48);
+    blotches(c, size, 14, 30, 90, 'rgba(10,10,12,0.4)', 49);
+    // Nasser Streifen und Algen um die Wasserlinie. Die Kachel wiederholt sich nur waagerecht.
+    const line = water * px;
+    const wet = c.createLinearGradient(0, line - px * 0.6, 0, size);
+    wet.addColorStop(0, 'rgba(6,8,8,0)');
+    wet.addColorStop(0.35, 'rgba(6,8,8,0.55)');
+    wet.addColorStop(0.5, 'rgba(10,16,10,0.75)');
+    wet.addColorStop(1, 'rgba(8,12,8,0.85)');
+    c.fillStyle = wet;
+    c.fillRect(0, line - px * 0.6, size, size);
+    // Rinnspuren unter den Fugen.
+    for (let i = 0; i < 40; i++) {
+      const x = r() * size;
+      const top = r() * line * 0.8;
+      const g = c.createLinearGradient(0, top, 0, line);
+      g.addColorStop(0, 'rgba(8,8,10,0)');
+      g.addColorStop(1, 'rgba(8,8,10,0.35)');
+      c.fillStyle = g;
+      c.fillRect(x, top, 2 + r() * 5, line - top);
+    }
+    return { map: tex(color), normalMap: tex(normalFromHeight(height, 1.6), { srgb: false }) };
+  });
+}
+
 export function slate() {
   return cached('slate', () => {
     const size = 256;

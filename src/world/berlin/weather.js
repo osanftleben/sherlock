@@ -29,20 +29,23 @@ export function buildWeather(loc, r) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('tail', new THREE.BufferAttribute(tail, 1));
-  // Überdachte Stellen (loc.dry: Rechtecke, etwa Tordurchfahrten), dort fällt bis 4,5 m kein Regen.
-  // Feste Anzahl, damit sich der Shader nicht ändert, wenn ein Viertel mehr oder weniger hat.
+  // Überdachte Stellen (loc.dry: Rechtecke, etwa Tordurchfahrten oder der Viaduktbogen), dort
+  // fällt bis zur Höhe `top` (sonst 4,5 m) kein Regen. Feste Anzahl, damit sich der Shader nicht
+  // ändert, wenn ein Viertel mehr oder weniger hat.
   const DRY = 4;
+  if ((loc.dry?.length ?? 0) > DRY) console.warn(`weather.js: nur ${DRY} trockene Stellen, ${loc.dry.length} eingetragen`);
   const dry = Array.from({ length: DRY }, (_, i) => {
     const d = loc.dry?.[i];
     return d ? new THREE.Vector4(d.minX, d.maxX, d.minZ, d.maxZ) : new THREE.Vector4(0, -1, 0, -1);
   });
+  const dryTop = Array.from({ length: DRY }, (_, i) => loc.dry?.[i]?.top ?? 4.5);
   const rain = new THREE.LineSegments(g, new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    uniforms: { time: { value: 0 }, origin: { value: new THREE.Vector3() }, dry: { value: dry } },
+    uniforms: { time: { value: 0 }, origin: { value: new THREE.Vector3() }, dry: { value: dry }, dryTop: { value: dryTop } },
     vertexShader: `
       attribute float tail;
-      uniform float time; uniform vec3 origin; uniform vec4 dry[${DRY}]; varying float vA;
+      uniform float time; uniform vec3 origin; uniform vec4 dry[${DRY}]; uniform float dryTop[${DRY}]; varying float vA;
       void main(){
         vec3 p = position;
         p.y = mod(p.y - time * 9.0, 20.0);
@@ -55,7 +58,7 @@ export function buildWeather(loc, r) {
         vA = clamp(1.0 - dist / 20.0, 0.0, 1.0) * smoothstep(1.5, 5.0, dist);
         for (int i = 0; i < ${DRY}; i++) {
           vec4 d = dry[i];
-          if (p.y < 4.5 && p.x > d.x && p.x < d.y && p.z > d.z && p.z < d.w) vA = 0.0;
+          if (p.y < dryTop[i] && p.x > d.x && p.x < d.y && p.z > d.z && p.z < d.w) vA = 0.0;
         }
         gl_Position = projectionMatrix * mv;
       }`,

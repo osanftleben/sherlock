@@ -22,26 +22,32 @@ export function buildHorizon(loc, r) {
   const far = new Bag();
   const windows = new Bag();
   const mirror = new BankMirror();
-  for (let x = -220; x < 220; x += 16 + r() * 8) {
-    const h = 14 + r() * 8;
+  const house = (x, h, rand) => {
     far.box(0xffffff, 18, h, 10, x, h / 2, 118);
     mirror.fill(x - 9, x + 9, 0, h, 0);
-    for (let c = 0; c < 2 + Math.floor(hr() * 3); c++) {
-      const cx = x - 7 + hr() * 14;
-      const ch = 1.4 + hr();
-      far.box(0xffffff, 0.9, ch, 0.9, cx, h + 0.6, 116 + hr() * 4);
+    for (let c = 0; c < 2 + Math.floor(rand() * 3); c++) {
+      const cx = x - 7 + rand() * 14;
+      const ch = 1.4 + rand();
+      far.box(0xffffff, 0.9, ch, 0.9, cx, h + 0.6, 116 + rand() * 4);
       mirror.fill(cx - 0.45, cx + 0.45, h, h + 0.6 + ch / 2, 0);
     }
     // Fenster in Achsen und Geschossen zu 3,6 m; die meisten sind dunkel.
     for (let fy = 3.2; fy < h - 2; fy += 3.6) {
       for (let ax = -7.2; ax <= 7.2; ax += 3.6) {
-        if (hr() < 0.2) {
+        if (rand() < 0.2) {
           windows.box(0xffffff, 1, 1.5, 0.05, x + ax, fy, 112.9);
           mirror.fill(x + ax - 0.5, x + ax + 0.5, fy - 0.75, fy + 0.75, 1);
         }
       }
     }
-  }
+  };
+  let east = -220;
+  for (; east < 220; east += 16 + r() * 8) house(east, 14 + r() * 8, hr);
+  // Nach beiden Seiten weiter bis ans Ende von Wasser und Kaimauer (±360), sonst reißt das
+  // Gegenufer hinter den Sperren am Quai ab. Eigener Zufall, damit die Synagoge gleich bleibt.
+  const er = rng(1901);
+  for (; east < 360; east += 16 + er() * 8) house(east, 14 + er() * 8, er);
+  for (let x = -236 - er() * 8; x > -360; x -= 16 + er() * 8) house(x, 14 + er() * 8, er);
   // Kaimauer am Gegenufer, vom Wasser bis knapp über das Pflaster vor den Häusern.
   far.box(0xffffff, 720, 0.6 - WATER_Y, 1, 0, (0.3 + WATER_Y) / 2 - 0.05, BANK_Z + 0.5);
   mirror.fill(-360, 360, WATER_Y, 0.4, 0);

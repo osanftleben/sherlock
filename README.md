@@ -141,7 +141,8 @@ glatt, und nichts verdeckt ihre Schilder oder Fundstellen.
 **Durchfahrten und Höfe:** `row({ …, gate: n })` baut in Achse `n` der Reihe eine Tordurchfahrt mit
 Rundbogen, Gewölbe und offenen Torflügeln, auf der Hofseite dieselbe Achse gedreht. Der Zufall wird
 dabei gezogen wie für die Achse, die dort vorher stand, damit alle übrigen Häuser gleich bleiben. Unter
-dem Gewölbe regnet es nicht (`loc.dry`, höchstens vier Stellen je Viertel). Hofwände entstehen mit
+dem Gewölbe regnet es nicht (`loc.dry`, höchstens vier Stellen je Viertel, trocken bis `top` Meter, sonst 4,5;
+der Viaduktbogen zur Spree belegt eine davon). Hofwände entstehen mit
 `courtWall()` aus denselben Fensterachsen, ohne Hauskörper und Dach (Beispiel: `court.js`). Eine Laterne
 wird mit `[x, z, true]` in der Liste der Laternen zur kaputten: kein Licht, eingeschlagene Scheibe.
 

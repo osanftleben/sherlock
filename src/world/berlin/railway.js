@@ -55,6 +55,8 @@ export function buildRailway(loc, r, brickMat) {
     } else {
       loc.collide(ax, ax + 1.1, VZ0, VZ1);
       loc.collide(ax + SEG - 1.1, ax + SEG, VZ0, VZ1);
+      // Im Durchgang zur Spree regnet es nicht, bis unter den Scheitel des Bogens (weather.js).
+      (loc.dry ??= []).push({ minX: ax + 1.1, maxX: ax + SEG - 1.1, minZ: VZ0, maxZ: VZ1, top: VH });
     }
   }
   addMesh(scene, merge(viaductParts), brickMat);

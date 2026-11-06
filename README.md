@@ -102,6 +102,9 @@ größere umgekehrt. Die Scheiben bleiben je Art ein Mesh, weil sie billig sind.
 Große matte Flächen (Putz, Hauskörper, Schiefer, Ziegel, Horizont) nutzen `matte()` aus `kit.js`, also
 Lambert statt PBR. Das spart in 1080p rund 2 ms. Was glänzen oder spiegeln soll (Pflaster, Glas,
 Eisen), bleibt bei `std()`.
+Die Szene wird in einen 4×-MSAA-Puffer im Format R11G11B10F gerechnet (`view.js`): Fließkomma für das
+Leuchten, aber halb so breit wie RGBA16F. Schon Löschen und Auflösen des Puffers sind auf schwachen
+Grafikchips teuer; mit dem kompakten Format sinkt die GPU-Zeit in 1080p um gut 1 ms.
 
 **Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Dahinter stehen Kulissen (Abschnitt „Kulissen hinter den Baustellen“ samt Laternen), die nur den Blick

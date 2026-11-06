@@ -152,8 +152,13 @@ export class View {
     this.exposure = 1.15;
 
     this.pixelRatio = Math.min(devicePixelRatio, 1.5);
-    // Nur die Szene wird geglättet (MSAA); alle Nachbearbeitung läuft ohne.
-    this.target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    // Nur die Szene wird geglättet (MSAA); alle Nachbearbeitung läuft ohne. Der Puffer ist
+    // R11G11B10F: Fließkomma für das Leuchten der Laternen, aber halb so breit wie RGBA16F. Löschen
+    // und Auflösen des 4×-Puffers kosten in 1080p sonst allein mehrere Millisekunden.
+    const compact = this.renderer.extensions.has('EXT_color_buffer_float');
+    this.target = new THREE.WebGLRenderTarget(4, 4, compact
+      ? { format: THREE.RGBFormat, type: THREE.UnsignedInt101111Type, samples: 4 }
+      : { type: THREE.HalfFloatType, samples: 4 });
     this.glow = new Glow(new THREE.Vector2(4, 4), 0.32, 0.5, 1.0);
     this.final = new THREE.RawShaderMaterial({ ...FinalShader, uniforms: THREE.UniformsUtils.clone(FinalShader.uniforms), depthTest: false, depthWrite: false });
     this.final.uniforms.tScene.value = this.target.texture;

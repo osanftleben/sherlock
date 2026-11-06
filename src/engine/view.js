@@ -1,29 +1,51 @@
 import * as THREE from 'three';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 
-// Letzter Schritt: etwas Fotografie von 1892 – Vignette, Korn, leichte Tonung, Überblendung.
-const GradeShader = {
+// Schlussbild in einem Durchgang: Szene plus Leuchten, Tonwerte (ACES), sRGB und etwas Fotografie
+// von 1892 – leichte Tonung, Vignette, Korn, Überblendung.
+const FinalShader = {
   uniforms: {
-    tDiffuse: { value: null },
+    tScene: { value: null },
+    tGlow: { value: null },
+    glow: { value: 1 },
+    sharpen: { value: 0 },
+    texel: { value: new THREE.Vector2() },
+    toneMappingExposure: { value: 1 },
     time: { value: 0 },
     fade: { value: 0 },
   },
   vertexShader: `
+    precision highp float;
+    attribute vec3 position;
+    attribute vec2 uv;
     varying vec2 vUv;
     void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
   `,
   fragmentShader: `
-    uniform sampler2D tDiffuse;
+    precision highp float;
+    uniform sampler2D tScene;
+    uniform sampler2D tGlow;
+    uniform float glow;
+    uniform float sharpen;
+    uniform vec2 texel;
     uniform float time;
     uniform float fade;
     varying vec2 vUv;
+    #include <tonemapping_pars_fragment>
+    #include <colorspace_pars_fragment>
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main() {
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      vec3 c = texture2D(tScene, vUv).rgb;
+      if (sharpen > 0.0) {
+        // Szene in verringerter Auflösung: beim Hochskalieren leicht nachschärfen.
+        vec3 n = texture2D(tScene, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tScene, vUv - vec2(texel.x, 0.0)).rgb
+               + texture2D(tScene, vUv + vec2(0.0, texel.y)).rgb + texture2D(tScene, vUv - vec2(0.0, texel.y)).rgb;
+        c = max(vec3(0.0), c + (c - n * 0.25) * sharpen);
+      }
+      c += texture2D(tGlow, vUv).rgb * glow;
+      c = ACESFilmicToneMapping(c);
+      c = sRGBTransferOETF(vec4(c, 1.0)).rgb;
       float l = dot(c, vec3(0.3, 0.59, 0.11));
       c = mix(c, vec3(l), 0.16);
       c *= mix(vec3(0.94, 0.97, 1.05), vec3(1.05, 1.0, 0.92), smoothstep(0.05, 0.7, l));
@@ -36,30 +58,112 @@ const GradeShader = {
   `,
 };
 
+// Leuchten wie UnrealBloomPass, aber ohne den teuren letzten Schritt zurück in volle Auflösung:
+// Das Ergebnis bleibt in halber Auflösung liegen und wird erst im Schlussbild addiert.
+class Glow extends UnrealBloomPass {
+  get texture() {
+    return this.renderTargetsHorizontal[0].texture;
+  }
+
+  draw(renderer, input) {
+    const quad = this._fsQuad;
+    this.highPassUniforms.tDiffuse.value = input.texture;
+    this.highPassUniforms.luminosityThreshold.value = this.threshold;
+    quad.material = this.materialHighPassFilter;
+    renderer.setRenderTarget(this.renderTargetBright);
+    quad.render(renderer);
+
+    let source = this.renderTargetBright;
+    for (let i = 0; i < this.nMips; i++) {
+      const blur = this.separableBlurMaterials[i];
+      quad.material = blur;
+      blur.uniforms.colorTexture.value = source.texture;
+      blur.uniforms.direction.value = UnrealBloomPass.BlurDirectionX;
+      renderer.setRenderTarget(this.renderTargetsHorizontal[i]);
+      quad.render(renderer);
+      blur.uniforms.colorTexture.value = this.renderTargetsHorizontal[i].texture;
+      blur.uniforms.direction.value = UnrealBloomPass.BlurDirectionY;
+      renderer.setRenderTarget(this.renderTargetsVertical[i]);
+      quad.render(renderer);
+      source = this.renderTargetsVertical[i];
+    }
+
+    quad.material = this.compositeMaterial;
+    this.compositeMaterial.uniforms.bloomStrength.value = this.strength;
+    this.compositeMaterial.uniforms.bloomRadius.value = this.radius;
+    renderer.setRenderTarget(this.renderTargetsHorizontal[0]);
+    quad.render(renderer);
+  }
+}
+
+// Misst die GPU-Zeit ganzer Bilder (wo der Browser Zeitabfragen erlaubt, sonst null).
+class GpuClock {
+  constructor(gl) {
+    this.gl = gl;
+    this.ext = gl.getExtension('EXT_disjoint_timer_query_webgl2');
+    this.pending = [];
+    this.query = null;
+  }
+
+  begin() {
+    if (!this.ext || this.pending.length > 6) return;
+    this.query = this.gl.createQuery();
+    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, this.query);
+  }
+
+  end() {
+    if (!this.query) return;
+    this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
+    this.pending.push(this.query);
+    this.query = null;
+  }
+
+  // Fertige Messungen in Millisekunden, älteste zuerst.
+  poll() {
+    const { gl, ext } = this;
+    const out = [];
+    if (!ext) return out;
+    const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
+    while (this.pending.length && gl.getQueryParameter(this.pending[0], gl.QUERY_RESULT_AVAILABLE)) {
+      const q = this.pending.shift();
+      if (!disjoint) out.push(gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6);
+      gl.deleteQuery(q);
+    }
+    return out;
+  }
+}
+
+// Ziel: mindestens 60 Bilder je Sekunde (16,7 ms). Die Grafikkarte bekommt 13,5 ms je Bild, der Rest bleibt
+// für Browser und Bildschirmausgabe.
+const BUDGET = 13.5;
+const MIN_SCALE = 0.6;
+
 export class View {
   constructor(canvas) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    // Tonwerte erst im Schlussbild; die Szene landet linear in einem Fließkomma-Puffer.
+    this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.shadowMap.enabled = false;
     this.camera = new THREE.PerspectiveCamera(68, 1, 0.08, 700);
+    this.scene = new THREE.Scene();
+    this.exposure = 1.15;
 
     this.pixelRatio = Math.min(devicePixelRatio, 1.5);
-    this.renderer.setPixelRatio(this.pixelRatio);
-
-    const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
-    this.composer = new EffectComposer(this.renderer, target);
-    this.renderPass = new RenderPass(new THREE.Scene(), this.camera);
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(4, 4), 0.32, 0.5, 1.0);
-    this.grade = new ShaderPass(GradeShader);
-    this.composer.addPass(this.renderPass);
-    this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
-    this.composer.addPass(this.grade);
+    // Nur die Szene wird geglättet (MSAA); alle Nachbearbeitung läuft ohne.
+    this.target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+    this.glow = new Glow(new THREE.Vector2(4, 4), 0.32, 0.5, 1.0);
+    this.final = new THREE.RawShaderMaterial({ ...FinalShader, uniforms: THREE.UniformsUtils.clone(FinalShader.uniforms), depthTest: false, depthWrite: false });
+    this.final.uniforms.tScene.value = this.target.texture;
+    this.final.uniforms.tGlow.value = this.glow.texture;
+    this.quad = new FullScreenQuad(this.final);
 
     this.fade = 1;
     this.fadeTarget = 0;
-    this.slowTime = 0;
+    // Innere Auflösung der Szene relativ zur Leinwand; die Regelung in adapt() hält damit 60 FPS.
+    this.scale = 1;
+    this.clock = new GpuClock(this.renderer.getContext());
+    this.gpuMs = 0;
+    this.sample = { time: 0, sum: 0, n: 0, slow: 0, frames: 0 };
     this.resize();
     addEventListener('resize', () => this.resize());
   }
@@ -71,32 +175,78 @@ export class View {
     this.camera.updateProjectionMatrix();
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(w, h, false);
-    this.composer.setPixelRatio(this.pixelRatio);
-    this.composer.setSize(w, h);
+    this.sizeScene();
+  }
+
+  sizeScene() {
+    const pw = Math.max(1, Math.round(innerWidth * this.pixelRatio * this.scale));
+    const ph = Math.max(1, Math.round(innerHeight * this.pixelRatio * this.scale));
+    this.target.setSize(pw, ph);
+    this.glow.setSize(pw, ph);
+    this.final.uniforms.texel.value.set(1 / pw, 1 / ph);
+    this.final.uniforms.sharpen.value = this.scale < 0.99 ? Math.min(0.5, (1 - this.scale) * 1.4) : 0;
   }
 
   setLocation(location) {
-    this.renderPass.scene = location.scene;
-    this.renderer.toneMappingExposure = 1.15 * location.exposure;
+    this.scene = location.scene;
+    this.exposure = 1.15 * location.exposure;
   }
 
-  // Schwache Rechner: erst die Auflösung senken, dann das Leuchten abschalten.
+  // Regelt die innere Auflösung nach der gemessenen GPU-Zeit: über dem Budget sofort herunter,
+  // mit viel Luft langsam wieder hinauf. Ohne Zeitabfragen zählt der Browser verspätete Bilder.
+  // Reicht die kleinste Auflösung nicht, fällt das Leuchten weg.
   adapt(dt) {
-    this.slowTime = dt > 1 / 28 ? this.slowTime + dt : Math.max(0, this.slowTime - dt);
-    if (this.slowTime < 3) return;
-    this.slowTime = 0;
-    if (this.pixelRatio > 0.75) {
-      this.pixelRatio = Math.max(0.75, this.pixelRatio - 0.25);
-      this.resize();
-    } else if (this.bloom.enabled) {
-      this.bloom.enabled = false;
+    const s = this.sample;
+    for (const ms of this.clock.poll()) {
+      s.sum += ms;
+      s.n++;
+    }
+    s.time += dt;
+    s.frames++;
+    if (dt > 1 / 50) s.slow++;
+    if (s.time < 0.5) return;
+
+    let scale = this.scale;
+    if (this.clock.ext) {
+      if (s.n >= 8) {
+        const ms = (this.gpuMs = s.sum / s.n);
+        if (ms > BUDGET * 1.05) scale = Math.max(scale - 0.15, scale * Math.sqrt(BUDGET / ms) - 0.02);
+        else if (ms < BUDGET * 0.78) scale += 0.05;
+        if (ms > BUDGET * 1.2 && this.scale <= MIN_SCALE) this.glow.enabled = false;
+      }
+    } else if (s.slow > s.frames * 0.25) {
+      scale -= 0.1;
+      if (this.scale <= MIN_SCALE) this.glow.enabled = false;
+    }
+    Object.assign(s, { time: 0, sum: 0, n: 0, slow: 0, frames: 0 });
+
+    scale = Math.min(1, Math.max(MIN_SCALE, Math.round(scale * 20) / 20));
+    if (scale !== this.scale) {
+      this.scale = scale;
+      this.sizeScene();
     }
   }
 
   render(dt, time) {
+    const r = this.renderer;
     this.fade += (this.fadeTarget - this.fade) * Math.min(1, dt * 5);
-    this.grade.uniforms.fade.value = this.fade;
-    this.grade.uniforms.time.value = time % 10;
-    this.composer.render(dt);
+
+    this.clock.begin();
+    r.setRenderTarget(this.target);
+    r.render(this.scene, this.camera);
+
+    const clear = r.autoClear;
+    r.autoClear = false;
+    if (this.glow.enabled) this.glow.draw(r, this.target);
+
+    const u = this.final.uniforms;
+    u.glow.value = this.glow.enabled ? 1 : 0;
+    u.toneMappingExposure.value = this.exposure;
+    u.fade.value = this.fade;
+    u.time.value = time % 10;
+    r.setRenderTarget(null);
+    this.quad.render(r);
+    this.clock.end();
+    r.autoClear = clear;
   }
 }

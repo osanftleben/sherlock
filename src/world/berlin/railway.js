@@ -72,19 +72,27 @@ export function buildRailway(loc, r, brickMat) {
   for (const z of [22.2, 24, 26, 27.8]) rails.box(0x35363a, deckW, 0.14, 0.09, 0, VH + 0.6, z);
   addMesh(scene, rails.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.6 }));
 
-  // Bahnhof Börse: Halle aus Eisen und Glas auf dem Viadukt.
+  // Bahnhof Börse: Halle aus Eisen und Glas auf dem Viadukt. Das Dach ist ein flacher
+  // Kreisbogen, der auf den Seitenwänden (Oberkante VH + 3.5) aufsitzt.
+  const HALL_R = 9.5;
+  const hallHalfSpan = (VZ1 - VZ0) / 2 - 0.2;
+  const hallArc = Math.asin(hallHalfSpan / HALL_R); // halber Öffnungswinkel des Bogens
+  const hallY = VH + 3.5 - HALL_R * Math.cos(hallArc); // Mittelpunkt des Bogens
+  const hallZ = (VZ0 + VZ1) / 2;
+  // Zylinder liegt nach der Drehung um Z entlang X; Winkel π/2 ist der Scheitel.
   const hall = new THREE.Mesh(
-    new THREE.CylinderGeometry(9.5, 9.5, 72, 24, 1, true, -Math.PI / 2, Math.PI),
+    new THREE.CylinderGeometry(HALL_R, HALL_R, 72, 24, 1, true, Math.PI / 2 - hallArc, 2 * hallArc),
     std({ color: 0x1b2430, roughness: 0.3, metalness: 0.4, side: THREE.DoubleSide }),
   );
   hall.rotation.z = Math.PI / 2;
-  hall.position.set(0, VH + 3.4, 25);
+  hall.position.set(0, hallY, hallZ);
   scene.add(hall);
   const ribs = new Bag();
   for (let x = -36; x <= 36; x += 4) {
-    const rib = new THREE.TorusGeometry(9.55, 0.07, 6, 24, Math.PI);
+    const rib = new THREE.TorusGeometry(HALL_R + 0.05, 0.07, 6, 12, 2 * hallArc);
+    rib.rotateZ(Math.PI / 2 - hallArc);
     rib.rotateY(Math.PI / 2);
-    rib.translate(x, VH + 3.4, 25);
+    rib.translate(x, hallY, hallZ);
     ribs.add(rib, 0x0c0e10);
   }
   ribs.box(0x3a2c24, 72, 3.2, 0.5, 0, VH + 1.9, VZ0 + 0.2);

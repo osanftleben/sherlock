@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { GameState } from './core/state.js';
 import { Input } from './core/input.js';
 import { Audio } from './core/audio.js';
+import { Ticking } from './core/ticking.js';
 import { View } from './engine/view.js';
 import { Player } from './engine/player.js';
 import { UI } from './ui/ui.js';
@@ -34,6 +35,7 @@ class Game {
     this.view = new View(document.getElementById('view'));
     this.input = new Input(this.view.renderer.domElement);
     this.audio = new Audio();
+    this.ticking = new Ticking(this.audio);
     this.ui = new UI(document.getElementById('ui'));
     this.player = new Player(this.view.camera);
     this.locations = {};
@@ -201,6 +203,7 @@ class Game {
     this.view.setLocation(this.location);
     this.player.teleport(spawn.pos, spawn.yaw, this.location);
     this.audio.setEnvironment(this.location.ambience);
+    this.ticking.setScene(this.location.scene);
     this.state.location = id;
     this.state.player = { pos: spawn.pos, yaw: spawn.yaw };
   }
@@ -493,6 +496,7 @@ class Game {
 
     this.location.update(dt, this.time, { camera, player: this.player });
     this.audio.update(dt, this.location.trainDistance ?? Infinity);
+    this.ticking.update(this.time, camera);
 
     if (this.mode === 'play') {
       this.target = this.player.findTarget(this.location, this.state);

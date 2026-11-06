@@ -138,6 +138,7 @@ class Room {
     const face = new THREE.Mesh(new THREE.CircleGeometry(radius, 20), new THREE.MeshStandardMaterial({ map: clockFace(hour, minute), roughness: 0.4, emissive: 0x302a20 }));
     face.position.z = 0.032;
     g.add(face);
+    g.userData.ticks = { kind: 'wall', size: radius };
     g.position.set(x, y, z);
     g.rotation.y = facing;
     this.scene.add(g);
@@ -163,6 +164,8 @@ class Room {
     bob.position.y = -0.56;
     pivot.add(bob);
     g.add(pivot);
+    // Das Ticken (core/ticking.js) folgt derselben Pendelfrequenz.
+    g.userData.ticks = { kind: 'pendulum', seed };
     g.position.set(x, y, z);
     g.rotation.y = facing;
     this.scene.add(g);

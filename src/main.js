@@ -11,7 +11,7 @@ import { Ticking } from './core/ticking.js';
 import { View } from './engine/view.js';
 import { Player } from './engine/player.js';
 import { UI } from './ui/ui.js';
-import { buildBerlin } from './world/berlin.js';
+import { buildBerlin } from './world/berlin/index.js';
 import { buildInteriors } from './world/interiors.js';
 import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
 import { softDisc } from './world/textures.js';

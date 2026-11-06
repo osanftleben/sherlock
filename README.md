@@ -39,7 +39,12 @@ src/
   core/              Spielstand, Eingabe, synthetisierte Klänge
   engine/            Spielerfigur und Kollision, Ort (Location), Rendering
   world/
-    berlin.js        das Viertel um den Hackeschen Markt
+    berlin/          das Viertel um den Hackeschen Markt
+      index.js       Straßenzüge, Eingänge, Anker, Stadtplan
+      facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Gehwege
+      railway.js     Stadtbahn, Bahnhof Börse, Zug
+      plaza.js       Platz: Bäume, Litfaßsäule, Urania-Säule, Achteck
+      lamps.js, traffic.js, weather.js, river.js, horizon.js
     interiors.js     Innenräume
     figures.js       Figuren, Pferde
     kit.js           Geometrie-Bausatz
@@ -73,10 +78,10 @@ werden alle Fälle nacheinander. Eine Tafel oben rechts und die Browser-Konsole 
 
 Optik und Texte prüft das nicht. Bedingungen der Form `!id` wertet die Simulation eher zu großzügig.
 
-**Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin.js` (`barrier(...)`).
+**Neues Viertel:** Die Grenzen der Welt sind die Baustellen in `world/berlin/index.js` (`barrier(...)`).
 Sie entfernen, an derselben Stelle mit `block` und `row` weiterbauen und `loc.map` ergänzen.
 
-**Neuer Innenraum:** Eine `build…`-Funktion in `world/interiors.js` ergänzen und in `berlin.js`
+**Neuer Innenraum:** Eine `build…`-Funktion in `world/interiors.js` ergänzen und in `berlin/index.js`
 mit `doorSpot` und `loc.exits` an ein Haus anschließen.
 
 ## Geschichtlicher Hintergrund

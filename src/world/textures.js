@@ -1886,3 +1886,265 @@ export function nightReflection() {
     return t;
   });
 }
+
+// Ladenschilder der gewöhnlichen Läden. boards: Schriftbretter über dem Schaufenster, je
+// Ladensorte SIGN_NAMES Inhaber (Zelle = Sorte * SIGN_NAMES + Inhaber), Inhabername in
+// Fraktur, darunter die Sorte. emblems: ausgestanzte Zunftzeichen für die Ausleger, eine
+// Zelle je Sorte in der Reihenfolge von SHOP_KINDS.
+export const SIGN_NAMES = 4;
+export const SIGN_ATLAS = { boards: { cols: 2, rows: 14 }, emblems: { cols: 4, rows: 2 } };
+const OWNERS = [
+  'Wilh. Krause', 'Carl Lehmann', 'Aug. Schulze', 'Gebr. Neumann', 'H. Friedländer', 'Otto Hahn',
+  'Rob. Zimmermann', 'L. Jacobsohn', 'Fr. Wolff', 'Ernst Richter', 'J. Levy', 'Gust. Braun',
+  'Paul Hoffmann', 'M. Hirschfeld', 'Ad. Wagner', 'Herm. Klein', 'Th. Schmidt', 'S. Rosenthal',
+  'Rich. Böhm', 'Alb. Fischer', 'E. Mendel', 'Fritz Kühn', 'A. Schwarz', 'Jul. Petersen',
+  'W. Lindemann', 'B. Cohn', 'K. Wendland', 'Max Ebert',
+];
+const SIGN_KIND_LINE = {
+  baecker: 'Bäckerei & Conditorei',
+  fleischer: 'Fleisch- & Wurstwaaren',
+  kolonial: 'Colonialwaaren · Delicatessen',
+  tuche: 'Tuche · Manufacturwaaren',
+  buch: 'Buch- & Kunsthandlung',
+  zigarren: 'Cigarren & Tabake',
+  hut: 'Hüte · Mützen · Schirme',
+};
+
+export function shopSigns() {
+  return cached('shop-signs', () => {
+    // Schriftbretter: 512 × 88 je Zelle, Seitenverhältnis wie das Brett (2,9 m × 0,5 m)
+    const BW = 512;
+    const BH = 88;
+    const { cols, rows } = SIGN_ATLAS.boards;
+    const b = canvas(BW * cols, BH * rows);
+    const ctx = b.getContext('2d');
+    const grounds = ['#1c2a20', '#2a1612', '#151515', '#18202e'];
+    SHOP_KINDS.forEach((kind, k) => {
+      for (let n = 0; n < SIGN_NAMES; n++) {
+        const cell = k * SIGN_NAMES + n;
+        const x = (cell % cols) * BW;
+        const y = Math.floor(cell / cols) * BH;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = grounds[(k + n) % grounds.length];
+        ctx.fillRect(0, 0, BW, BH);
+        ctx.strokeStyle = '#a8843a';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(5, 5, BW - 10, BH - 10);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(10, 10, BW - 20, BH - 20);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const gold = ctx.createLinearGradient(0, 16, 0, 58);
+        gold.addColorStop(0, '#f4d890');
+        gold.addColorStop(1, '#a87828');
+        ctx.font = '42px "UnifrakturMaguntia", serif';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText(OWNERS[cell % OWNERS.length], BW / 2 + 2, 38, BW - 60);
+        ctx.fillStyle = gold;
+        ctx.fillText(OWNERS[cell % OWNERS.length], BW / 2, 36, BW - 60);
+        ctx.font = '600 17px "EB Garamond", serif';
+        ctx.fillStyle = '#d0b47a';
+        ctx.fillText(SIGN_KIND_LINE[kind].toUpperCase(), BW / 2, 69, BW - 80);
+        ctx.restore();
+      }
+    });
+    const boards = new THREE.CanvasTexture(b);
+    boards.colorSpace = THREE.SRGBColorSpace;
+    boards.anisotropy = 8;
+
+    // Zunftzeichen: 256 × 256 je Zelle, Grund durchsichtig
+    const S = 256;
+    const e = canvas(S * SIGN_ATLAS.emblems.cols, S * SIGN_ATLAS.emblems.rows);
+    const g = e.getContext('2d');
+    const draw = {
+      baecker() {
+        // Brezel
+        g.strokeStyle = '#b8742c';
+        g.lineWidth = 26;
+        g.lineCap = 'round';
+        g.beginPath();
+        g.arc(128, 128, 84, Math.PI * 0.72, Math.PI * 2.28);
+        g.stroke();
+        g.beginPath();
+        g.moveTo(66, 186);
+        g.quadraticCurveTo(128, 150, 176, 92);
+        g.moveTo(190, 186);
+        g.quadraticCurveTo(128, 150, 80, 92);
+        g.stroke();
+        g.fillStyle = '#f0e8d0';
+        for (let i = 0; i < 18; i++) {
+          const a = Math.PI * (0.8 + i * 0.08);
+          g.fillRect(128 + Math.cos(a) * 84 - 2, 128 + Math.sin(a) * 84 - 2, 4, 4);
+        }
+      },
+      fleischer() {
+        // Ochsenkopf, vergoldet
+        g.fillStyle = '#c8a040';
+        g.beginPath();
+        g.moveTo(84, 70);
+        g.quadraticCurveTo(128, 50, 172, 70);
+        g.quadraticCurveTo(170, 150, 146, 210);
+        g.quadraticCurveTo(128, 224, 110, 210);
+        g.quadraticCurveTo(86, 150, 84, 70);
+        g.fill();
+        g.strokeStyle = '#d8b450';
+        g.lineWidth = 14;
+        g.lineCap = 'round';
+        g.beginPath();
+        g.moveTo(90, 72);
+        g.quadraticCurveTo(40, 60, 40, 20);
+        g.moveTo(166, 72);
+        g.quadraticCurveTo(216, 60, 216, 20);
+        g.stroke();
+        g.fillStyle = '#3a2810';
+        for (const x of [108, 148]) {
+          g.beginPath();
+          g.arc(x, 110, 7, 0, 7);
+          g.fill();
+        }
+        g.beginPath();
+        g.ellipse(128, 196, 18, 10, 0, 0, 7);
+        g.fill();
+      },
+      kolonial() {
+        // Kaffeekanne aus Kupfer
+        g.fillStyle = '#b86a3a';
+        g.beginPath();
+        g.moveTo(96, 220);
+        g.quadraticCurveTo(70, 150, 100, 90);
+        g.lineTo(156, 90);
+        g.quadraticCurveTo(186, 150, 160, 220);
+        g.closePath();
+        g.fill();
+        g.fillRect(104, 72, 48, 20);
+        g.beginPath();
+        g.arc(128, 66, 10, 0, 7);
+        g.fill();
+        g.strokeStyle = '#b86a3a';
+        g.lineWidth = 12;
+        g.beginPath();
+        g.moveTo(90, 170);
+        g.quadraticCurveTo(50, 150, 40, 100);
+        g.moveTo(166, 110);
+        g.quadraticCurveTo(214, 120, 170, 190);
+        g.stroke();
+        g.fillStyle = 'rgba(255,220,170,0.35)';
+        g.fillRect(108, 100, 10, 100);
+      },
+      tuche() {
+        // Schere
+        g.strokeStyle = '#a8acb0';
+        g.lineWidth = 12;
+        for (const x of [88, 168]) {
+          g.beginPath();
+          g.arc(x, 196, 26, 0, 7);
+          g.stroke();
+        }
+        g.fillStyle = '#b8bcc0';
+        g.beginPath();
+        g.moveTo(100, 172);
+        g.lineTo(196, 30);
+        g.lineTo(184, 26);
+        g.lineTo(112, 150);
+        g.fill();
+        g.beginPath();
+        g.moveTo(156, 172);
+        g.lineTo(60, 30);
+        g.lineTo(72, 26);
+        g.lineTo(144, 150);
+        g.fill();
+        g.fillStyle = '#d8a040';
+        g.beginPath();
+        g.arc(128, 128, 9, 0, 7);
+        g.fill();
+      },
+      buch() {
+        // Aufgeschlagenes Buch
+        g.fillStyle = '#7a1a18';
+        g.beginPath();
+        g.moveTo(20, 80);
+        g.lineTo(128, 96);
+        g.lineTo(236, 80);
+        g.lineTo(236, 196);
+        g.lineTo(128, 214);
+        g.lineTo(20, 196);
+        g.closePath();
+        g.fill();
+        g.fillStyle = '#ece0c0';
+        g.beginPath();
+        g.moveTo(30, 74);
+        g.quadraticCurveTo(80, 70, 124, 92);
+        g.lineTo(124, 202);
+        g.quadraticCurveTo(80, 182, 30, 188);
+        g.closePath();
+        g.moveTo(226, 74);
+        g.quadraticCurveTo(176, 70, 132, 92);
+        g.lineTo(132, 202);
+        g.quadraticCurveTo(176, 182, 226, 188);
+        g.closePath();
+        g.fill();
+        g.strokeStyle = 'rgba(60,40,20,0.5)';
+        g.lineWidth = 3;
+        for (let y = 104; y < 180; y += 14) {
+          g.beginPath();
+          g.moveTo(44, y - 6);
+          g.lineTo(112, y + 4);
+          g.moveTo(144, y + 4);
+          g.lineTo(212, y - 6);
+          g.stroke();
+        }
+      },
+      zigarren() {
+        // Zigarre mit Bauchbinde, schräg
+        g.save();
+        g.translate(128, 128);
+        g.rotate(-0.5);
+        g.fillStyle = '#7a4a22';
+        g.beginPath();
+        g.ellipse(0, 0, 112, 28, 0, 0, 7);
+        g.fill();
+        g.fillStyle = 'rgba(255,220,170,0.25)';
+        g.fillRect(-100, -20, 200, 8);
+        g.fillStyle = '#b82a1a';
+        g.fillRect(40, -28, 26, 56);
+        g.fillStyle = '#e0c060';
+        g.fillRect(46, -28, 14, 56);
+        g.fillStyle = '#d8582a';
+        g.beginPath();
+        g.ellipse(-108, 0, 10, 20, 0, 0, 7);
+        g.fill();
+        g.restore();
+      },
+      hut() {
+        // Zylinder mit goldenem Rand, damit er nachts nicht im Dunkel verschwindet
+        g.fillStyle = '#181818';
+        g.fillRect(80, 50, 96, 140);
+        g.beginPath();
+        g.ellipse(128, 192, 92, 22, 0, 0, 7);
+        g.fill();
+        g.fillStyle = '#5a1a1a';
+        g.fillRect(80, 160, 96, 22);
+        g.strokeStyle = '#c8a040';
+        g.lineWidth = 5;
+        g.strokeRect(80, 50, 96, 140);
+        g.beginPath();
+        g.ellipse(128, 192, 92, 22, 0, 0, 7);
+        g.stroke();
+      },
+    };
+    SHOP_KINDS.forEach((kind, k) => {
+      g.save();
+      g.translate((k % SIGN_ATLAS.emblems.cols) * S, Math.floor(k / SIGN_ATLAS.emblems.cols) * S);
+      g.beginPath();
+      g.rect(0, 0, S, S);
+      g.clip();
+      draw[kind]();
+      g.restore();
+    });
+    const emblems = new THREE.CanvasTexture(e);
+    emblems.colorSpace = THREE.SRGBColorSpace;
+    emblems.anisotropy = 8;
+    return { boards, emblems };
+  });
+}

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, merge, pediment, roofPrism, std } from '../kit.js';
-import { WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, windowAtlas } from '../textures.js';
+import {
+  SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
+} from '../textures.js';
 
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
 export const BAY_W = 3.4;
@@ -12,6 +14,8 @@ const RAIL_H = 0.92;
 // Dunkle Fenster: wie hell die Gardine dahinter erscheint und wie stark das Glas spiegelt.
 const SHADE_ALBEDO = 0.07;
 const SHADE_REFLECT = 6;
+// Schmiedeeisen: Handläufe, Ausleger
+const IRON = 0x1a1c1b;
 export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a288, 0x8a7a68, 0x9a9488];
 
 function bayParts(type) {
@@ -295,6 +299,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const reliefRand = rng(1896);
   const reliefBag = new Bag();
   const ironBag = new Bag();
+  const signRand = rng(1898);
+  const signs = { boards: [], litBoards: [], emblems: [] };
   const masses = [];
   const slabs = [];
   const roofs = [];
@@ -331,7 +337,6 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const buildRelief = ({ erker, balconies, dormers }, { base, types, col, cTrim, H }) => {
     const wall = new Bag();
     const iron = new Bag();
-    const IRON = 0x1a1c1b;
     // Schmiedeeisernes Gitter entlang einer achsparallelen Strecke, Unterkante y: eine Fläche
     // mit ausgestanztem Gitterbild (railing), darauf ein echter Handlauf.
     const rail = (xa, za, xb, zb, y) => {
@@ -401,6 +406,36 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
+  // Schreibt die Texturkoordinaten einer Geometrie auf eine Zelle eines Atlas um.
+  const atlasUV = (g, cell, { cols, rows }) => {
+    const uv = g.attributes.uv;
+    const cx = cell % cols;
+    const cy = rows - 1 - Math.floor(cell / cols);
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, (cx + 0.01 + 0.98 * uv.getX(i)) / cols, (cy + 0.01 + 0.98 * uv.getY(i)) / rows);
+    return g;
+  };
+
+  // Ladenschild über einem gewöhnlichen Laden (Achse gx), an manchen zusätzlich ein Ausleger
+  // mit Zunftzeichen; hanging: false an den Hausenden, damit er nicht in die Nachbarzeile ragt.
+  // Das Brett sitzt zwischen Schaufenster und Gesims, der Ausleger auf dem Quaderstreifen am
+  // Rand der Achse, 3,4 m über dem Gehweg. Eigener Zufall (signRand).
+  const shopSign = (gx, kind, lit, hanging) => {
+    const k = SHOP_KINDS.indexOf(kind);
+    const board = atlasUV(new THREE.BoxGeometry(2.9, 0.5, 0.05), k * SIGN_NAMES + Math.floor(signRand() * SIGN_NAMES), SIGN_ATLAS.boards);
+    board.translate(BAY_W / 2, 3.87, 0.055).applyMatrix4(gx);
+    (lit ? signs.litBoards : signs.boards).push(board);
+    if (!hanging || signRand() > 0.45) return;
+    const x = 0.12;
+    const iron = new Bag();
+    iron.box(IRON, 0.08, 0.6, 0.08, x, 4.0, 0.04);
+    iron.box(IRON, 0.04, 0.04, 1.15, x, 4.25, 0.575);
+    const strut = Math.hypot(0.71, 0.45);
+    iron.add(new THREE.BoxGeometry(0.03, 0.03, strut).rotateX(-Math.atan2(0.45, 0.71)).translate(x, (3.78 + 4.23) / 2, (0.04 + 0.75) / 2), IRON);
+    for (const z of [0.47, 0.97]) iron.box(IRON, 0.015, 0.16, 0.015, x, 4.15, z);
+    reliefBag.parts.push(iron.build().applyMatrix4(gx));
+    signs.emblems.push(atlasUV(new THREE.PlaneGeometry(0.7, 0.7), k, SIGN_ATLAS.emblems).rotateY(Math.PI / 2).translate(x, 3.72, 0.72).applyMatrix4(gx));
+  };
+
   // rand: eigener Zufall, z. B. für Kulissen, damit der gemeinsame Zufall r des Viertels
   // unberührt bleibt und alle übrigen Häuser so aussehen wie bisher.
   // ownGlass: Achsen im Erdgeschoss, deren Scheibe der Aufrufer selbst baut.
@@ -444,6 +479,14 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         kind = mix[Math.floor(kindRand() * mix.length)];
       }
       batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
+      if (tGround === 'shop' && shopMix) {
+        // Dunkle Läden haben noch keine Sorte: aus eigenem Zufall, damit kindRand bleibt.
+        const p = new THREE.Vector3().setFromMatrixPosition(gx);
+        const mix = shopMix(p.x, p.z);
+        const sort = kind ?? mix[Math.floor(signRand() * mix.length)];
+        // Unter einem Erker sitzen dessen Konsolen, dort kein Schild.
+        if (!inErker(i, 0)) shopSign(gx, sort, lit, i > 0 && i < bays - 1);
+      }
       let y = FLOOR.ground;
       types.forEach((type, f) => {
         // Achsen im Erker rücken mit ihm vor die Fassade.
@@ -580,6 +623,16 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     // Ferne wird das Gitter so zu einem halb durchscheinenden dunklen Band, statt zu verschwinden.
     if (ironBag.parts.length) {
       addMesh(scene, ironBag.build(), std({ map: railing(), vertexColors: true, roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide, alphaToCoverage: true }));
+    }
+
+    // Ladenschilder. Bretter über erleuchteten Läden fangen etwas vom Licht der Auslage.
+    const { boards, emblems } = shopSigns();
+    if (signs.boards.length) addMesh(scene, merge(signs.boards), std({ map: boards, roughness: 0.55 }));
+    if (signs.litBoards.length) {
+      addMesh(scene, merge(signs.litBoards), std({ map: boards, roughness: 0.55, emissive: 0xffffff, emissiveMap: boards, emissiveIntensity: 0.25 }));
+    }
+    if (signs.emblems.length) {
+      addMesh(scene, merge(signs.emblems), std({ map: emblems, roughness: 0.45, metalness: 0.3, side: THREE.DoubleSide, alphaToCoverage: true }));
     }
   };
 

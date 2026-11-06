@@ -106,6 +106,8 @@ anschließen. Was mehrere Räume brauchen, gehört nach `fittings.js`.
 **Neue Ladenart:** Die Auslagen der übrigen Läden sind gemalte Bilder aus `shopDisplay(kind)` in
 `world/textures.js`. Eine neue Art dort in `SHOP_KINDS` und `SHOP_NAMES` eintragen, ihre Waren zeichnen
 und in `shopMix` (`world/berlin/index.js`) einem Straßenzug zuteilen. Dunkle Läden zeigen einen Rollladen.
+Für das Schriftbrett über dem Laden braucht die Art eine Zeile in `SIGN_KIND_LINE` und für den
+Ausleger ein Zunftzeichen in `shopSigns()`; Atlasgrößen stehen in `SIGN_ATLAS`.
 Erleuchtete Wohnungsfenster zeigen Bilder aus `windowAtlas()` (Zeilen = Arten wie Spitzengardine oder
 Rollo, Spalten = Varianten). `facades.js` wählt je Stockwerk eines Hauses eine Art. Der Atlas wird so
 abgedunkelt, dass ein Fenster aus der Ferne so hell wirkt wie eine einfarbige Scheibe. Dunkle Fenster

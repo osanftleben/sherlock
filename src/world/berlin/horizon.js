@@ -34,7 +34,8 @@ export function buildHorizon(loc, r) {
 
   // Neue Synagoge: goldene Kuppel über der Oranienburger Straße.
   const synagogueGold = new THREE.MeshStandardMaterial({ color: 0xc69c3a, metalness: 0.8, roughness: 0.35, fog: false, emissive: 0x3c2c10 });
-  const domeBase = cyl(7, 7, 7, -205, 36, -8, 16);
+  // Der Tambour sitzt unmittelbar auf dem Baukörper (Oberkante 30 m) und trägt die Kuppel (ab 39,5 m).
+  const domeBase = cyl(7, 7, 9.5, -205, 34.75, -8, 16);
   const domeTop = new THREE.SphereGeometry(7.4, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
   domeTop.scale(1, 1.25, 1);
   domeTop.translate(-205, 39.5, -8);

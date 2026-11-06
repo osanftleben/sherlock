@@ -679,13 +679,13 @@ export function makeHorse(color = 0x2e2018) {
   const bodyGeo = new THREE.CapsuleGeometry(0.34, 1.05, 6, 12);
   bodyGeo.rotateX(Math.PI / 2);
   bodyGeo.translate(0, 1.18, 0);
-  const neck = cyl(0.13, 0.22, 0.8, 0, 1.58, 0.72, 10);
-  neck.rotateX(0.55);
-  neck.translate(0, 0.63, 0.56);
-  const headGeo = box(0.17, 0.2, 0.5, 0, 1.94, 1.14);
-  const ear1 = box(0.04, 0.12, 0.04, -0.06, 2.1, 0.96);
-  const ear2 = box(0.04, 0.12, 0.04, 0.06, 2.1, 0.96);
-  const mane = box(0.04, 0.5, 0.55, 0, 1.76, 0.75);
+  // Hals, Mähne und Kopf werden um ihre eigene Mitte gekippt und erst dann an den Rumpf gesetzt.
+  // Der Hals steigt vom Widerrist (z 0,6) schräg nach vorn zum Hinterkopf (z 1,0) auf.
+  const neck = cyl(0.13, 0.22, 0.8, 0, 0, 0, 10).rotateX(0.55).translate(0, 1.62, 0.8);
+  const mane = box(0.05, 0.75, 0.1).rotateX(0.55).translate(0, 1.7, 0.67);
+  const headGeo = box(0.17, 0.2, 0.5).rotateX(0.7).translate(0, 1.84, 1.17);
+  const ear1 = box(0.04, 0.12, 0.04, -0.06, 2.12, 0.97);
+  const ear2 = box(0.04, 0.12, 0.04, 0.06, 2.12, 0.97);
   const tail = cyl(0.03, 0.09, 0.8, 0, 0.98, -0.92, 8);
   root.add(new THREE.Mesh(merge([bodyGeo, neck, headGeo, ear1, ear2, mane, tail]), mat));
   const legs = [];

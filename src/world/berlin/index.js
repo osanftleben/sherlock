@@ -38,13 +38,16 @@ export function buildBerlin() {
       side: THREE.BackSide,
       fog: false,
       depthWrite: false,
-      uniforms: { low: { value: new THREE.Color(FOG) }, high: { value: new THREE.Color(0x070a12) } },
+      // glow: Lichtglocke der Gaslaternen knapp über dem Horizont, warm und schwach. Genau am
+      // Horizont ist sie null, damit der Himmel dort weiter in den Nebel der Straßen übergeht.
+      uniforms: { low: { value: new THREE.Color(FOG) }, high: { value: new THREE.Color(0x070a12) }, glow: { value: new THREE.Color(0.012, 0.009, 0.007) } },
       vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `
-        uniform vec3 low; uniform vec3 high; varying vec3 vP;
+        uniform vec3 low; uniform vec3 high; uniform vec3 glow; varying vec3 vP;
         void main(){
           float t = smoothstep(0.0, 0.5, vP.y);
           vec3 c = mix(low, high, t);
+          c += glow * smoothstep(0.0, 0.06, vP.y) * (1.0 - smoothstep(0.06, 0.32, vP.y));
           vec3 m = normalize(vec3(-0.45, 0.62, -0.64));
           float d = max(dot(normalize(vP), m), 0.0);
           c += vec3(0.42,0.5,0.62) * pow(d, 900.0) * 1.6 + vec3(0.1,0.13,0.2) * pow(d, 40.0);

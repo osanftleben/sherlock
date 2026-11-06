@@ -136,9 +136,10 @@ class GpuClock {
 
 export const STAGES = ['Szene', 'Leuchten', 'Schluss'];
 
-// Ziel: mindestens 60 Bilder je Sekunde (16,7 ms). Die Grafikkarte bekommt 13,5 ms je Bild, der Rest bleibt
-// für Browser und Bildschirmausgabe.
-const BUDGET = 13.5;
+// Ziel: mindestens 60 Bilder je Sekunde (16,7 ms). Die Grafikkarte bekommt 15,5 ms je Bild, der Rest bleibt
+// für Browser und Bildschirmausgabe. Auf einem Rundgang durch Fall 1 (Iris Xe, 1080p) waren bei 13,5,
+// 14,5 und 15,5 ms gleich wenige Bilder verspätet (0,5 %); mit 15,5 ms bleibt die Auflösung bei 95–100 %.
+const BUDGET = 15.5;
 const MIN_SCALE = 0.6;
 
 export class View {
@@ -169,6 +170,8 @@ export class View {
     this.fadeTarget = 0;
     // Innere Auflösung der Szene relativ zur Leinwand; die Regelung in adapt() hält damit 60 FPS.
     this.scale = 1;
+    // GPU-Zeit je Bild, auf die die Regelung zielt (ms); Messwerkzeuge dürfen sie verstellen.
+    this.budget = BUDGET;
     this.clock = new GpuClock(this.renderer.getContext());
     this.gpuMs = 0;
     this.sample = { time: 0, sum: 0, n: 0, slow: 0, frames: 0 };
@@ -226,9 +229,9 @@ export class View {
     if (this.clock.ext) {
       if (s.n >= 8) {
         const ms = (this.gpuMs = s.sum / s.n);
-        if (ms > BUDGET * 1.05) scale = Math.max(scale - 0.15, scale * Math.sqrt(BUDGET / ms) - 0.02);
-        else if (ms < BUDGET * 0.78) scale += 0.05;
-        if (ms > BUDGET * 1.2 && this.scale <= MIN_SCALE) this.glow.enabled = false;
+        if (ms > this.budget * 1.05) scale = Math.max(scale - 0.15, scale * Math.sqrt(this.budget / ms) - 0.02);
+        else if (ms < this.budget * 0.78) scale += 0.05;
+        if (ms > this.budget * 1.2 && this.scale <= MIN_SCALE) this.glow.enabled = false;
       }
     } else if (s.slow > s.frames * 0.25) {
       scale -= 0.1;

@@ -1546,7 +1546,7 @@ function buildBank() {
     ceiling: 0x3a3428,
     ambient: 0.5,
   });
-  const { loc, scene } = room;
+  const { loc } = room;
   const r = rng(1414);
 
   // Hohe Vertäfelung, Stuckleiste, Läufer von der Tür zum Schreibtisch

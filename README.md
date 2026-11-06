@@ -17,6 +17,12 @@ npm run dev
 
 Danach http://localhost:5173 öffnen.
 
+Vor dem Einchecken den Code prüfen (ESLint: fehlende oder überflüssige Importe, Tippfehler in Namen):
+
+```bash
+npm run lint
+```
+
 ## Steuerung
 
 | Taste | Aktion |

@@ -6,6 +6,7 @@ import { addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
 import { buildHorizon } from './horizon.js';
 import { buildRiver } from './river.js';
+import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildLamps } from './lamps.js';
 import { buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -67,17 +68,17 @@ export function buildBerlin() {
 
   // --- Rosenthaler Straße ---------------------------------------------------
   row({ x: -9, z: -24, face: 'east', bays: 20 }); // bis z = -92
-  const apotheke = block({ x: -9, z: -92, face: 'east', color: 0xa8957c, ground: ['shop', 'door', 'shop', 'ground', 'ground'] }, 5);
+  const apotheke = block({ x: -9, z: -92, face: 'east', color: 0xa8957c, ground: ['display', 'door', 'display', 'ground', 'ground'], ownGlass: [0, 2], recess: DISPLAY_RECESS }, 5);
   row({ x: -9, z: -109, face: 'east', bays: 24 }); // bis z = -190
 
   row({ x: 9, z: -190, face: 'west', bays: 25 });
   row({ x: 9, z: -95, face: 'west', bays: 5 }); // z -95 bis -78
-  const kessler = block({ x: 9, z: -78, face: 'west', color: 0x8a8070, ground: ['ground', 'door', 'shop', 'shop', 'ground', 'ground'] }, 6);
+  const kessler = block({ x: 9, z: -78, face: 'west', color: 0x8a8070, ground: ['ground', 'door', 'display', 'display', 'ground', 'ground'], ownGlass: [2, 3], recess: DISPLAY_RECESS }, 6);
   row({ x: 9, z: -57.6, face: 'west', bays: 10 });
 
   // --- Sophienstraße ---------------------------------------------------------
   row({ x: 9, z: -105, face: 'south', bays: 10 });
-  const destille = block({ x: 43, z: -105, face: 'south', color: 0x786c5c, floors: 3, ground: ['shop', 'door', 'shop', 'ground', 'ground'] }, 5);
+  const destille = block({ x: 43, z: -105, face: 'south', color: 0x786c5c, floors: 3, ground: ['display', 'door', 'display', 'ground', 'ground'], ownGlass: [0, 2], recess: DISPLAY_RECESS }, 5);
   row({ x: 60, z: -105, face: 'south', bays: 21 });
   row({ x: 130, z: -95, face: 'north', bays: 36 });
 
@@ -86,11 +87,11 @@ export function buildBerlin() {
   row({ x: 9, z: -24, face: 'south', bays: 7 });
   row({ x: 32, z: -24, face: 'west', bays: 13 });
   row({ x: -32, z: -14, face: 'east', bays: 3 });
-  const bank = block({ x: -32, z: 18, face: 'east', color: 0x77706a, floors: 3, lit: 0.1, ground: ['ground', 'ground', 'door', 'ground', 'ground', 'ground'] }, 6);
+  const bank = block({ x: -32, z: 18, face: 'east', color: 0x77706a, floors: 3, lit: 0.1, ground: ['ground', 'ground', 'door', 'ground', 'ground', 'ground'], ownGlass: [0, 1, 3, 4, 5] }, 6);
 
   // --- Oranienburger Straße ---------------------------------------------------
   row({ x: -170, z: -14, face: 'south', bays: 25 });
-  const pension = block({ x: -85, z: -14, face: 'south', color: 0x9a8a74, ground: ['ground', 'ground', 'door', 'ground', 'ground', 'ground'] }, 6);
+  const pension = block({ x: -85, z: -14, face: 'south', color: 0x9a8a74, ground: ['ground', 'ground', 'door', 'ground', 'ground', 'ground'], ownGlass: [0, 1, 3, 4, 5] }, 6);
   row({ x: -64.6, z: -14, face: 'south', bays: 10 });
   row({ x: -32, z: -2, face: 'north', bays: 41 });
 
@@ -285,6 +286,7 @@ export function buildBerlin() {
   shopSign(pension, 2, 'Pension Puhlmann', 6);
   doorSpot('pension', pension.at(2, 1.5, 0.2), 'Pension Puhlmann', 'pension');
   lanternOver(pension, 2);
+  buildShopWindows(loc, { kessler, apotheke, destille, bank, pension });
 
   // Rückwege aus den Häusern: ein Schritt vor der Tür, mit Blick auf die Straße.
   const out = (bld, bay, yaw) => {

@@ -1072,3 +1072,142 @@ export function clockFace(hour = 9, minute = 40, size = 256) {
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
+
+// Erleuchtetes Fenster von außen: warmer Schein hinter Spitzengardinen, seitlich
+// gebundene Übergardinen. Füllt die ganze Scheibe (Seitenverhältnis 2 : 3).
+export function laceCurtain() {
+  return cached('lace', () => {
+    const w = 256;
+    const h = 384;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    const glow = ctx.createRadialGradient(w * 0.5, h * 0.42, 10, w * 0.5, h * 0.45, h * 0.62);
+    glow.addColorStop(0, '#f2c27a');
+    glow.addColorStop(0.55, '#b4783c');
+    glow.addColorStop(1, '#4a2c16');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+    // Spitze: Rauten aus Fäden, darin Rosetten, unten ein Bogenrand.
+    const r = rng(17);
+    ctx.strokeStyle = 'rgba(255,246,228,0.5)';
+    ctx.lineWidth = 1.2;
+    for (let k = -h; k < w + h; k += 14) {
+      ctx.beginPath();
+      ctx.moveTo(k, 0);
+      ctx.lineTo(k + h, h);
+      ctx.moveTo(k, 0);
+      ctx.lineTo(k - h, h);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,248,232,0.45)';
+    for (let y = 24; y < h - 40; y += 42) {
+      for (let x = 20 + ((y / 42) % 2) * 21; x < w; x += 42) {
+        for (let p = 0; p < 6; p++) {
+          const a = (p / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.ellipse(x + Math.cos(a) * 6, y + Math.sin(a) * 6, 5, 2.4, a, 0, 7);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.fillStyle = 'rgba(255,248,232,0.55)';
+    for (let x = 0; x < w; x += 16) {
+      ctx.beginPath();
+      ctx.arc(x + 8, h - 34, 8, 0, Math.PI);
+      ctx.fill();
+    }
+    // Falten der Spitze: senkrechte Schatten
+    for (let x = 0; x < w; x += 9 + r() * 10) {
+      ctx.fillStyle = `rgba(60,30,10,${0.05 + r() * 0.1})`;
+      ctx.fillRect(x, 0, 3 + r() * 5, h - 26);
+    }
+    // Übergardinen, mit Kordel gerafft
+    for (const side of [0, 1]) {
+      const x0 = side ? w - 46 : 0;
+      for (let i = 0; i < 46; i += 2) {
+        const v = 0.5 + 0.5 * Math.sin(i * 0.55);
+        ctx.fillStyle = `rgb(${70 + v * 40},${22 + v * 12},${18 + v * 8})`;
+        const waist = Math.abs(i - (side ? 46 : 0)) * 0.35;
+        ctx.fillRect(x0 + i, 0, 2, h * 0.55);
+        ctx.fillRect(x0 + i + (side ? waist * 0.4 : -waist * 0.4), h * 0.55, 2, h * 0.45);
+      }
+      ctx.fillStyle = '#c8a050';
+      ctx.fillRect(x0 + (side ? 0 : 34), h * 0.54, 12, 6);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Schwerer, zugezogener Samtvorhang (dunkelgrün), senkrechte Falten.
+export function velvetDrape() {
+  return cached('velvet', () => {
+    const w = 128;
+    const h = 256;
+    const c = canvas(w, h);
+    const ctx = c.getContext('2d');
+    for (let x = 0; x < w; x++) {
+      const v = 0.5 + 0.35 * Math.sin(x * 0.31) + 0.15 * Math.sin(x * 0.83 + 1);
+      ctx.fillStyle = `rgb(${14 + v * 26},${34 + v * 40},${24 + v * 28})`;
+      ctx.fillRect(x, 0, 1, h);
+    }
+    const g = ctx.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(0,0,0,0.35)');
+    g.addColorStop(0.2, 'rgba(0,0,0,0)');
+    g.addColorStop(1, 'rgba(0,0,0,0.25)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
+// Goldschrift auf einer Schaufensterscheibe, Grund durchsichtig. Erste Zeile im Bogen.
+export function glassLettering(lines) {
+  const w = 1024;
+  const h = 512;
+  const c = canvas(w, h);
+  const ctx = c.getContext('2d');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const gold = (y0, y1) => {
+    const g = ctx.createLinearGradient(0, y0, 0, y1);
+    g.addColorStop(0, '#f6dc96');
+    g.addColorStop(0.5, '#c89a3c');
+    g.addColorStop(1, '#8a6420');
+    return g;
+  };
+  const [arc, ...rest] = lines;
+  ctx.font = '96px "UnifrakturMaguntia", serif';
+  const R = 640;
+  const total = ctx.measureText(arc).width;
+  let a = -total / R / 2;
+  ctx.fillStyle = gold(60, 200);
+  ctx.strokeStyle = 'rgba(30,18,6,0.8)';
+  ctx.lineWidth = 6;
+  for (const ch of arc) {
+    const cw = ctx.measureText(ch).width;
+    a += cw / R / 2;
+    ctx.save();
+    ctx.translate(w / 2 + Math.sin(a) * R, 120 + R - Math.cos(a) * R);
+    ctx.rotate(a);
+    ctx.strokeText(ch, 0, 0);
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+    a += cw / R / 2;
+  }
+  ctx.font = '58px "EB Garamond", serif';
+  rest.forEach((line, i) => {
+    const y = 270 + i * 76;
+    ctx.fillStyle = gold(y - 30, y + 30);
+    ctx.strokeText(line, w / 2, y);
+    ctx.fillText(line, w / 2, y);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}

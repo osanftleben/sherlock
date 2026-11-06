@@ -50,6 +50,7 @@ src/
       facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Gehwege
       railway.js     Stadtbahn, Bahnhof Börse, Zug
       plaza.js       Platz: Bäume, Litfaßsäule, Urania-Säule, Achteck
+      shopwindows.js Schaufenster und Fenster der Schauplätze von Fall 1
       lamps.js, traffic.js, weather.js, river.js, horizon.js
     interiors/       Innenräume, ein Modul je Raum
       index.js       Liste der Räume

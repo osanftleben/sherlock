@@ -9,21 +9,21 @@ export const FACADES = [0x9c8f79, 0xa89a80, 0x8c8474, 0xa08a70, 0x8f8b84, 0xb0a2
 
 function bayParts(type) {
   const W = BAY_W;
-  const H = FLOOR[type === 'shop' || type === 'door' ? 'ground' : type];
+  const H = FLOOR[type === 'shop' || type === 'door' || type === 'display' ? 'ground' : type];
   const wall = new Bag();
   const glass = [];
   const trimC = new THREE.Color(1.22, 1.2, 1.15);
   const stone = new THREE.Color(0.8, 0.78, 0.74);
   const wood = new THREE.Color(0.09, 0.07, 0.06);
   const D = 0.34;
-  const hole = (ww, wy, wh) => {
+  const hole = (ww, wy, wh, backing = true) => {
     const side = (W - ww) / 2;
     wall.box(0xffffff, side, H, D, side / 2, H / 2, -D / 2);
     wall.box(0xffffff, side, H, D, W - side / 2, H / 2, -D / 2);
     wall.box(0xffffff, ww, wy, D, W / 2, wy / 2, -D / 2);
     const top = H - wy - wh;
     wall.box(0xffffff, ww, top, D, W / 2, wy + wh + top / 2, -D / 2);
-    wall.box(wood, ww, wh, 0.03, W / 2, wy + wh / 2, -D + 0.01);
+    if (backing) wall.box(wood, ww, wh, 0.03, W / 2, wy + wh / 2, -D + 0.01);
   };
   const sash = (ww, wy, wh, rows = 2) => {
     const z = -D + 0.09;
@@ -45,7 +45,7 @@ function bayParts(type) {
     wall.box(trimC, ww * 0.22, 0.14, 0.12, W / 2 + ww / 3, wy - 0.16, 0.06);
   };
 
-  if (type === 'ground' || type === 'shop' || type === 'door') {
+  if (type === 'ground' || type === 'shop' || type === 'door' || type === 'display') {
     // Sockel mit Quaderung.
     wall.box(stone, W, 0.5, 0.12, W / 2, 0.25, 0.06);
     for (let i = 0; i < 7; i++) {
@@ -59,13 +59,15 @@ function bayParts(type) {
       sash(ww, 1.3, 2.3);
       sill(ww, 1.3);
       wall.box(trimC, ww + 0.34, 0.14, 0.14, W / 2, 3.68, 0.07);
-    } else if (type === 'shop') {
+    } else if (type === 'shop' || type === 'display') {
+      // display: Schaufenster ohne Rückwand, dahinter baut der Aufrufer eine Auslage.
       const ww = 2.7;
-      hole(ww, 0.7, 2.75);
+      hole(ww, 0.7, 2.75, type === 'shop');
       glass.push(box(ww - 0.06, 2.7, 0.02, W / 2, 0.7 + 1.37, -D + 0.05));
       wall.box(wood, ww + 0.1, 0.1, 0.07, W / 2, 0.72, -D + 0.1);
       wall.box(wood, ww + 0.1, 0.1, 0.07, W / 2, 3.42, -D + 0.1);
-      wall.box(wood, 0.08, 2.75, 0.07, W / 2, 2.07, -D + 0.1);
+      // Mittelpfosten nur bei gewöhnlichen Läden; die Auslagen haben eine große Spiegelscheibe.
+      if (type === 'shop') wall.box(wood, 0.08, 2.75, 0.07, W / 2, 2.07, -D + 0.1);
       wall.box(wood, ww + 0.1, 0.5, 0.1, W / 2, 0.45, 0.04);
     } else {
       const ww = 1.7;
@@ -118,15 +120,16 @@ function bayParts(type) {
 class FacadeBatcher {
   constructor() {
     this.types = {};
-    for (const t of ['ground', 'shop', 'door', 'noble', 'upper', 'attic']) {
+    for (const t of ['ground', 'shop', 'display', 'door', 'noble', 'upper', 'attic']) {
       this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [] };
     }
   }
 
-  place(type, matrix, color, lit) {
+  // glass: false lässt die Scheibe weg, wenn der Aufrufer sie selbst baut (Schaufenster).
+  place(type, matrix, color, lit, glass = true) {
     const t = this.types[type];
     t.walls.push({ matrix, color });
-    (lit ? t.lit : t.dark).push(matrix);
+    if (glass) (lit ? t.lit : t.dark).push(matrix);
   }
 
   build(scene, wallMat, darkGlass, litGlass) {
@@ -192,7 +195,11 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
   // rand: eigener Zufall, z. B. für Kulissen, damit der gemeinsame Zufall r des Viertels
   // unberührt bleibt und alle übrigen Häuser so aussehen wie bisher.
-  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r }, bays) => {
+  // ownGlass: Achsen im Erdgeschoss, deren Scheibe der Aufrufer selbst baut.
+  // recess: Tiefe, um die der Hauskörper im Erdgeschoss zurückweicht, damit hinter den
+  // Schaufenstern Platz für eine Auslage ist. Hinter den übrigen Achsen deckt deren
+  // Scheibe oder Tür die Lücke ab.
+  const block = ({ x, z, face, floors = 4, color, depth = 14, ground = [], lit = 0.22, sidewalk = 3, rand = r, ownGlass = [], recess = 0 }, bays) => {
     const rot = FACING[face];
     const R = new THREE.Matrix4().makeRotationY(rot);
     const T = new THREE.Matrix4().makeTranslation(x, 0, z);
@@ -203,7 +210,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     for (let i = 0; i < bays; i++) {
       const tGround = ground[i] || (rand() < 0.32 ? 'shop' : 'ground');
       const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
-      batcher.place(tGround, gx, col, tGround === 'shop' ? rand() < 0.8 : rand() < 0.2);
+      batcher.place(tGround, gx, col, tGround === 'shop' ? rand() < 0.8 : rand() < 0.2, !ownGlass.includes(i));
       let y = FLOOR.ground;
       for (const type of types) {
         const m = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, y, 0));
@@ -226,7 +233,12 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
     };
     const id = masses.length;
-    masses.push({ id, ...rect(0, W, -depth, -0.34), H, color: cDark });
+    if (recess) {
+      masses.push({ id, ...rect(0, W, -depth, -0.34 - recess), H: FLOOR.ground, color: cDark });
+      masses.push({ id, ...rect(0, W, -depth, -0.34), y0: FLOOR.ground, H, color: cDark });
+    } else {
+      masses.push({ id, ...rect(0, W, -depth, -0.34), H, color: cDark });
+    }
     slabs.push({ id, ...rect(0, W, -0.6, 0.3) });
     // Gesimse genau so breit wie das Haus: breiter überlappen sie den Nachbarn in
     // derselben Ebene und flackern.
@@ -275,7 +287,10 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     const at = (bay, height, out = 0.25) =>
       new THREE.Vector3((bay + 0.5) * BAY_W, height, out).applyMatrix4(base);
-    return { at, rot, W, H, face };
+    // frame(bay): Lage der Achse in der Welt; lokal x quer zur Achse (0 = Mitte),
+    // y nach oben, z aus der Fassade heraus zur Straße (0 = Fassadenebene).
+    const frame = (bay) => new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation((bay + 0.5) * BAY_W, 0, 0));
+    return { at, rot, W, H, face, frame };
   };
 
   // Reihe zusammenhängender Häuser mit wechselnder Breite und Höhe.
@@ -297,7 +312,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     for (const m of masses) {
       const w = m.maxX - m.minX;
       const d = m.maxZ - m.minZ;
-      if (w > 0.05 && d > 0.05) massing.box(m.color, w, m.H, d, (m.minX + m.maxX) / 2, m.H / 2, (m.minZ + m.maxZ) / 2);
+      const y0 = m.y0 || 0;
+      if (w > 0.05 && d > 0.05) massing.box(m.color, w, m.H - y0, d, (m.minX + m.maxX) / 2, (y0 + m.H) / 2, (m.minZ + m.maxZ) / 2);
     }
 
     // Gehwege, Bordkanten

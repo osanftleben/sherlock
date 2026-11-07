@@ -30,7 +30,15 @@ class Parts {
   }
 
   add(geo, c) {
-    this.list.push(tint(geo, color(c)));
+    tint(geo, color(c));
+    // Faltentäler (drape) sind dunkler: Ihre Stärke steht je Vertex in ao.
+    const ao = geo.attributes.ao;
+    if (ao) {
+      const col = geo.attributes.color;
+      for (let i = 0; i < ao.count; i++) col.setXYZ(i, col.getX(i) * ao.getX(i), col.getY(i) * ao.getX(i), col.getZ(i) * ao.getX(i));
+      geo.deleteAttribute('ao');
+    }
+    this.list.push(geo);
     return this;
   }
 
@@ -75,10 +83,13 @@ function halfDisc(r, back = false) {
 
 // Rumpfprofile (Radius, Höhe). Querschnitt wird in der Tiefe gestaucht.
 const TORSO_M = [[0, 0.95], [0.158, 0.96], [0.152, 1.04], [0.16, 1.12], [0.172, 1.22], [0.178, 1.32], [0.176, 1.4], [0.15, 1.46], [0.09, 1.5], [0.05, 1.52], [0, 1.525]];
-const TORSO_F = [[0, 0.98], [0.14, 0.99], [0.124, 1.06], [0.148, 1.17], [0.168, 1.27], [0.164, 1.37], [0.146, 1.45], [0.085, 1.5], [0, 1.51]];
-const SKIRT = [[0, 0.012], [0.36, 0.015], [0.35, 0.12], [0.31, 0.35], [0.26, 0.6], [0.2, 0.85], [0.15, 1.0], [0.128, 1.07]];
-const APRON = [[0.37, 0.1], [0.32, 0.35], [0.27, 0.6], [0.21, 0.85], [0.16, 1.0], [0.135, 1.07]];
+// Mieder mit schmaler Taille; der Rock liegt an der Hüfte glatt an und weitet sich glockig zum Saum.
+const TORSO_F = [[0, 0.98], [0.14, 0.99], [0.116, 1.06], [0.148, 1.17], [0.17, 1.27], [0.165, 1.37], [0.146, 1.45], [0.085, 1.5], [0, 1.51]];
+const SKIRT = [[0, 0.012], [0.37, 0.015], [0.362, 0.07], [0.33, 0.24], [0.285, 0.42], [0.24, 0.6], [0.19, 0.82], [0.152, 0.98], [0.122, 1.07]];
+const SKIRT_SZ = 0.86;
+const SKIRT_SEG = 96;
 const DEPTH = 0.66;
+const DEPTH_F = 0.7;
 
 // Schnitte der Männerröcke: Profil des Schoßes und Breite des Spalts vorn.
 const COATS = {
@@ -380,23 +391,70 @@ function frontZ(profile, y, w, depth) {
 // Legt eine flach gebaute Form (z um 0) auf die Brust: Jeder Punkt rückt auf die Oberfläche
 // des Rumpfprofils an seiner Stelle, plus off. So liegen Weste, Hemd und Revers an, statt
 // in der Brust zu verschwinden oder vor ihr zu schweben.
-function conform(g, w, off) {
+function conform(g, w, off, profile = TORSO_M, depth = DEPTH) {
   const pos = g.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const y = pos.getY(i);
-    const r = Math.max(0.02, radiusAt(TORSO_M, y) * w);
-    const front = r * DEPTH * Math.sqrt(Math.max(0, 1 - (x / r) ** 2));
+    const r = Math.max(0.02, radiusAt(profile, y) * w);
+    const front = r * depth * Math.sqrt(Math.max(0, 1 - (x / r) ** 2));
     pos.setZ(i, front + off + pos.getZ(i));
   }
   g.computeVertexNormals();
   return g;
 }
 
+// Mieder der Frauen: wie conform, nur auf dem Frauenprofil.
+const conformF = (g, w, off) => conform(g, w, off, TORSO_F, DEPTH_F);
+
 function flat(points) {
   const shape = new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y)));
   return new THREE.ShapeGeometry(shape);
 }
+
+// Trapez aus vielen kleinen Flächen (unten halbe Breite b0, oben b1), damit es sich beim
+// Anlegen an den Rumpf rundet, statt als Brett vor der Brust zu stehen.
+function panel(b0, b1, y0, y1, nx = 8, ny = 8) {
+  const g = new THREE.PlaneGeometry(1, 1, nx, ny);
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const v = pos.getY(i) + 0.5;
+    pos.setXYZ(i, pos.getX(i) * 2 * (b0 + (b1 - b0) * v), y0 + (y1 - y0) * v, 0);
+  }
+  return g;
+}
+
+// Faltenwurf eines Drehkörpers: Der Radius schwingt um die Achse (n Falten, unregelmäßig
+// verteilt) mit der Stärke weight(y); hinten fällt der Stoff um back weiter. Faltentäler
+// werden dunkler (ao, siehe Parts.add). Die Naht der Drehung wird verschmolzen, sonst zeigen
+// die neuen Normalen eine Kante.
+function drape(g, { n, amp, weight, back = 0, hump = null, ao = 0.22 }) {
+  const pos = g.attributes.position;
+  const shadeAo = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const t = weight(pos.getY(i));
+    const phi = Math.atan2(x, z);
+    const wave = Math.sin(n * phi + 0.8 * Math.sin(2 * phi + 1) + 0.4 * Math.sin(5 * phi));
+    const b = (1 - Math.cos(phi)) / 2;
+    const f = 1 + amp * t * wave + back * t * b + (hump ? hump(pos.getY(i)) * b * b : 0);
+    pos.setX(i, x * f);
+    pos.setZ(i, z * f);
+    shadeAo[i] = 1 - ao * t * (0.5 - 0.5 * wave);
+  }
+  g.setAttribute('ao', new THREE.BufferAttribute(shadeAo, 1));
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  const merged = mergeVertices(g, 1e-5);
+  merged.computeVertexNormals();
+  return merged;
+}
+
+// Gewicht der Rockfalten: an der Hüfte glatt, zum Saum hin voll.
+const skirtFall = (y) => Math.min(1, Math.max(0, (1.0 - y) / 0.95)) ** 1.3;
+// Hinten unter der Taille etwas Fülle (Tournürenrest), weich in den Rock geformt.
+const SKIRT_DRAPE = { n: 13, amp: 0.055, weight: skirtFall, back: 0.07, hump: (y) => 0.24 * Math.exp(-(((y - 0.9) / 0.13) ** 2)) };
 
 // Hemd, Weste und Krawatte als V im Ausschnitt des Rocks; darüber die Revers mit Kerbe und
 // der Kragen des Rocks im Nacken.
@@ -436,22 +494,52 @@ function buildTorso(L, w) {
   const T = new Parts();
   if (L.female) {
     const torso = scaleProfile(TORSO_F, w);
-    T.add(lathe(torso, { sz: 0.7 }), L.coat);
-    T.add(lathe(scaleProfile(SKIRT, w), { sz: 0.86, seg: 22 }), L.coat);
-    T.add(lathe([[0.364 * w, 0.02], [0.357 * w, 0.09]], { sz: 0.86, seg: 22 }), shade(L.coat, 0.7));
-    T.add(ball(0.14, 0, 0.98, -0.12 * w, w, 0.7, 0.8), L.coat);
-    for (const s of [-1, 1]) T.add(ball(0.062, s * 0.158 * w, 1.43, 0, 1, 0.85, 0.85), L.coat);
+    T.add(lathe(torso, { sz: DEPTH_F, seg: 24 }), L.coat);
+    // Rock mit Falten, die an der Hüfte glatt beginnen und zum Saum hin tiefer fallen; darauf
+    // eine dunklere Saumborte, die denselben Faltenwurf mitmacht.
+    T.add(drape(lathe(scaleProfile(SKIRT, w), { sz: SKIRT_SZ, seg: SKIRT_SEG }), SKIRT_DRAPE), L.coat);
+    T.add(drape(lathe([[0.373 * w, 0.016], [0.366 * w, 0.075]], { sz: SKIRT_SZ, seg: SKIRT_SEG }), SKIRT_DRAPE), shade(L.coat, 0.7));
+    for (const s of [-1, 1]) T.add(ball(0.06, s * 0.156 * w, 1.43, 0, 1, 0.85, 0.85), L.coat);
+    // Mieder: Knopfleiste, zwei Abnäher von der Brust zur Taille, Gürtel mit Schließe.
+    const seam = shade(L.coat, 0.82);
+    T.add(conformF(panel(0.013, 0.013, 1.07, 1.49, 1, 12), w, 0.0015), seam);
+    for (const s of [-1, 1]) T.add(conformF(panel(0.003, 0.002, 1.07, 1.24, 1, 6).translate(s * 0.058, 0, 0), w, 0.0012), shade(L.coat, 0.7));
+    if (!L.apron) {
+      T.add(lathe([[0.128 * w, 1.055], [0.127 * w, 1.077], [0.13 * w, 1.1]], { sz: SKIRT_SZ, seg: 28 }), shade(L.coat, 0.6));
+      T.add(box(0.03, 0.03, 0.008, 0, 1.077, 0.128 * w * SKIRT_SZ + 0.004), shade(GOLD, 0.7));
+    }
     if (L.apron) {
-      T.add(lathe(scaleProfile(APRON, w), { sz: 0.86, phiStart: -0.75, phiLength: 1.5 }), L.apron);
-      T.add(box(0.16, 0.2, 0.01, 0, 1.24, frontZ(TORSO_F, 1.24, w, 0.7) + 0.006), L.apron);
+      // Schürze: Rockteil liegt auf den Falten des Rocks, Latz und Träger auf dem Mieder,
+      // das Band läuft um die Taille und ist hinten zur Schleife gebunden.
+      const apron = SKIRT.filter(([, y]) => y > 0.2 && y < 1.06).map(([r, y]) => [r * w + 0.008, y]);
+      apron.unshift([radiusAt(SKIRT, 0.17) * w + 0.008, 0.17]);
+      apron.push([radiusAt(SKIRT, 1.06) * w + 0.008, 1.06]);
+      // Auf dem Raster des Rocks, damit die Falten Kante auf Kante liegen.
+      const step = TAU / SKIRT_SEG;
+      T.add(drape(lathe(apron, { sz: SKIRT_SZ, phiStart: -13 * step, phiLength: 26 * step, seg: 26 }), SKIRT_DRAPE), L.apron);
+      T.add(conformF(panel(0.07, 0.078, 1.06, 1.35, 8, 8), w, 0.003), L.apron);
+      for (const s of [-1, 1]) {
+        const strap = panel(0.011, 0.011, 1.33, 1.47, 1, 6);
+        const p = strap.attributes.position;
+        for (let i = 0; i < p.count; i++) p.setX(i, p.getX(i) + s * (0.066 + (p.getY(i) - 1.33) * 0.32));
+        T.add(conformF(strap, w, 0.0035), L.apron);
+      }
+      const band = shade(L.apron, 0.92);
+      T.add(lathe([[0.131 * w, 1.05], [0.133 * w, 1.09]], { sz: SKIRT_SZ, seg: 28 }), band);
+      const bz = -(0.132 * w * SKIRT_SZ) - 0.008;
+      for (const s of [-1, 1]) T.add(ball(0.028, s * 0.026, 1.072, bz, 1, 0.55, 0.35, 8, 6).rotateZ(s * 0.25), band);
+      T.add(ball(0.011, 0, 1.07, bz - 0.004, 1, 1, 0.6, 6, 5), band);
     }
     if (L.shawl) {
-      T.add(lathe(scaleProfile([[0.205, 1.18], [0.19, 1.33], [0.155, 1.45], [0.075, 1.51]], w), { sz: 0.74, phiStart: 0.32, phiLength: TAU - 0.64 }), L.shawl);
+      // Umschlagtuch über den Schultern, vorn offen; die Spitze hängt hinten über den Rücken.
+      T.add(drape(lathe(scaleProfile([[0.21, 1.17], [0.198, 1.28], [0.175, 1.39], [0.14, 1.46], [0.075, 1.515]], w), { sz: 0.76, phiStart: 0.36, phiLength: TAU - 0.72, seg: 40 }), { n: 9, amp: 0.035, weight: (y) => Math.min(1, Math.max(0, (1.4 - y) / 0.23)), ao: 0.15 }), L.shawl);
+      T.add(flat([[-0.16 * w, 1.19], [0.16 * w, 1.19], [0, 1.07]]).translate(0, 0, -0.209 * w * 0.76 - 0.004), L.shawl);
     }
     T.add(cyl(0.048, 0.05, 0.07, 0, 1.53, 0, 12), L.collar);
     T.add(ball(0.012, 0, 1.505, 0.05, 1, 1.2, 0.5, 8, 6), GOLD);
-    buttonsDown(T, 0, [1.12, 1.2, 1.28, 1.36], TORSO_F, w, 0.7, shade(L.coat, 0.5), 0.007);
-    if (L.chain) T.add(new THREE.TorusGeometry(0.04, 0.003, 4, 12, Math.PI).rotateZ(Math.PI).translate(0.04, 1.12, frontZ(TORSO_F, 1.12, w, 0.7) + 0.004), GOLD);
+    // Unter dem Schürzenlatz bleiben die Knöpfe verborgen.
+    buttonsDown(T, 0, L.apron ? [1.44] : [1.12, 1.2, 1.28, 1.36, 1.44], TORSO_F, w, DEPTH_F, shade(L.coat, 0.5), 0.0065);
+    if (L.chain) T.add(new THREE.TorusGeometry(0.04, 0.003, 4, 12, Math.PI).rotateZ(Math.PI).translate(0.04, 1.12, frontZ(TORSO_F, 1.12, w, DEPTH_F) + 0.004), GOLD);
     T.add(cyl(0.041, 0.045, 0.11, 0, 1.555, 0, 10), L.skin);
     return T.mesh();
   }
@@ -550,8 +638,15 @@ function buildArm(L, w, s) {
   const U = new Parts();
   // Oberarm mit gerundeter Schulterkappe, oben kräftiger, zum Ellbogen schmaler.
   const k = L.female ? 0.9 : 1;
-  const upper = [[0.045, -0.3], [0.047, -0.22], [0.051, -0.11], [0.054, -0.035], [0.05, 0.005], [0.036, 0.026], [0, 0.034]];
-  U.add(lathe(upper.map(([r, y]) => [r * k, y]), { seg: 12, sz: 0.92 }), sleeve);
+  if (L.female) {
+    // Keulenärmel: an der Schulter gebauscht und in Falten gezogen, zum Ellbogen eng.
+    const puff = [[0.044, -0.3], [0.046, -0.24], [0.052, -0.17], [0.064, -0.1], [0.071, -0.04], [0.068, 0.0], [0.056, 0.03], [0.034, 0.047], [0, 0.052]];
+    const gather = (y) => THREE.MathUtils.smoothstep(y, -0.2, -0.08) * (1 - THREE.MathUtils.smoothstep(y, 0.02, 0.05));
+    U.add(drape(lathe(puff.map(([r, y]) => [r * k, y]), { seg: 32, sz: 0.92 }), { n: 8, amp: 0.07, weight: gather, ao: 0.18 }), sleeve);
+  } else {
+    const upper = [[0.045, -0.3], [0.047, -0.22], [0.051, -0.11], [0.054, -0.035], [0.05, 0.005], [0.036, 0.026], [0, 0.034]];
+    U.add(lathe(upper, { seg: 12, sz: 0.92 }), sleeve);
+  }
   U.add(ball(0.046 * k, 0, -0.3, 0, 1, 1, 1, 8, 6), sleeve);
   upperGroup.add(U.mesh());
 

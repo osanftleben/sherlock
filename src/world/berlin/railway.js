@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
-import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
+import { ARCH_FRONT, archFronts, fogPuff, hallWindow, rng, signTexture, softDisc, viaductBrick } from '../textures.js';
+import { grimy } from './grime.js';
 import { addSign } from './facades.js';
 import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
 import { hearing } from './traffic.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
-export function buildRailway(loc, r, brickMat) {
+export function buildRailway(loc, r) {
   const { scene } = loc;
   // Stadtbahnviadukt: z = 18 bis 32, mit Bögen. Bogen bei x = 0 ist der Durchgang zur Spree.
   const VZ0 = 18;
@@ -31,6 +32,57 @@ export function buildRailway(loc, r, brickMat) {
   };
   const archGeo = new THREE.ExtrudeGeometry(archShape(), { depth: VZ1 - VZ0, bevelEnabled: false, curveSegments: 12 });
   const viaductParts = [];
+  // Der Bogen des Durchgangs bekommt ein eigenes, glänzendes Material (nasse Wände).
+  const passageParts = [];
+  // Werkstein: Bogenringe aus Keilsteinen, Kämpfer und Sockel an den Pfeilern, hell abgesetzt
+  // gegen die Ziegel. Die Ringe reichen oben in die Fahrbahnplatte, die über sie vorkragt.
+  const stone = new Bag();
+  const SANDSTONE = 0x9a8e74;
+  const PLINTH = 0x6a6660;
+  const RING_IN = SEG / 2 - 1.1;
+  const RING_OUT = RING_IN + 0.38;
+  const VOUSSOIRS = 19;
+  const voussoir = (a0, a1) => {
+    const s = new THREE.Shape();
+    s.moveTo(Math.cos(a0) * RING_IN, Math.sin(a0) * RING_IN);
+    s.lineTo(Math.cos(a0) * RING_OUT, Math.sin(a0) * RING_OUT);
+    s.absarc(0, 0, RING_OUT, a0, a1, false);
+    s.lineTo(Math.cos(a1) * RING_IN, Math.sin(a1) * RING_IN);
+    s.absarc(0, 0, RING_IN, a1, a0, true);
+    return new THREE.ExtrudeGeometry(s, { depth: 0.07, bevelEnabled: false, curveSegments: 2 });
+  };
+  const ring = [];
+  for (let k = 0; k < VOUSSOIRS; k++) {
+    const a0 = (k / VOUSSOIRS) * Math.PI + 0.006;
+    const a1 = ((k + 1) / VOUSSOIRS) * Math.PI - 0.006;
+    // Jeder Keilstein ein wenig anders getönt.
+    ring.push([voussoir(a0, a1), new THREE.Color(SANDSTONE).multiplyScalar(0.9 + ((k * 37) % 11) / 55)]);
+  }
+  const stoneTrim = (ax, i) => {
+    const cx = ax + SEG / 2;
+    for (const [z, flip] of [[VZ0 - 0.07, false], [VZ1, true]]) {
+      for (const [g, col] of ring) {
+        const v = g.clone();
+        if (flip) v.rotateY(Math.PI);
+        stone.add(v.translate(cx, 4.1, flip ? z + 0.07 : z), col);
+      }
+    }
+    // Pfeiler links des Bogens (der rechte gehört zum nächsten Bogen); am Ende auch der rechte.
+    for (const px of i === 24 ? [ax, ax + SEG] : [ax]) {
+      for (const [z, d] of [[VZ0, -1], [VZ1, 1]]) {
+        stone.box(SANDSTONE, 2.44, 0.28, 0.16, px, 4.1 - 0.14, z + d * 0.06);
+        stone.box(PLINTH, 2.3, 0.7, 0.12, px, 0.35, z + d * 0.04);
+      }
+    }
+    if (i === 0) {
+      // Im Durchgang laufen Kämpfer und Sockel an beiden Wänden durch.
+      for (const x of [ax + 1.1, ax + SEG - 1.1]) {
+        const d = x < cx ? 1 : -1;
+        stone.box(SANDSTONE, 0.16, 0.28, VZ1 - VZ0, x + d * 0.06, 4.1 - 0.14, (VZ0 + VZ1) / 2);
+        stone.box(PLINTH, 0.12, 0.7, VZ1 - VZ0, x + d * 0.04, 0.35, (VZ0 + VZ1) / 2);
+      }
+    }
+  };
   const infill = new Bag();
   const fronts = [];
   const lanterns = new Bag();
@@ -68,7 +120,8 @@ export function buildRailway(loc, r, brickMat) {
       if (Math.abs(nor.getZ(k)) > 0.5) uv.setXY(k, pos.getX(k) * 0.33, pos.getY(k) * 0.33);
       else uv.setXY(k, pos.getZ(k) * 0.33, (pos.getX(k) + pos.getY(k)) * 0.33);
     }
-    viaductParts.push(g);
+    (i === 0 ? passageParts : viaductParts).push(g);
+    stoneTrim(ax, i);
     if (i !== 0) {
       // Gefüllte Bögen: Lager und Kneipen unter der Bahn.
       // Destille oder Schlosserei mit Licht, sonst Kohlenhandlung oder Lager. Die Zahl aus r
@@ -106,8 +159,18 @@ export function buildRailway(loc, r, brickMat) {
       (loc.dry ??= []).push({ minX: ax + 1.1, maxX: ax + SEG - 1.1, minZ: VZ0, maxZ: VZ1, top: VH });
     }
   }
-  addMesh(scene, merge(viaductParts), brickMat);
-  addMesh(scene, infill.build(), matte({ vertexColors: true, ...brick() }));
+  // Gaslaterne im Durchgang zur Spree, am westlichen Pfeiler in halber Tiefe. Sie bekommt ein
+  // echtes Licht aus der Rangliste der Straßenlaternen (lamps.js), sonst bliebe das Gewölbe
+  // schwarz: Lichtscheine hellen nur auf, was schon beleuchtet ist.
+  {
+    const p = wallLantern(lanterns, flames, new THREE.Vector3(-SEG / 2 + 1.1, 3.5, (VZ0 + VZ1) / 2), new THREE.Vector3(1, 0, 0), 0.52, washes);
+    glows.push(p);
+    (loc.extraLamps ??= []).push({ x: p.x + 0.1, y: p.y, z: p.z, intensity: 16, weight: 0.3 });
+  }
+  addMesh(scene, merge(viaductParts), sooty(grimy(matte(viaductBrick()), 'brick'), 'viaduct'));
+  addMesh(scene, merge(passageParts), sooty(grimy(std({ ...viaductBrick(), roughness: 0.9 }), 'brick'), 'passage', true));
+  addMesh(scene, stone.build(), sooty(grimy(matte({ vertexColors: true }), 'plaster'), 'viaductStone'));
+  addMesh(scene, infill.build(), matte({ vertexColors: true, ...viaductBrick() }));
   const af = archFronts();
   addMesh(scene, merge(fronts), std({ map: af.map, emissive: 0xffffff, emissiveMap: af.emissiveMap, emissiveIntensity: 0.9, roughness: 0.8 }));
   addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
@@ -436,4 +499,48 @@ function cylX2(r, x, y, z) {
   g.rotateX(Math.PI / 2);
   g.translate(x, y, z);
   return g;
+}
+
+// Ruß, Kalk und Nässe am Viadukt, über grimy() gelegt (braucht dessen vGrimePos und grimeMap).
+// Ruß der Dampfloks: oben dicht, in senkrechten Fahnen nach unten auslaufend. Kalkausblühungen
+// am Fuß der Pfeiler, wo die Feuchte aus dem Boden steigt. wet: Im Durchgang sind die Wände
+// unten nass, dunkler und glänzend (nur bei MeshStandardMaterial).
+function sooty(material, key, wet = false) {
+  const prev = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    prev(shader, renderer);
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        float sootHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float sootNoise(vec2 p) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(sootHash(i), sootHash(i + vec2(1.0, 0.0)), f.x), mix(sootHash(i + vec2(0.0, 1.0)), sootHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }`,
+      )
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        float along = vGrimePos.x + vGrimePos.z;
+        float streak = texture2D(grimeMap, vec2(along / 2.3, vGrimePos.y / 40.0)).r;
+        float soot = smoothstep(3.5, 8.5, vGrimePos.y + (0.63 - streak) * 9.0);
+        diffuseColor.rgb *= mix(1.0, 0.45, soot);
+        float saltN = sootNoise(vec2(along * 1.4, vGrimePos.y * 2.2)) * 0.65 + sootNoise(vec2(along * 4.1, vGrimePos.y * 6.0)) * 0.35;
+        float salt = smoothstep(0.5, 0.75, saltN) * (1.0 - smoothstep(0.25, 1.4, vGrimePos.y));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.4, 0.38, 0.35), salt * 0.55);
+        ${wet ? 'float wetWall = 1.0 - smoothstep(0.2, 1.9, vGrimePos.y + (sootNoise(vec2(along * 2.0, 0.5)) - 0.5) * 0.8);\n        diffuseColor.rgb *= mix(1.0, 0.68, wetWall);' : ''}`,
+      );
+    if (wet) {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor = mix(roughnessFactor, 0.28, wetWall);`,
+      );
+    }
+  };
+  material.customProgramCacheKey = () => `sooty-${key}`;
+  return material;
 }

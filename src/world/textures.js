@@ -323,6 +323,53 @@ export function brick() {
   });
 }
 
+// Ziegel des Stadtbahnviadukts im Kreuzverband: Läufer- und Binderschichten im Wechsel, jede
+// zweite Läuferschicht um einen halben Stein versetzt. Gedämpftes Braunrot statt grellem Rot,
+// einzelne dunkel gebrannte Klinker und hellere, gelbliche Steine, dazu helle Kalkfugen, damit
+// man nachts den Verband und nicht eine rote Fläche sieht. Eine Kachel ist gut 3 m groß
+// (UV × 0,33 wie im Viadukt): 40 Schichten zu 7,6 cm, Läufer 25 cm, Binder 12,5 cm.
+export function viaductBrick() {
+  return cached('viaductBrick', () => {
+    const size = 512;
+    const color = canvas(size);
+    const height = canvas(size);
+    const c = color.getContext('2d');
+    const h = height.getContext('2d');
+    const r = rng(1882);
+    c.fillStyle = '#5c564e';
+    c.fillRect(0, 0, size, size);
+    h.fillStyle = '#000';
+    h.fillRect(0, 0, size, size);
+    const rows = 40;
+    const bh = size / rows;
+    for (let row = 0; row < rows; row++) {
+      const header = row % 2 === 1;
+      const n = header ? 24 : 12;
+      const bw = size / n;
+      // Jede zweite Läuferschicht um einen halben Läufer versetzt (Kreuzverband).
+      const off = header ? bw / 2 : row % 4 === 2 ? bw / 2 : 0;
+      for (let i = 0; i < n; i++) {
+        const v = r();
+        const kind = r();
+        let rgb;
+        if (kind < 0.1) rgb = [58 + v * 14, 38 + v * 8, 36 + v * 8];
+        else if (kind < 0.18) rgb = [128 + v * 20, 92 + v * 14, 68 + v * 10];
+        else rgb = [92 + v * 30, 54 + v * 14, 42 + v * 10];
+        c.fillStyle = `rgb(${rgb.map(Math.round).join(',')})`;
+        h.fillStyle = `rgb(${Math.round(150 + r() * 100)},0,0)`;
+        // Was rechts über den Rand ragt, erscheint links wieder: Die Kachel ist nahtlos.
+        for (const x of [i * bw + off, i * bw + off - size]) {
+          c.fillRect(x + 1, row * bh + 1, bw - 2, bh - 2);
+          h.fillRect(x + 1, row * bh + 1, bw - 2, bh - 2);
+        }
+      }
+    }
+    grain(c, size, 18, 1883);
+    blotches(c, size, 14, 10, 30, 'rgba(20,14,12,0.18)', 1884);
+    return { map: tex(color), normalMap: tex(normalFromHeight(height, 1.6), { srgb: false }) };
+  });
+}
+
 // Quaimauer aus Granitquadern. Eine Kachel ist 4 × 4 m groß, ihre Oberkante ist die Quaikante. Der
 // Streifen um die Wasserlinie (`water` Meter unter der Kante) ist nass und dunkel, darunter grünlich.
 export function quayStone(water = 2.7) {
@@ -3651,13 +3698,17 @@ export function archFronts() {
       cx.beginPath();
       cx.rect(ox, oy, C, C);
       cx.clip();
-      // Ziegel wie am Viadukt.
-      cx.fillStyle = '#5c3326';
+      // Ziegel wie am Viadukt (viaductBrick): gedämpftes Braunrot, helle Kalkfugen, einzelne
+      // Klinker. Eigener Zufall, damit sich das Übrige dieser Textur nicht verschiebt.
+      cx.fillStyle = '#5c564e';
       cx.fillRect(ox, oy, C, C);
+      const rb = rng(1894 + cell);
       for (let row = 0, y = oy; y < oy + C; row++, y += 7) {
         for (let x = ox - (row % 2) * 11; x < ox + C; x += 22) {
-          const v = 70 + r() * 40;
-          cx.fillStyle = `rgb(${v + 30},${v * 0.48},${v * 0.36})`;
+          const v = r();
+          const kind = rb();
+          const rgb = kind < 0.1 ? [58 + v * 14, 38 + v * 8, 36 + v * 8] : kind < 0.18 ? [128 + v * 20, 92 + v * 14, 68 + v * 10] : [92 + v * 30, 54 + v * 14, 42 + v * 10];
+          cx.fillStyle = `rgb(${rgb.map(Math.round).join(',')})`;
           cx.fillRect(x + 1, y + 1, 20, 5);
         }
       }

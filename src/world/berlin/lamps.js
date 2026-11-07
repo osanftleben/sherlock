@@ -79,26 +79,32 @@ export function buildLamps(loc, positions, ironMat) {
     scene.add(l);
     lights.push(l);
   }
-  const ranked = glows.map((g) => ({ g, d: 0 }));
+  // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight). weight < 1
+  // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
+  // weiter weg sieht als ihre Entfernung vermuten lässt.
+  const ranked = [
+    ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.y + 3.7, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
+    ...(loc.extraLamps ?? []).map((e, i) => ({ x: e.x, z: e.z, ly: e.y, seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
+  ];
   let timer = 0;
   loc.onUpdate((dt, t, { camera }) => {
     timer -= dt;
     if (timer < 0) {
       timer = 0.25;
       for (const e of ranked) {
-        const dx = e.g.x - camera.position.x;
-        const dz = e.g.z - camera.position.z;
-        e.d = dx * dx + dz * dz;
+        const dx = e.x - camera.position.x;
+        const dz = e.z - camera.position.z;
+        e.d = (dx * dx + dz * dz) * e.weight;
       }
       ranked.sort((a, b) => a.d - b.d);
     }
     lights.forEach((l, i) => {
-      const { g } = ranked[i];
-      l.position.set(g.x, g.y + 3.7, g.z);
-      const flicker = 0.93 + 0.07 * Math.sin(t * 9 + g.seed) * Math.sin(t * 3.7 + g.seed * 2);
+      const e = ranked[i];
+      l.position.set(e.x, e.ly, e.z);
+      const flicker = 0.93 + 0.07 * Math.sin(t * 9 + e.seed) * Math.sin(t * 3.7 + e.seed * 2);
       // Die letzte Lampe der Rangliste blendet aus, damit das Umspringen nicht auffällt.
       const fade = i < 4 ? 1 : 0.6;
-      l.intensity = 32 * flicker * fade;
+      l.intensity = e.intensity * flicker * fade;
     });
     for (const g of glows) {
       g.s.material.opacity = 0.5 + 0.06 * Math.sin(t * 6 + g.seed);

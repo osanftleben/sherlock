@@ -186,7 +186,7 @@ export function buildBerlin() {
   street.position.set(0, 0, (STREET_Z0 + STREET_Z1) / 2);
   scene.add(street);
 
-  buildRailway(loc, r, brickMat);
+  buildRailway(loc, r);
   const farBank = buildHorizon(loc, r);
   buildRiver(loc, FOG, farBank);
 

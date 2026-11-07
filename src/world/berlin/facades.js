@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
 import { grimy } from './grime.js';
 import { lightPool } from './lamps.js';
+import { buildDownpipes } from './gutters.js';
 import {
   SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
@@ -355,6 +356,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const slabs = [];
   const roofs = [];
   const curbs = [];
+  // Fallrohre, je Haus eines an der rechten Hauskante (gutters.js).
+  const pipes = [];
 
   // Erker, Balkone und Gauben eines Hauses, aus eigenem Zufall (reliefRand), damit Häuser,
   // Fenster und Läden bleiben, wie sie sind. Erker und Balkone halten eine Achse Abstand
@@ -805,6 +808,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     geo.applyMatrix4(base);
     massing.parts.push(geo);
 
+    pipes.push({ base, x: W - 0.2, H, walk: sidewalk });
+
     const rGeo = roofPrism(W, 3.4, depth, W / 2, H + 0.2, -depth / 2);
     rGeo.applyMatrix4(base);
     roofs.push(rGeo);
@@ -878,6 +883,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const finish = () => {
     batcher.build(scene, wallMat, darkGlass, litGlass);
     buildSpills(scene, spills);
+    buildDownpipes(loc, pipes);
     trimMasses(masses, slabs);
     for (const m of masses) {
       const w = m.maxX - m.minX;

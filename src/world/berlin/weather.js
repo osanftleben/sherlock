@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { fogPuff } from '../textures.js';
+import { merge } from '../kit.js';
 
 export function buildWeather(loc, r) {
   const { scene } = loc;
@@ -71,6 +72,28 @@ export function buildWeather(loc, r) {
   rain.frustumCulled = false;
   scene.add(rain);
 
+  // Spritzer: wo ein Tropfen aufschlägt, sprüht für einen Augenblick ein Hauch feiner Tröpfchen
+  // hoch. Sie sind beleuchtet, man sieht sie also vor allem im Schein der Laternen und Fenster.
+  const SPLASHES = 260;
+  const splashGeo = merge([
+    new THREE.PlaneGeometry(0.14, 0.1).translate(0, 0.05, 0),
+    new THREE.PlaneGeometry(0.14, 0.1).translate(0, 0.05, 0).rotateY(Math.PI / 2),
+  ]);
+  const splashes = new THREE.InstancedMesh(splashGeo, new THREE.MeshLambertMaterial({
+    color: 0xffffff, emissive: 0x15181b, alphaMap: splashMask(), transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  }), SPLASHES);
+  splashes.frustumCulled = false;
+  splashes.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(splashes);
+  const drops = Array.from({ length: SPLASHES }, () => ({ x: 0, y: 0, z: 0, age: Math.random() * 0.2, life: 0.2, rot: 0 }));
+  const sm = new THREE.Matrix4();
+  const sq = new THREE.Quaternion();
+  const sScale = new THREE.Vector3();
+  const sPos = new THREE.Vector3();
+  const yAxis = new THREE.Vector3(0, 1, 0);
+  const dryAt = (x, z) => (loc.dry ?? []).some((d) => x > d.minX && x < d.maxX && z > d.minZ && z < d.maxZ);
+
   const ahead = new THREE.Vector3();
   const rel = new THREE.Vector3();
   let cover = 1;
@@ -81,6 +104,27 @@ export function buildWeather(loc, r) {
     const roofed = (loc.dry ?? []).some((d) => c.x > d.minX && c.x < d.maxX && c.z > d.minZ && c.z < d.maxZ && c.y < (d.top ?? 4.5));
     cover += ((roofed ? 0 : 1) - cover) * (1 - Math.exp(-dt * 3));
     camera.getWorldDirection(ahead);
+    // Spritzer: neu gesetzt in einem Kasten von 24 m um die Kamera, eher vor ihr als dahinter.
+    for (let i = 0; i < SPLASHES; i++) {
+      const d = drops[i];
+      d.age += dt;
+      if (d.age > d.life) {
+        d.age = 0;
+        d.life = 0.12 + Math.random() * 0.1;
+        d.x = c.x + ahead.x * 6 + (Math.random() - 0.5) * 24;
+        d.z = c.z + ahead.z * 6 + (Math.random() - 0.5) * 24;
+        d.y = loc.heightAt(d.x, d.z) + 0.002;
+        d.rot = Math.random() * Math.PI;
+        if (dryAt(d.x, d.z)) d.y = -10;
+      }
+      const k = d.age / d.life;
+      const size = (0.5 + k) * (1 - k * k) * 1.4;
+      sPos.set(d.x, d.y, d.z);
+      sq.setFromAxisAngle(yAxis, d.rot);
+      sScale.set(size, size * (1.2 - 0.6 * k), size);
+      splashes.setMatrixAt(i, sm.compose(sPos, sq, sScale));
+    }
+    splashes.instanceMatrix.needsUpdate = true;
     for (const p of puffs) {
       p.s.position.x += p.vx * dt;
       const dx = p.s.position.x - c.x;
@@ -97,4 +141,34 @@ export function buildWeather(loc, r) {
       p.s.visible = p.s.material.opacity > 0.002;
     }
   });
+}
+
+// Sprühhauch eines Aufschlags, von der Seite gesehen: weich, breiter als hoch, unten am dichtesten,
+// darin ein paar hellere Tröpfchen. Einzelne Tropfen wären aus Gehhöhe kleiner als ein Pixel.
+function splashMask() {
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 48;
+  const g = c.getContext('2d');
+  g.fillStyle = '#000';
+  g.fillRect(0, 0, 64, 48);
+  g.save();
+  g.scale(1.4, 1);
+  const glow = g.createRadialGradient(23, 47, 0, 23, 47, 20);
+  glow.addColorStop(0, 'rgba(255,255,255,0.85)');
+  glow.addColorStop(0.45, 'rgba(255,255,255,0.3)');
+  glow.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = glow;
+  g.fillRect(0, 0, 64, 48);
+  g.restore();
+  g.fillStyle = '#fff';
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 6) * Math.PI;
+    g.beginPath();
+    g.arc(32 - Math.cos(a) * (12 + (i % 3) * 6), 46 - Math.sin(a) * (12 + (i % 2) * 12), 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.NoColorSpace;
+  return t;
 }

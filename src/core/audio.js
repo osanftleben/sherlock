@@ -118,6 +118,29 @@ export class Audio {
     this.nextSlap = 0;
     this.nextCreak = 4;
 
+    // Fallrohr: ein dünner Strahl plätschert auf die Gehwegplatten. Helles, unruhiges Rauschen,
+    // dessen Pegel schnell flattert, dazu einzelne Tropfen (update). gutterOut setzt die Nähe.
+    this.gutterPan = ctx.createStereoPanner();
+    this.gutterOut = ctx.createGain();
+    this.gutterOut.gain.value = 0;
+    this.gutterOut.connect(this.gutterPan).connect(this.master);
+    const trickle = ctx.createBiquadFilter();
+    trickle.type = 'bandpass';
+    trickle.frequency.value = 2400;
+    trickle.Q.value = 1.2;
+    const bubble = ctx.createGain();
+    bubble.gain.value = 0.05;
+    const flutter = ctx.createBiquadFilter();
+    flutter.type = 'lowpass';
+    flutter.frequency.value = 22;
+    const flutterDepth = ctx.createGain();
+    flutterDepth.gain.value = 1.5;
+    this.loop(flutter);
+    flutter.connect(flutterDepth).connect(bubble.gain);
+    this.loop(trickle);
+    trickle.connect(bubble).connect(this.gutterOut);
+    this.nextDrip = 0;
+
     // Fahrende Droschke: leises, dumpfes Rollen der Eisenreifen, darüber einzelne unregelmäßige
     // Stöße, wenn ein Rad über eine Steinkante holpert (update). Die Hufe sollen führen.
     this.cabPan = ctx.createStereoPanner();
@@ -526,6 +549,24 @@ export class Audio {
     }
   }
 
+  // Ein Tropfen aus dem Fallrohr: kurzes Plinken, dessen Ton nach oben gleitet, und ein Klatschen.
+  drip() {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const f = 700 + Math.random() * 900;
+    const osc = ctx.createOscillator();
+    osc.frequency.setValueAtTime(f, t);
+    osc.frequency.exponentialRampToValueAtTime(f * 1.8, t + 0.04);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.03 + Math.random() * 0.04, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    osc.connect(g).connect(this.gutterOut);
+    osc.start(t);
+    osc.stop(t + 0.08);
+    this.burst({ freq: 3200 + Math.random() * 1500, q: 1, dur: 0.03, gain: 0.05 + Math.random() * 0.05, out: this.gutterOut });
+  }
+
   // Ferner Wagen: Hufe im Trab, gedämpft und von einer Seite, schwillt an und wieder ab.
   hooves() {
     const ctx = this.ctx;
@@ -687,7 +728,7 @@ export class Audio {
   // (Abstand und Seite von Quaimauer und Kahn), fehlt in Innenräumen. sounds: Ereignisse des
   // Orts ({ type: 'hoof' | 'stamp' | 'snort', vol, pan }), werden hier abgespielt und geleert.
   // cab: Pegel und Seite der fahrenden Droschke (traffic.js).
-  update(dt, trainDistance, river, sounds, cab) {
+  update(dt, trainDistance, river, sounds, cab, gutter) {
     if (!this.ctx) {
       if (sounds) sounds.length = 0;
       return;
@@ -708,6 +749,14 @@ export class Audio {
     if (this.nextBump < 0) {
       if (outdoors && cab?.moving && cab.vol > 0.02) this.burst({ freq: 120 + Math.random() * 110, q: 1.3, dur: 0.05 + Math.random() * 0.04, gain: 0.25 + Math.random() * 0.25, out: this.cabOut });
       this.nextBump = 0.06 + Math.random() * 0.16;
+    }
+    const nearGutter = outdoors && gutter ? gutter.vol : 0;
+    this.gutterOut.gain.setTargetAtTime(nearGutter, now, 0.2);
+    if (gutter) this.gutterPan.pan.setTargetAtTime(gutter.pan * 0.85, now, 0.1);
+    this.nextDrip -= dt;
+    if (this.nextDrip < 0) {
+      if (nearGutter > 0.01) this.drip();
+      this.nextDrip = 0.05 + Math.random() * 0.25;
     }
     const nearWater = outdoors && river ? Math.max(0, 1 - river.distance / 18) ** 2 : 0;
     const nearBarge = outdoors && river ? Math.max(0, 1 - river.barge / 30) ** 2 : 0;

@@ -400,22 +400,49 @@ export function buildBerlin() {
   buildTraffic(loc, r);
   buildWeather(loc, r);
   buildLife(loc);
+  loc.onUpdate((dt, t) => {
+    rainTime.value = t % 1000;
+  });
 
   return loc;
 }
 
 // Legt streetWet() in Weltkoordinaten über das Pflaster: Pfützen sind dunkel, glatt und ohne
 // Steinrelief, dazu großflächig hellere und dunklere Stellen, damit sich die 8-m-Kachel
-// nicht wiederholt.
+// nicht wiederholt. In den Pfützen schlagen Tropfen ein: kleine Ringe, die sich ausbreiten und
+// das Spiegelbild der Laternen kräuseln (nur die Normale, kein eigenes Licht).
+const rainTime = { value: 0 };
+const RIPPLES = `
+uniform float rainTime;
+float rippleGlint;
+float rippleHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+// Ein Ring je Zelle (cell Meter), der in jedem Takt neu und an anderer Stelle einschlägt oder
+// aussetzt. Gibt die Neigung der Wasseroberfläche in x und z zurück.
+vec2 ripple(vec2 xz, float cell, float seed) {
+  vec2 p = xz / cell + seed;
+  vec2 id = floor(p);
+  float h = rippleHash(id);
+  float u = rainTime / (0.9 + h * 1.4) + h * 13.0;
+  float cyc = floor(u);
+  float ph = fract(u);
+  float on = step(rippleHash(id + cyc * 7.31), 0.5);
+  vec2 c = vec2(rippleHash(id + cyc * 3.7 + 1.3), rippleHash(id + cyc * 5.1 + 2.9)) * 0.6 + 0.2;
+  vec2 d = (fract(p) - c) * cell;
+  float r = length(d);
+  float x = r - ph * 0.08;
+  float fade = (1.0 - ph) * (1.0 - ph);
+  return on * fade * sin(x * 110.0) * exp(-x * x * 1400.0) * d / max(r, 0.001);
+}`;
 function wetStreet(material) {
   const wet = streetWet();
   material.onBeforeCompile = (shader) => {
     shader.uniforms.wetMap = { value: wet };
+    shader.uniforms.rainTime = rainTime;
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;')
+      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}`)
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
@@ -434,12 +461,23 @@ function wetStreet(material) {
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
         // Die Pfütze spiegelt den dunklen Himmel und die Laternen, nicht den Lichtschein der Umgebungskarte.
-        reflectedLight.indirectSpecular *= mix(1.0, 0.15, puddle);`,
+        reflectedLight.indirectSpecular *= mix(1.0, 0.15, puddle);
+        // Die Kämme der Tropfenringe stehen schräg und fangen das Licht der Laternen von allen Seiten:
+        // feine helle Kreise, wo Licht hinfällt, im Dunkeln nichts.
+        reflectedLight.directSpecular += rippleGlint * 1.6 * reflectedLight.directDiffuse / max(material.diffuseColor, vec3(0.01));`
       )
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
-        normal = normalize(mix(normal, nonPerturbedNormal, puddle));`,
+        normal = normalize(mix(normal, nonPerturbedNormal, puddle));
+        // Tropfenringe; in der Ferne, wo ein Pixel mehr als ein paar Zentimeter deckt, flimmerten sie nur.
+        float rippleNear = 1.0 - smoothstep(0.025, 0.07, length(fwidth(vGroundXZ)));
+        rippleGlint = 0.0;
+        if (puddle * rippleNear > 0.01) {
+          vec2 rip = ripple(vGroundXZ, 0.45, 0.0) + ripple(vGroundXZ, 0.37, 17.3);
+          rippleGlint = length(rip) * puddle * rippleNear;
+          normal = normalize(normal + mat3(viewMatrix) * vec3(rip.x, 0.0, rip.y) * (0.45 * puddle * rippleNear));
+        }`,
       );
   };
   material.customProgramCacheKey = () => 'wetStreet';

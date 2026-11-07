@@ -58,6 +58,123 @@ const FinalShader = {
   `,
 };
 
+// Belichtungsmesser für die Augenanpassung: teilt die (lineare, noch unbelichtete) Szene in
+// 16 × 9 Felder und schreibt je Feld den Mittelwert des Logarithmus der Leuchtdichte aus 16
+// Proben. Der Wert (log2 von -14 bis 4) steht auf zwei Bytes verteilt in Rot und Grün, damit
+// er sich fein genug auslesen lässt.
+const METER = { cols: 16, rows: 9, lo: -14, hi: 4 };
+const MeterShader = {
+  uniforms: { tScene: { value: null } },
+  vertexShader: FinalShader.vertexShader,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D tScene;
+    varying vec2 vUv;
+    void main() {
+      vec2 cells = vec2(${METER.cols}.0, ${METER.rows}.0);
+      vec2 cell = floor(vUv * cells);
+      float sum = 0.0;
+      for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+          vec2 uv = (cell + (vec2(float(i), float(j)) + 0.5) / 4.0) / cells;
+          float l = dot(texture2D(tScene, uv).rgb, vec3(0.2126, 0.7152, 0.0722));
+          sum += log2(max(l, 1e-5));
+        }
+      }
+      float v = clamp((sum / 16.0 - (${METER.lo}.0)) / (${METER.hi - METER.lo}.0), 0.0, 1.0) * 255.0;
+      gl_FragColor = vec4(floor(v) / 255.0, fract(v), 0.0, 1.0);
+    }
+  `,
+};
+
+// Augenanpassung: Ist das Bild dunkler als eine gewöhnliche Straßenecke bei Nacht, öffnet sich
+// das Auge langsam (einige Sekunden), vor Hellem schließt es sich rascher. Nur teilweise und in
+// Grenzen, damit die Nacht Nacht bleibt und dunkle Ecken nicht zu grauem Brei werden.
+const EYE = {
+  // Bereich der mittleren log2-Leuchtdichte, in dem nichts nachgeregelt wird. Gemessen an den
+  // Standpunkten von ?messen: Straßen und Plätze -4,9 bis -6,7, Stuben -5,0 bis -5,5; darunter
+  // Viadukt und Spree (-7), der Hof (-7,2 bis -7,6) und die Tordurchfahrt (-8).
+  low: -6.6,
+  high: -4.4,
+  // Anteil, um den das Auge den Abstand zu diesem Bereich ausgleicht (1 = ganz).
+  strength: 0.7,
+  // Grenzen des Faktors auf die Belichtung.
+  min: 0.75,
+  max: 2.1,
+  // Zeitkonstanten in Sekunden: ins Dunkle, ins Helle.
+  open: 2.4,
+  close: 0.7,
+  // Abstand der Messungen in Sekunden.
+  every: 0.2,
+};
+
+class Eye {
+  constructor(renderer, scene) {
+    this.renderer = renderer;
+    this.target = new THREE.WebGLRenderTarget(METER.cols, METER.rows, { depthBuffer: false });
+    this.material = new THREE.RawShaderMaterial({ ...MeterShader, uniforms: { tScene: { value: scene } }, depthTest: false, depthWrite: false });
+    this.quad = new FullScreenQuad(this.material);
+    this.pixels = new Uint8Array(METER.cols * METER.rows * 4);
+    this.wait = 0;
+    this.busy = false;
+    // Gemessene mittlere log2-Leuchtdichte (null bis zur ersten Messung) und aktueller Faktor.
+    this.level = null;
+    this.factor = 1;
+    this.enabled = true;
+  }
+
+  // Misst in Abständen (asynchron, ohne auf die Grafikkarte zu warten) und führt den Faktor nach.
+  update(dt) {
+    if (!this.enabled) {
+      this.factor = 1;
+      return;
+    }
+    this.wait -= dt;
+    if (this.wait <= 0 && !this.busy) {
+      this.wait = EYE.every;
+      this.measure();
+    }
+    if (this.level === null) return;
+    const off = this.level < EYE.low ? EYE.low - this.level : this.level > EYE.high ? EYE.high - this.level : 0;
+    const stops = THREE.MathUtils.clamp(EYE.strength * off, Math.log2(EYE.min), Math.log2(EYE.max));
+    const goal = 2 ** stops;
+    const tau = goal > this.factor ? EYE.open : EYE.close;
+    this.factor += (goal - this.factor) * Math.min(1, dt / tau);
+  }
+
+  measure() {
+    const r = this.renderer;
+    r.setRenderTarget(this.target);
+    this.quad.render(r);
+    this.busy = true;
+    r.readRenderTargetPixelsAsync(this.target, 0, 0, METER.cols, METER.rows, this.pixels)
+      .then(() => {
+        // Mitte stärker gewichtet: Dorthin schaut man.
+        const p = this.pixels;
+        let sum = 0;
+        let weight = 0;
+        for (let y = 0; y < METER.rows; y++) {
+          for (let x = 0; x < METER.cols; x++) {
+            const i = (y * METER.cols + x) * 4;
+            const v = (p[i] + p[i + 1] / 255) / 255;
+            const dx = (x + 0.5) / METER.cols - 0.5;
+            const dy = (y + 0.5) / METER.rows - 0.5;
+            const w = 1 - 1.4 * (dx * dx + dy * dy);
+            sum += (METER.lo + v * (METER.hi - METER.lo)) * w;
+            weight += w;
+          }
+        }
+        this.level = sum / weight;
+      })
+      .catch(() => {
+        this.enabled = false;
+      })
+      .finally(() => {
+        this.busy = false;
+      });
+  }
+}
+
 // Leuchten wie UnrealBloomPass, aber ohne den teuren letzten Schritt zurück in volle Auflösung:
 // Das Ergebnis bleibt in halber Auflösung liegen und wird erst im Schlussbild addiert.
 class Glow extends UnrealBloomPass {
@@ -165,6 +282,7 @@ export class View {
     this.final.uniforms.tScene.value = this.target.texture;
     this.final.uniforms.tGlow.value = this.glow.texture;
     this.quad = new FullScreenQuad(this.final);
+    this.eye = new Eye(this.renderer, this.target.texture);
 
     this.fade = 1;
     this.fadeTarget = 0;
@@ -266,6 +384,7 @@ export class View {
     this.clock.end();
     this.sceneInfo.calls = r.info.render.calls;
     this.sceneInfo.triangles = r.info.render.triangles;
+    this.eye.update(dt);
 
     const clear = r.autoClear;
     r.autoClear = false;
@@ -277,7 +396,7 @@ export class View {
 
     const u = this.final.uniforms;
     u.glow.value = this.glow.enabled ? 1 : 0;
-    u.toneMappingExposure.value = this.exposure;
+    u.toneMappingExposure.value = this.exposure * this.eye.factor;
     u.fade.value = this.fade;
     u.time.value = time % 10;
     this.clock.begin('Schluss');

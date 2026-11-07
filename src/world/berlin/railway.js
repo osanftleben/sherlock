@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
 import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
 import { addSign } from './facades.js';
+import { lightPool } from './lamps.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
 export function buildRailway(loc, r, brickMat) {
@@ -104,7 +105,7 @@ export function buildRailway(loc, r, brickMat) {
   addMesh(scene, merge(fronts), std({ map: af.map, emissive: 0xffffff, emissiveMap: af.emissiveMap, emissiveIntensity: 0.9, roughness: 0.8 }));
   addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) }));
-  addMesh(scene, merge(pools), new THREE.MeshBasicMaterial({ map: softDisc('lampPool', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.33)'), color: 0xc08040, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
+  addMesh(scene, merge(pools), lightPool(0xc08040, 0.5));
   const deck = new Bag();
   const deckW = 49 * SEG;
   deck.box(0x2c2622, deckW, 0.5, VZ1 - VZ0 + 0.8, 0, VH + 0.25, (VZ0 + VZ1) / 2);

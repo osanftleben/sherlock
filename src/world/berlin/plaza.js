@@ -4,6 +4,7 @@ import { clockFace, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, u
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
+import { lightPool } from './lamps.js';
 
 // Brunnen in der Mitte des Platzes, in der Wendeschleife der Droschke (traffic.js):
 // Die Fahrspur bleibt rundum gut 6 m von seiner Mitte weg. Die beiden Laternen daneben
@@ -486,6 +487,6 @@ function buildUrania(loc, ux, uz) {
 function addPool(scene, x, z, size, color, opacity) {
   const geo = new THREE.PlaneGeometry(size, size);
   geo.rotateX(-Math.PI / 2);
-  const mat = new THREE.MeshBasicMaterial({ map: softDisc('lampPool', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.33)'), color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
+  const mat = lightPool(color, opacity);
   return addMesh(scene, geo, mat, x, 0.03, z);
 }

@@ -2,6 +2,27 @@ import * as THREE from 'three';
 import { Bag, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 
+// Lichtfleck einer Laterne auf dem Boden. Er wird nicht als helle Scheibe daraufgelegt, sondern
+// verstärkt, was schon da ist (Ergebnis = Boden × (1 + Licht)): Die Steine leuchten auf, die
+// Fugen und Pfützen bleiben dunkel, und im Dunst verblasst er mit dem Pflaster. POOL_GAIN gleicht
+// aus, dass der Boden ohne Laterne nur vom schwachen Himmelslicht getroffen wird.
+const POOL_GAIN = 36;
+export function lightPool(color, opacity) {
+  return new THREE.MeshBasicMaterial({
+    map: softDisc('lampPool', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.33)'),
+    // Etwas entsättigt: Das Licht multipliziert sich mit dem schon warmen Pflaster.
+    color: new THREE.Color(color).lerp(new THREE.Color(1, 1, 1), 0.35).multiplyScalar(POOL_GAIN),
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    premultipliedAlpha: true,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.DstColorFactor,
+    blendDst: THREE.OneFactor,
+  });
+}
+
 export function buildLamps(loc, positions, ironMat) {
   const { scene } = loc;
   const post = new Bag();
@@ -19,7 +40,7 @@ export function buildLamps(loc, positions, ironMat) {
   const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
   const poolGeo = new THREE.PlaneGeometry(1, 1);
   poolGeo.rotateX(-Math.PI / 2);
-  const poolMat = new THREE.MeshBasicMaterial({ map: softDisc('lampPool', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.33)'), color: 0xc77b38, transparent: true, opacity: 0.33, depthWrite: false, blending: THREE.AdditiveBlending });
+  const poolMat = lightPool(0xc77b38, 0.33);
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, positions.length);
   const glows = [];
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);

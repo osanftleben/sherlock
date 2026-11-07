@@ -432,7 +432,7 @@ function wetStreet(material) {
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
         // Die Pfütze spiegelt den dunklen Himmel und die Laternen, nicht den Lichtschein der Umgebungskarte.
-        reflectedLight.indirectSpecular *= mix(1.0, 0.4, puddle);`,
+        reflectedLight.indirectSpecular *= mix(1.0, 0.15, puddle);`,
       )
       .replace(
         '#include <normal_fragment_maps>',

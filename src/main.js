@@ -17,7 +17,7 @@ import { buildInteriors } from './world/interiors/index.js';
 import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
 import { makeProp } from './world/props.js';
 import { ShadowSelf } from './world/holmes.js';
-import { sparkle } from './world/textures.js';
+import { softDisc, sparkle } from './world/textures.js';
 import { CASES, CASE_LIST, FIRST_CASE } from './cases/index.js';
 
 const RETORTS = [
@@ -220,20 +220,33 @@ class Game {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     }));
-    sprite.position.copy(spot.pos);
-    loc.scene.add(sprite);
+    // Dunkler Hof hinter dem Stern: Auf hellem Grund (Porzellan, Papier) ginge das additive
+    // Weiß sonst unter. Auf dunklem Grund sieht man ihn nicht.
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: softDisc('glintHalo', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.3)'),
+      color: 0x000000,
+      transparent: true,
+      depthWrite: false,
+    }));
+    sprite.renderOrder = 2;
+    halo.renderOrder = 1;
+    const glint = new THREE.Group();
+    glint.add(halo, sprite);
+    glint.position.copy(spot.pos);
+    loc.scene.add(glint);
     const updater = loc.onUpdate((dt, t, { camera }) => {
       const near = camera.position.distanceTo(spot.pos) < 6.5;
-      sprite.visible = near && this.state.check(spot.when) && !(doneKey && this.state.has(doneKey));
-      if (sprite.visible) {
+      glint.visible = near && this.state.check(spot.when) && !(doneKey && this.state.has(doneKey));
+      if (glint.visible) {
         const phase = spot.pos.x * 5 + spot.pos.z * 3;
         const flash = Math.max(0, Math.sin(t * 2.4 + phase)) ** 8;
         sprite.scale.setScalar(0.12 + 0.1 * flash);
         sprite.material.opacity = 0.75 + 0.25 * flash;
         sprite.material.rotation = t * 0.4 + phase;
+        halo.scale.setScalar(0.09 + 0.04 * flash);
       }
     });
-    return { object: sprite, updater };
+    return { object: glint, updater };
   }
 
   showTitle() {

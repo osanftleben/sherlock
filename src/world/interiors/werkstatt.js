@@ -67,7 +67,8 @@ export function buildWerkstatt() {
   room.table(0.45, -1.75, 0.6, 0.6, 0.62);
   room.plainBag.add(cyl(0.05, 0.035, 0.07, 0.45, 0.69, -1.75, 12), 0xe4dcc8);
   room.plainBag.add(cyl(0.08, 0.08, 0.012, 0.45, 0.655, -1.75, 14), 0xe4dcc8);
-  loc.anchor('cup', 0.45, 0.72, -1.75);
+  // Knapp über dem Rand (0,725): Lag der Anker in der Tasse, verdeckte sie den Kern des Glints.
+  loc.anchor('cup', 0.45, 0.75, -1.75);
   // Kesslers Brille neben der Tasse, die Zeitung ist ihm vom Schoß gerutscht.
   for (const dx of [-0.032, 0.032]) {
     const lens = new THREE.TorusGeometry(0.024, 0.003, 4, 14);

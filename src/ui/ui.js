@@ -124,7 +124,8 @@ export class UI {
     let i = 0;
     const show = () => {
       this.clear();
-      const s = el('div', 'screen solid');
+      // Fester Textkasten (style.css .tale): Der Knopf bleibt stehen, wie lang der Absatz auch ist.
+      const s = el('div', 'screen solid tale');
       s.append(el('p', 'story', paragraphs[i]));
       const menu = el('div', 'menu');
       const next = () => {

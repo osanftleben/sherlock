@@ -87,13 +87,15 @@ button {
   text-align: right;
 }
 
+/* Ortsname beim Betreten: unter dem Ziel oben links, sonst schiebt sich in schmalen Fenstern
+   ein langer Name wie „Bankhaus Lindner & Sohn“ über dessen zweite Zeile. */
 .banner {
   position: absolute;
   left: 50%;
-  top: 11%;
+  top: max(18%, 120px);
   transform: translateX(-50%);
   font-family: var(--fraktur);
-  font-size: 46px;
+  font-size: clamp(30px, 5vw, 46px);
   color: var(--paper);
   text-shadow: 0 2px 12px #000;
   opacity: 0;
@@ -279,6 +281,9 @@ canvas.map { width: 100%; height: 100%; display: block; background: #d8caa6; }
 .screen .case.geloest .state { color: var(--gold); }
 .screen .case.gesperrt { opacity: 0.55; }
 .screen .story { max-width: 700px; font-size: 24px; line-height: 1.45; margin: 0 0 28px; }
+/* Erzählseiten: Platz für sechs Zeilen, der Absatz steht mittig darin. So springt „Weiter“ nicht
+   von Seite zu Seite, wenn ein Absatz eine Zeile mehr oder weniger hat. */
+.screen.tale .story { min-height: 8.7em; display: flex; align-items: center; justify-content: center; }
 .screen .controls { margin-top: 26px; color: rgba(230, 218, 189, 0.8); font-size: 16px; line-height: 1.5; }
 .screen .tally { color: var(--gold); font-style: italic; margin: 0 0 18px; }
 

@@ -302,9 +302,12 @@ function buildEntrance(loc, x, z0) {
   const back = new THREE.ShapeGeometry(archOutline(true), 16).rotateY(Math.PI).translate(x, 0, z0 + 0.03);
   addMesh(scene, back, new THREE.MeshBasicMaterial({ color: 0x0a0806, side: THREE.DoubleSide }));
   // Wände in drei Abschnitten, damit der Lichtverlauf sichtbar wird; unten ein dunkler Sockel.
+  // Sie beginnen knapp hinter Front und Rückseite: Läge ihre Stirnseite in der Ebene der Front,
+  // flackerte sie an den Türkanten und über der Tür als heller Streifen hindurch.
+  const zWall = z0 + 0.05;
   for (let k = 0; k < 3; k++) {
-    const za = z0 + ((zBack - z0) * k) / 3;
-    const zb = z0 + ((zBack - z0) * (k + 1)) / 3;
+    const za = zWall + ((zBack - zWall) * k) / 3;
+    const zb = zWall + ((zBack - zWall) * (k + 1)) / 3;
     const zm = (za + zb) / 2;
     for (const sx of [-1, 1]) {
       bag.box(lit(0xb8a27c, zm, 3.5), 0.08, 5.3, zb - za, x + sx * (half + 0.04), 3.75, zm);
@@ -323,9 +326,9 @@ function buildEntrance(loc, x, z0) {
   bag.box(lit(0x6a625a, lampZ, top), dw, top, zBack - zTop, x, top / 2, (zTop + zBack) / 2);
   // Decke: von der Türoberkante mit der Treppe ansteigend bis über den Absatz.
   const rise = lampY + 0.6 - dh;
-  const ceil = new THREE.PlaneGeometry(dw, Math.hypot(zBack - z0, rise));
-  ceil.rotateX(Math.PI / 2 - Math.atan2(rise, zBack - z0));
-  ceil.translate(x, dh + rise / 2, (z0 + zBack) / 2);
+  const ceil = new THREE.PlaneGeometry(dw, Math.hypot(zBack - zWall, rise));
+  ceil.rotateX(Math.PI / 2 - Math.atan2(rise, zBack - zWall));
+  ceil.translate(x, dh + rise / 2, (zWall + zBack) / 2);
   bag.add(ceil, lit(0x8a7658, zBack - 1, lampY));
   // Handlauf aus Eisen an der einen Wand.
   const rail = new THREE.BoxGeometry(0.05, 0.05, Math.hypot(zTop - zStair, top));

@@ -1,4 +1,8 @@
 // Alle Klänge werden synthetisiert, das Projekt braucht keine Audiodateien.
+
+// Grundpegel des Zugrollens, zwischen den Schienenstößen.
+const RUMBLE_BASE = 0.5;
+
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -6,6 +10,8 @@ export class Audio {
     this.nextHoof = 8;
     this.nextBell = 45;
     this.nextClack = 0;
+    this.nextClank = 0;
+    this.nextHop = 0;
     this.nextTram = 25;
     this.nextDrop = 0;
   }
@@ -90,39 +96,67 @@ export class Audio {
     this.trainGain = ctx.createGain();
     this.trainGain.gain.value = 0;
     this.trainGain.connect(this.trainPan);
+    // Gefiltertes Rauschen klingt nach Wind oder Brandung, wie man es auch formt, erst recht,
+    // wenn sein Pegel zufällig auf und ab geht. Rollendes Eisen dagegen sind unzählige kleine
+    // Schläge von Rad auf Schiene, und jeder bringt Radreifen und Schiene kurz zum Klingen.
+    // Deshalb dichte, gleichmäßige Impulse (grit), so dicht, dass sie nicht knistern, durch
+    // schmale Resonanzen, unharmonisch gestimmt wie die Eigentöne eines Radreifens. Je schneller
+    // die Fahrt, desto dichter die Schläge (update setzt die Abspielrate).
+    const gritLen = ctx.sampleRate * 2;
+    const gritBuffer = ctx.createBuffer(1, gritLen, ctx.sampleRate);
+    const gritData = gritBuffer.getChannelData(0);
+    const gritRate = 5000 / ctx.sampleRate;
+    for (let i = 0; i < gritLen; i++) {
+      if (Math.random() < gritRate) gritData[i] = (Math.random() < 0.5 ? -1 : 1) * (0.4 + 0.6 * Math.random());
+    }
+    this.grit = ctx.createBufferSource();
+    this.grit.buffer = gritBuffer;
+    this.grit.loop = true;
+    this.grit.start();
+    // Alles Rollen läuft über rumbling. Sein Pegel schwankt nicht zufällig, sondern im Takt der
+    // Fahrt: Bei jeder Achse über einem Schienenstoß schwillt das Grollen kurz an (clack), dazu
+    // sanft die Radumdrehung (gut 4 Hz bei voller Fahrt).
+    const rumbling = ctx.createGain();
+    rumbling.gain.value = RUMBLE_BASE;
+    rumbling.connect(this.trainGain);
+    this.rumbling = rumbling;
+    this.wheelTurn = ctx.createOscillator();
+    this.wheelTurn.frequency.value = 4.2;
+    const turnDepth = ctx.createGain();
+    turnDepth.gain.value = 0.08;
+    this.wheelTurn.connect(turnDepth).connect(rumbling.gain);
+    this.wheelTurn.start();
+    // Eigentöne von Radreifen und Schiene: Frequenz, Güte, Anteil.
+    const steel = ctx.createGain();
+    steel.gain.value = 1.6;
+    steel.connect(rumbling);
+    this.steel = steel;
+    for (const [freq, q, gain] of [[430, 10, 1], [1080, 18, 0.8], [1730, 24, 0.6], [2540, 28, 0.45], [3390, 30, 0.3]]) {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = freq;
+      f.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      this.grit.connect(f).connect(g).connect(steel);
+    }
+    // Das Mauerwerk dröhnt mit: tiefes Grollen und ein Dröhnen um 180 Hz, leiser als das Eisen,
+    // sonst wird es wieder zum Rauschen.
     const trainFilter = ctx.createBiquadFilter();
     trainFilter.type = 'lowpass';
     trainFilter.frequency.value = 130;
-    // Das Mauerwerk dröhnt mit: tiefes Grollen kräftiger als das Rollen, dazu ein Dröhnen um
-    // 180 Hz, das auch kleine Lautsprecher wiedergeben. Es schwillt im Takt der Bögen, über die
-    // der Zug gerade rollt.
     const rumble = ctx.createGain();
-    rumble.gain.value = 2.2;
+    rumble.gain.value = 1.0;
     this.loop(trainFilter);
-    trainFilter.connect(rumble).connect(this.trainGain);
+    trainFilter.connect(rumble).connect(rumbling);
     const boomFilter = ctx.createBiquadFilter();
     boomFilter.type = 'bandpass';
     boomFilter.frequency.value = 180;
     boomFilter.Q.value = 1.4;
     const boom = ctx.createGain();
-    boom.gain.value = 1.4;
-    const arches = ctx.createOscillator();
-    arches.frequency.value = 0.9;
-    this.arches = arches;
-    const archDepth = ctx.createGain();
-    archDepth.gain.value = 0.5;
-    arches.connect(archDepth).connect(boom.gain);
-    arches.start();
+    boom.gain.value = 0.45;
     this.loop(boomFilter);
-    boomFilter.connect(boom).connect(this.trainGain);
-    const rollFilter = ctx.createBiquadFilter();
-    rollFilter.type = 'bandpass';
-    rollFilter.frequency.value = 420;
-    rollFilter.Q.value = 0.8;
-    const wheels = ctx.createGain();
-    wheels.gain.value = 0.5;
-    this.loop(rollFilter);
-    rollFilter.connect(wheels).connect(this.trainGain);
+    boomFilter.connect(boom).connect(rumbling);
     this.locoPan = ctx.createStereoPanner();
     this.locoPan.connect(this.master);
     this.locoOut = ctx.createGain();
@@ -140,25 +174,51 @@ export class Audio {
     this.loop(steamFilter);
     steamFilter.connect(this.steamGain).connect(this.locoOut);
     this.nextPump = 0;
-    // Bremsen: ein hohes Kreischen der Klötze auf den Rädern in den letzten Metern.
+    // Bremsen: Die Klötze kreischen auf den Rädern in den letzten Metern. Kein reiner Ton, der
+    // klänge nach Pfeife: Jedes Rad singt in seiner eigenen Höhe, rau wie eine Geigensaite, und
+    // setzt im Wechsel von Haften und Rutschen immer wieder aus (flick). Die Höhe wandert ein
+    // wenig und springt dann und wann auf einen Nachbarton (update, nextHop). Darunter schaben
+    // die Klötze. Steht der Zug, knarzt es noch einmal (brakeGroan).
     this.squealGain = ctx.createGain();
     this.squealGain.gain.value = 0;
     this.squealGain.connect(this.trainPan);
-    const wobble = ctx.createOscillator();
-    wobble.frequency.value = 6.5;
-    const wobbleDepth = ctx.createGain();
-    wobbleDepth.gain.value = 35;
-    wobble.connect(wobbleDepth);
-    for (const [freq, gain] of [[3150, 1], [4720, 0.35]]) {
+    this.squealVoices = [];
+    for (const [base, share] of [[2380, 0.8], [3150, 1], [3610, 0.6], [4470, 0.45]]) {
       const osc = ctx.createOscillator();
-      osc.frequency.value = freq;
-      wobbleDepth.connect(osc.frequency);
+      osc.type = 'triangle';
+      osc.frequency.value = base;
+      const shake = ctx.createBufferSource();
+      shake.buffer = this.noise;
+      shake.loop = true;
+      const flickFilter = ctx.createBiquadFilter();
+      flickFilter.type = 'lowpass';
+      flickFilter.frequency.value = 14 + Math.random() * 10;
+      const flickDepth = ctx.createGain();
+      flickDepth.gain.value = 30;
+      const flick = ctx.createGain();
+      flick.gain.value = 0.15;
+      shake.connect(flickFilter).connect(flickDepth).connect(flick.gain);
+      const driftFilter = ctx.createBiquadFilter();
+      driftFilter.type = 'lowpass';
+      driftFilter.frequency.value = 1.5;
+      const driftDepth = ctx.createGain();
+      driftDepth.gain.value = 6000;
+      shake.connect(driftFilter).connect(driftDepth).connect(osc.frequency);
+      shake.start(0, Math.random() * 2.5);
       const g = ctx.createGain();
-      g.gain.value = gain;
-      osc.connect(g).connect(this.squealGain);
+      g.gain.value = share;
+      osc.connect(flick).connect(g).connect(this.squealGain);
       osc.start();
+      this.squealVoices.push({ osc, base });
     }
-    wobble.start();
+    const scrapeFilter = ctx.createBiquadFilter();
+    scrapeFilter.type = 'bandpass';
+    scrapeFilter.frequency.value = 2600;
+    scrapeFilter.Q.value = 1.2;
+    const scrape = ctx.createGain();
+    scrape.gain.value = 0.5;
+    this.loop(scrapeFilter);
+    scrapeFilter.connect(scrape).connect(this.squealGain);
 
     // Wasser an der Quaimauer: gedämpftes Rauschen, dessen Pegel langsam schwillt, dazu einzelne
     // Schwapper (update). Alles läuft über waterOut, dessen Pegel die Nähe zum Quai setzt.
@@ -797,22 +857,42 @@ export class Audio {
     const roll = outdoors && train ? train.roll.vol : 0;
     const loco = outdoors && train ? train.loco.vol : 0;
     const speed = train ? train.speed : 0;
-    this.trainGain.gain.setTargetAtTime(roll * 0.32 * Math.min(1, speed * 1.3), now, 0.3);
+    this.trainGain.gain.setTargetAtTime(roll * 0.66 * Math.min(1, speed * 1.3), now, 0.3);
     this.locoOut.gain.setTargetAtTime(loco * 1.5, now, 0.2);
-    this.arches.frequency.setTargetAtTime(0.1 + 0.8 * speed, now, 0.5);
+    this.wheelTurn.frequency.setTargetAtTime(0.5 + 3.7 * speed, now, 0.5);
+    this.grit.playbackRate.setTargetAtTime(0.3 + 0.7 * speed, now, 0.5);
     const standing = train && train.phase === 'stop';
     this.steamGain.gain.setTargetAtTime(standing ? 0.025 : train && !train.drive ? 0.01 : 0, now, 0.8);
     const braking = train && train.phase === 'in' && speed > 0 && speed < 0.4;
-    this.squealGain.gain.setTargetAtTime(braking ? roll * 0.012 * (1 - speed / 0.4) : 0, now, 0.15);
+    this.squealGain.gain.setTargetAtTime(braking ? roll * 0.016 * (1 - speed / 0.4) : 0, now, 0.15);
+    // Ein Rad springt auf einen Nachbarton und gleitet nach einer Weile zurück.
+    this.nextHop -= dt;
+    if (braking && this.nextHop < 0) {
+      const voice = this.squealVoices[Math.floor(Math.random() * this.squealVoices.length)];
+      const step = [1, 1.07, 0.93, 1.13, 0.88][Math.floor(Math.random() * 5)];
+      voice.osc.frequency.setTargetAtTime(voice.base * step, now, 0.012);
+      this.nextHop = 0.15 + Math.random() * 0.7;
+    }
+    // Kommt der Zug zum Stehen, knarzen die Klötze ein letztes Mal.
+    const phase = train ? train.phase : null;
+    if (phase === 'stop' && this.trainPhase === 'in' && roll > 0.02) this.brakeGroan(roll);
+    this.trainPhase = phase;
     if (train) {
       this.trainPan.pan.setTargetAtTime(train.roll.pan * 0.6, now, 0.2);
       this.locoPan.pan.setTargetAtTime(train.loco.pan * 0.8, now, 0.1);
     }
-    // Schienenstöße im Takt der Fahrt: je langsamer, desto seltener.
+    // Schienenstöße im Takt der Fahrt: je langsamer, desto seltener. Zwölf Meter Schiene bei
+    // 13 m/s, also knapp eine Sekunde von Stoß zu Stoß.
     this.nextClack -= dt;
     if (this.nextClack < 0) {
-      if (roll > 0.02 && speed > 0.08) this.clack(roll * 1.6 * Math.min(1, speed * 1.5));
-      this.nextClack = (0.52 + Math.random() * 0.08) / Math.max(speed, 0.08);
+      if (roll > 0.02 && speed > 0.08) this.clack(roll * 5.0 * Math.min(1, speed * 1.5), speed);
+      this.nextClack = (0.9 + Math.random() * 0.08) / Math.max(speed, 0.08);
+    }
+    // Dazwischen klirrt und rasselt es: Kupplungen, Puffer, lose Bleche der Wagen.
+    this.nextClank -= dt;
+    if (this.nextClank < 0) {
+      if (roll > 0.02 && speed > 0.1) this.clank(roll * Math.min(1, speed * 1.5));
+      this.nextClank = (0.2 + Math.random() * 1.1) / Math.max(speed, 0.2);
     }
     // Vier Dampfstöße je Radumdrehung, nicht ganz gleichmäßig: der Dampf strömt mal etwas
     // länger, mal kürzer aus den Zylindern. Beim Anfahren langsam und schwer.
@@ -1042,17 +1122,76 @@ export class Audio {
   }
 
   // Die Bremsen lassen los: ein langes, abschwellendes Zischen.
+  // Die letzten Zentimeter vor dem Halt: Die Klötze haften und rutschen nur noch ein paarmal,
+  // ein tiefes, stockendes Knarzen, das langsamer und tiefer wird, dann ein dumpfer Ruck.
+  brakeGroan(vol) {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(260, t);
+    osc.frequency.exponentialRampToValueAtTime(140, t + 0.6);
+    const f = ctx.createBiquadFilter();
+    f.type = 'bandpass';
+    f.frequency.value = 900;
+    f.Q.value = 1.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    let at = t;
+    for (let i = 0; i < 6; i++) {
+      const k = 0.05 * vol * (1 - i * 0.12) * (0.7 + Math.random() * 0.3);
+      g.gain.setTargetAtTime(k, at, 0.006);
+      g.gain.setTargetAtTime(0, at + 0.035 + i * 0.008, 0.012);
+      at += 0.07 + i * 0.022;
+    }
+    osc.connect(f).connect(g).connect(this.trainPan);
+    osc.start(t);
+    osc.stop(at + 0.2);
+    this.burst({ freq: 80, q: 1, dur: 0.3, gain: 0.9 * vol, when: at - t, out: this.trainPan });
+  }
+
   brakeRelease(vol, pan) {
     const out = this.panned(pan * 0.7, 3);
     this.burst({ freq: 3400, q: 0.5, dur: 1.8, gain: 0.12 * vol, attack: 0.04, out });
     this.burst({ freq: 900, q: 0.7, dur: 1.2, gain: 0.06 * vol, attack: 0.03, out });
   }
 
-  // Ein Drehgestell rollt über einen Schienenstoß: „ta-dam“, hell vom Eisen, dumpf vom Viadukt.
-  clack(vol) {
-    for (const when of [0, 0.11 + Math.random() * 0.02]) {
-      this.burst({ freq: 700 + Math.random() * 150, q: 1.8, dur: 0.04, gain: 0.22 * vol, when, out: this.trainPan });
-      this.burst({ freq: 110, q: 1.2, dur: 0.16, gain: 0.8 * vol, when, out: this.trainPan });
+  // Zwei Achsen rollen über einen Schienenstoß, die letzte eines Wagens und die erste des
+  // nächsten, gut zweieinhalb Meter auseinander: „da-damm“ im Takt der Fahrt (speed 0..1, voll
+  // sind 13 m/s). Von der Straße unter dem Viadukt hört man vor allem den schweren, dumpfen
+  // Stoß ins Mauerwerk, darüber den kurzen Schlag des Rades und kaum etwas Helles. Jeder Stoß
+  // ist etwas anders laut, damit es nicht nach Metronom klingt.
+  clack(vol, speed = 1) {
+    const axle = 2.6 / (13 * Math.max(speed, 0.08));
+    [0, axle].forEach((offset, i) => {
+      const when = offset * (0.94 + Math.random() * 0.12);
+      const share = (i === 1 ? 1 : 0.75) * (0.65 + Math.random() * 0.35);
+      const k = vol * share;
+      // Das ganze Rollen schwillt mit dem Schlag an und klingt wieder ab.
+      const t = this.ctx.currentTime + when;
+      this.rumbling.gain.setTargetAtTime(RUMBLE_BASE * (1 + 1.4 * share), t, 0.01);
+      this.rumbling.gain.setTargetAtTime(RUMBLE_BASE, t + 0.05, 0.14);
+      this.burst({ freq: 85 + Math.random() * 25, q: 1, dur: 0.22, gain: 1.1 * k, when, out: this.trainPan });
+      this.burst({ freq: 380 + Math.random() * 120, q: 1.3, dur: 0.07, gain: 0.45 * k, when, out: this.trainPan });
+      this.burst({ freq: 900 + Math.random() * 150, q: 1.5, dur: 0.03, gain: 0.2 * k, when, out: this.trainPan });
+      this.burst({ freq: 1500, q: 0.8, dur: 0.015, gain: 0.06 * k, when, out: this.trainPan });
+      // Rad und Schiene klingen nach dem Schlag kurz nach wie angeschlagenes Eisen.
+      this.burst({ freq: 640 + Math.random() * 60, q: 30, dur: 0.18, gain: 1.6 * k, when, out: this.trainPan });
+      this.burst({ freq: 1720 + Math.random() * 120, q: 35, dur: 0.12, gain: 0.9 * k, when, out: this.trainPan });
+    });
+  }
+
+  // Klirren einer Kupplung oder eines losen Blechs: schmale Eigentöne in unharmonischem
+  // Verhältnis, wie bei angeschlagenem Stahl, kurz und ungleich laut.
+  clank(vol) {
+    const base = 500 + Math.random() * 1300;
+    const hits = Math.random() < 0.4 ? 2 : 1;
+    for (let h = 0; h < hits; h++) {
+      const when = h * (0.04 + Math.random() * 0.08);
+      const k = vol * (0.4 + Math.random() * 0.6) * (h ? 0.6 : 1);
+      [[1, 1], [2.76, 0.6], [5.4, 0.35]].forEach(([ratio, share]) => {
+        this.burst({ freq: base * ratio, q: 40, dur: 0.2 + Math.random() * 0.15, gain: 1.8 * k * share, when, out: this.trainPan });
+      });
     }
   }
 

@@ -27,20 +27,19 @@ export class Audio {
     const data = this.noise.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
 
-    // Wind
+    // Wind: zwischen den Häusern meist fast still, dann und wann eine Böe, die anschwillt,
+    // dabei heller wird und wieder abflaut (geplant in update). windGain ist der Pegel für
+    // drinnen oder draußen, windGust die Böe selbst.
     this.windGain = ctx.createGain();
-    this.windGain.gain.value = 0.09;
-    const windFilter = ctx.createBiquadFilter();
-    windFilter.type = 'lowpass';
-    windFilter.frequency.value = 260;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.07;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 80;
-    lfo.connect(lfoGain).connect(windFilter.frequency);
-    lfo.start();
-    this.loop(windFilter);
-    windFilter.connect(this.windGain).connect(this.master);
+    this.windGain.gain.value = 0.065;
+    this.windFilter = ctx.createBiquadFilter();
+    this.windFilter.type = 'lowpass';
+    this.windFilter.frequency.value = 220;
+    this.windGust = ctx.createGain();
+    this.windGust.gain.value = 0.3;
+    this.nextGust = 4 + Math.random() * 8;
+    this.loop(this.windFilter);
+    this.windFilter.connect(this.windGust).connect(this.windGain).connect(this.master);
 
     // Ferne Stadt: ein tiefes, langsam an- und abschwellendes Grollen hinter den Häusern,
     // Räder und Hufe vieler Straßen, zu einem Rauschen verschwommen.
@@ -145,12 +144,33 @@ export class Audio {
     src.start();
   }
 
+  // Eine Böe: in ein bis drei Sekunden hoch, kurz halten, in drei bis sechs Sekunden wieder
+  // auf das leise Grundrauschen. Je stärker, desto heller.
+  gust(dt, now) {
+    this.nextGust -= dt;
+    if (this.nextGust > 0) return;
+    const peak = 0.5 + Math.random() * 0.6;
+    const rise = 1 + Math.random() * 2;
+    const hold = 0.5 + Math.random() * 2;
+    const fall = 3 + Math.random() * 3;
+    const g = this.windGust.gain;
+    const f = this.windFilter.frequency;
+    g.cancelScheduledValues(now);
+    f.cancelScheduledValues(now);
+    g.setTargetAtTime(peak, now, rise / 3);
+    g.setTargetAtTime(0.2 + Math.random() * 0.15, now + rise + hold, fall / 3);
+    f.setTargetAtTime(230 + peak * 150, now, rise / 3);
+    f.setTargetAtTime(200 + Math.random() * 40, now + rise + hold, fall / 3);
+    // Manchmal folgt eine zweite Böe dicht auf die erste, sonst bleibt es eine Weile ruhig.
+    this.nextGust = Math.random() < 0.25 ? rise + hold + 1 : rise + hold + fall + 6 + Math.random() * 18;
+  }
+
   setEnvironment(env) {
     this.env = env;
     if (!this.ctx) return;
     const outdoors = env === 'street';
     const t = this.ctx.currentTime;
-    this.windGain.gain.setTargetAtTime(outdoors ? 0.09 : 0.012, t, 0.4);
+    this.windGain.gain.setTargetAtTime(outdoors ? 0.065 : 0.025, t, 0.4);
     this.cityGain.gain.setTargetAtTime(outdoors ? 0.03 : 0.006, t, 0.4);
     this.rainGain.gain.setTargetAtTime(outdoors ? 0.004 : 0.0007, t, 0.4);
     this.dropGain.gain.setTargetAtTime(outdoors ? 1 : 0.35, t, 0.4);
@@ -590,6 +610,7 @@ export class Audio {
     this.rain(dt);
     const outdoors = this.env === 'street';
     const now = this.ctx.currentTime;
+    this.gust(dt, now);
     if (sounds?.length) {
       if (outdoors) {
         for (const s of sounds) if (s.vol > 0.005) this[s.type]?.(s.vol, s.pan, s);

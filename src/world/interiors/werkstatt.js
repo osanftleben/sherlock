@@ -21,9 +21,8 @@ export function buildWerkstatt() {
 
   // Werkbank unter den verkitteten Fenstern
   room.woodBag.box(0x6a4628, 1.0, 0.09, 5.6, W - 0.55, 0.92, 0);
-  room.woodBag.box(0x4a2e18, 0.9, 0.86, 0.1, W - 0.55, 0.45, -2.7);
-  room.woodBag.box(0x4a2e18, 0.9, 0.86, 0.1, W - 0.55, 0.45, 2.7);
   room.woodBag.box(0x4a2e18, 0.08, 0.5, 5.4, W - 0.1, 0.65, 0);
+  benchBody(room, W);
   room.solid(W - 0.55, 0, 1.0, 5.6);
   for (const z of [-1.5, 1.5]) {
     room.window('east', z, 2.1, 1.3, 1.6);
@@ -56,6 +55,9 @@ export function buildWerkstatt() {
   policeLantern(room, [W - 0.75, 0.965, 2.05], [-0.6, 0.55, -1.3]);
   room.lamp(-1.2, 2.6, -0.6, { intensity: 3.2, range: 12, hang: false, visible: false, color: 0xffc080 });
   streetGlow(room, [W + 0.4, 2.9, 1.5], [2.2, 0, 0.6]);
+  // Durch das nördliche Fenster fällt das Laternenlicht schräg auf die Werkbank, gerade hell
+  // genug, um Reparaturbuch, Werkzeug und Uhrwerke zu erkennen.
+  streetGlow(room, [W + 0.6, 3.0, -1.7], [W - 0.75, 0.95, -0.7]);
 
   // Tatort: Ohrensessel des Toten auf dem Teppich, Besucherstuhl, Beistelltisch
   rug(room, -0.55, -1.3, 2.4, 1.8, 0x4a1c1a, 0x8a6a3a);
@@ -185,6 +187,25 @@ export function buildWerkstatt() {
 }
 
 // --- Ausstattung der Werkstatt ---------------------------------------------------
+
+// Unterbau der Uhrmacherbank: an beiden Enden ein Kasten mit fünf Schubladen, dazwischen unter
+// der Platte eine Reihe flacher Schubladen für Federn, Steine und Zeiger. Kniefreiheit in der Mitte.
+function benchBody(room, W) {
+  const bx = W - 0.55;
+  const front = bx - 0.45;
+  const brass = 0xb59a55;
+  const drawer = (y, z, h, w) => {
+    room.woodBag.box(0x5a3a22, 0.016, h - 0.02, w - 0.03, front - 0.008, y, z);
+    room.metalBag.add(new THREE.SphereGeometry(0.009, 6, 4).translate(front - 0.02, y, z), brass);
+  };
+  for (const s of [-1, 1]) {
+    const z = s * 2.45;
+    room.woodBag.box(0x4a2e18, 0.9, 0.86, 0.6, bx, 0.43, z);
+    for (let i = 0; i < 5; i++) drawer(0.12 + i * 0.155, z, 0.155, 0.6);
+  }
+  room.woodBag.box(0x4a2e18, 0.9, 0.1, 3.3, bx, 0.82, 0);
+  for (let i = 0; i < 5; i++) drawer(0.82, -1.32 + i * 0.66, 0.1, 0.66);
+}
 
 // Blendlaterne der Polizei auf der Werkbank, ihr Kegel fällt auf den Sessel.
 // Im Kegel tanzt Staub.
@@ -405,6 +426,52 @@ function workbenchTools(room, W, r) {
   spindle.rotateZ(Math.PI / 2);
   spindle.translate(bx - 0.38, top + 0.07, 2.45);
   room.metalBag.add(spindle, steel);
+
+  // Arbeitslampe: Petroleum, kalt. Kessler hat sie gelöscht, bevor er sich in den Sessel setzte.
+  const ax = W - 0.25;
+  const az = -1.08;
+  const turn = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([pr, py]) => new THREE.Vector2(pr, py)), seg);
+  room.metalBag.add(turn([[0, 0], [0.075, 0], [0.075, 0.012], [0.05, 0.03], [0.018, 0.05], [0.013, 0.3], [0.02, 0.31], [0, 0.315]]).translate(ax, top, az), brass);
+  room.glassBag.add(new THREE.SphereGeometry(0.055, 14, 10).scale(1, 0.75, 1).translate(ax, top + 0.35, az), 0xd8c89a);
+  room.metalBag.add(cyl(0.028, 0.032, 0.035, ax, top + 0.405, az, 12), brass);
+  room.glassBag.add(cyl(0.022, 0.024, 0.16, ax, top + 0.5, az, 12), 0xe8e4dc);
+  // Grüner Glasschirm, außen glänzend, innen weiß
+  const SHADE = [[0.13, 0], [0.11, 0.025], [0.07, 0.07], [0.045, 0.1]];
+  room.plainBag.add(turn(SHADE, 24).translate(ax, top + 0.42, az), 0x1e4a2c);
+  room.plainBag.add(turn(SHADE.map(([pr, py]) => [pr * 0.96, py - 0.003]).reverse(), 24).translate(ax, top + 0.42, az), 0xd8d4c4);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    room.metalBag.add(cyl(0.003, 0.003, 0.08, ax + Math.cos(a) * 0.06, top + 0.44, az + Math.sin(a) * 0.06, 4), brass);
+  }
+
+  // Lederunterlage vor dem Drehstuhl, darauf ein offenes Taschenuhrwerk im Werkhalter,
+  // Gehäuse und Deckel daneben.
+  room.plainBag.box(0x2a3a2a, 0.36, 0.004, 0.5, bx - 0.15, top + 0.002, 0.7);
+  const mx = bx - 0.1;
+  const mz = 0.82;
+  room.metalBag.add(new THREE.TorusGeometry(0.03, 0.006, 6, 18).rotateX(Math.PI / 2).translate(mx, top + 0.02, mz), 0x2a2c2e);
+  for (const s of [-1, 1]) room.metalBag.box(0x2a2c2e, 0.01, 0.014, 0.04, mx, top + 0.012, mz + s * 0.042);
+  room.metalBag.add(cyl(0.024, 0.024, 0.006, mx, top + 0.026, mz, 18), brass);
+  for (let k = 0; k < 4; k++) room.metalBag.add(cyl(0.004 + k * 0.002, 0.004 + k * 0.002, 0.003, mx - 0.01 + k * 0.006, top + 0.031, mz - 0.008 + (k % 2) * 0.012, 8), k % 2 ? brass : steel);
+  room.metalBag.add(cyl(0.026, 0.026, 0.012, mx - 0.12, top + 0.012, mz + 0.05, 18), 0xb8b8b4);
+  room.metalBag.add(new THREE.SphereGeometry(0.026, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.25, 1).translate(mx - 0.12, top + 0.018, mz + 0.05), 0xb8b8b4);
+  room.metalBag.add(cyl(0.026, 0.026, 0.004, mx + 0.08, top + 0.006, mz + 0.08, 18), 0xb8b8b4);
+  // Ölgeber
+  room.glassBag.add(cyl(0.012, 0.015, 0.03, mx + 0.07, top + 0.015, mz - 0.1, 10), 0xc8b878);
+  room.metalBag.add(cyl(0.002, 0.002, 0.06, mx + 0.07, top + 0.05, mz - 0.1, 4), steel);
+
+  // Holzkasten mit Taschenuhren, die auf Abholung warten
+  const tx = bx - 0.2;
+  const tz = -2.0;
+  room.woodBag.box(0x3a2010, 0.3, 0.03, 0.22, tx, top + 0.015, tz);
+  for (const [w, d, ox, oz] of [[0.3, 0.012, 0, -0.105], [0.3, 0.012, 0, 0.105], [0.012, 0.22, -0.145, 0], [0.012, 0.22, 0.145, 0]]) room.woodBag.box(0x3a2010, w, 0.045, d, tx + ox, top + 0.03, tz + oz);
+  room.plainBag.box(0x4a1c1a, 0.27, 0.004, 0.19, tx, top + 0.032, tz);
+  for (let i = 0; i < 6; i++) {
+    const wx = tx - 0.09 + (i % 3) * 0.09;
+    const wz = tz - 0.045 + Math.floor(i / 3) * 0.09;
+    room.metalBag.add(cyl(0.03, 0.03, 0.012, wx, top + 0.04, wz, 16), i % 3 === 1 ? 0xb8b8b4 : brass);
+    room.metalBag.add(cyl(0.006, 0.006, 0.01, wx, top + 0.04, wz - 0.034, 6), brass);
+  }
 
   // Werkzeugleiste zwischen den Fenstern
   const wx = W - 0.04;

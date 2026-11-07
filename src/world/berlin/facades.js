@@ -131,10 +131,38 @@ function bayParts(type) {
       wall.box(0xffffff, side, H, D, W - side / 2, H / 2, -D / 2);
       const top = H - dh - 0.8;
       wall.box(0xffffff, ww, top, D, W / 2, dh + 0.8 + top / 2, -D / 2);
-      const door = new THREE.Color(0.14, 0.09, 0.06);
-      wall.box(door, ww / 2 - 0.02, dh, 0.06, W / 2 - ww / 4, dh / 2, -D + 0.05);
-      wall.box(door, ww / 2 - 0.02, dh, 0.06, W / 2 + ww / 4, dh / 2, -D + 0.05);
-      wall.box(wood, ww, 0.1, 0.08, W / 2, dh + 0.04, -D + 0.08);
+      // Haustür: zwei Flügel aus gebeiztem Eichenholz mit Kassetten, Messingknäufen und
+      // Schlüsselschild, davor zwei Stufen aus Sandstein. Das Holz ist hell genug gefärbt, dass es
+      // nach dem Abdunkeln durch die (lineare, etwa ein Viertel helle) Fassadenfarbe noch als Holz
+      // zu lesen ist.
+      const door = new THREE.Color(0.95, 0.6, 0.36);
+      const panel = new THREE.Color(1.15, 0.75, 0.45);
+      const rail = new THREE.Color(0.72, 0.46, 0.27);
+      const brass = new THREE.Color(3.0, 2.3, 1.0);
+      const stepTop = 0.3;
+      wall.box(stone, ww + 0.1, stepTop, D - 0.02, W / 2, stepTop / 2, -D / 2 - 0.01);
+      wall.box(stone, ww + 0.1, 0.03, 0.04, W / 2, stepTop - 0.015, 0.0);
+      wall.box(stone, ww + 0.36, 0.17, 0.26, W / 2, 0.085, 0.13);
+      const leafW = ww / 2 - 0.02;
+      const leafH = dh - stepTop;
+      const face = -D + 0.08;
+      for (const s of [-1, 1]) {
+        const cx = W / 2 + s * ww / 4;
+        wall.box(door, leafW, leafH, 0.06, cx, stepTop + leafH / 2, -D + 0.05);
+        // Untere und obere Kassette, dazwischen der Kämpfer.
+        wall.box(panel, leafW - 0.2, 0.55, 0.025, cx, stepTop + 0.2 + 0.275, face + 0.012);
+        wall.box(panel, leafW - 0.2, leafH - 1.05, 0.025, cx, stepTop + 0.9 + (leafH - 1.05) / 2, face + 0.012);
+        wall.box(rail, leafW, 0.08, 0.03, cx, stepTop + 0.83, face + 0.015);
+        // Knauf mit Rosette an der Schlagleiste, darunter das Schlüsselschild.
+        const kx = W / 2 + s * 0.09;
+        wall.add(new THREE.SphereGeometry(0.028, 10, 8).translate(kx, 1.08, face + 0.05), brass);
+        wall.add(new THREE.CylinderGeometry(0.035, 0.035, 0.01, 12).rotateX(Math.PI / 2).translate(kx, 1.08, face + 0.005), brass);
+        if (s > 0) wall.box(brass, 0.035, 0.1, 0.008, kx, 0.95, face + 0.004);
+      }
+      // Schlagleiste zwischen den Flügeln, Zarge rundum.
+      wall.box(rail, 0.04, leafH, 0.03, W / 2, stepTop + leafH / 2, face + 0.015);
+      for (const s of [-1, 1]) wall.box(rail, 0.06, dh + 0.8, 0.1, W / 2 + s * (ww / 2 - 0.03), (dh + 0.8) / 2, -D + 0.06);
+      wall.box(rail, ww, 0.1, 0.08, W / 2, dh + 0.04, -D + 0.08);
       glass.push(box(ww - 0.1, 0.7, 0.02, W / 2, dh + 0.42, -D + 0.05));
       wall.box(trimC, ww + 0.34, 0.16, 0.2, W / 2, dh + 0.92, 0.1);
       frame(ww, 0, dh + 0.8);
@@ -904,8 +932,12 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         const back = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation((i + 1) * BAY_W, 0, -depth - 0.34).multiply(new THREE.Matrix4().makeRotationY(Math.PI)));
         batcher.place('gate', back, col, false, false);
       } else {
-        batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
+        // Im Hausflur brennt das Gas bis zur Polizeistunde: Das Oberlicht über der Haustür ist
+        // immer hell und wirft etwas Schein auf Stufe und Gehweg.
+        const door = tGround === 'door';
+        batcher.place(tGround, gx, col, lit || door, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
         const y = sidewalk ? 0.13 : 0;
+        if (door) spills.push({ matrix: gx, k: 0.3, y });
         if (lit && kind) spills.push({ matrix: gx, k: 1, y });
         else if (lit && tGround === 'ground' && !ownGlass.includes(i)) spills.push({ matrix: gx, k: 0.45, y });
       }

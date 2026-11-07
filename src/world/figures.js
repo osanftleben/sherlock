@@ -118,6 +118,8 @@ function normalize(look) {
     lantern: look.lantern ?? false,
     umbrella: look.umbrella ?? null,
     glass: look.glass ?? false,
+    punch: look.punch ?? false,
+    habit: look.habit ?? null,
     sabre: look.sabre ?? false,
     chain: look.chain ?? false,
     piping: look.piping ?? null,
@@ -475,7 +477,8 @@ function buildArm(L, w, s) {
   let rest = -0.15;
   let gesture = true;
   if (s > 0 && L.cane) {
-    F.add(cyl(0.011, 0.011, 0.86, 0, -0.71, 0.05, 6), 0x2a1a10);
+    // Etwas länger als bis zum Boden: Neigt sich der Arm beim Aufstützen, hebt die Spitze nicht ab.
+    F.add(cyl(0.011, 0.011, 0.92, 0, -0.74, 0.05, 6), 0x2a1a10);
     F.add(ball(0.022, 0, -0.27, 0.05, 1, 1, 1, 8, 6), L.cane === 'silver' ? STEEL : GOLD);
     gesture = false;
   }
@@ -489,6 +492,21 @@ function buildArm(L, w, s) {
     }
     F.add(glassGeo, 0x9a6a20);
     F.add(foam, 0xe8e2cc);
+    gesture = false;
+  }
+  if (s > 0 && L.punch && !L.cane && !L.glass) {
+    // Knipszange des Schaffners: zwei Griffe in der Faust, darüber das Maul mit dem Lochstempel,
+    // aufrecht gehalten wie das Glas.
+    rest = -1.0;
+    const parts = [];
+    for (const k of [-1, 1]) parts.push(box(0.009, 0.12, 0.007, k * 0.008, -0.02, 0).rotateZ(k * 0.1));
+    parts.push(box(0.026, 0.03, 0.022, 0, 0.055, 0.004));
+    parts.push(box(0.012, 0.014, 0.034, 0, 0.074, 0.02));
+    for (const g of parts) {
+      g.rotateX(-rest);
+      g.translate(0, -0.31, 0.03);
+      F.add(g, STEEL);
+    }
     gesture = false;
   }
   fore.add(F.mesh());
@@ -576,8 +594,9 @@ function buildPipe() {
 // neck (tie, cravat, scarf, none), tie, collar, skin, hair, hairStyle (short, parted,
 // receding, bald, bun), beard (full, mutton, goatee, stubble), moustache (kaiser, walrus,
 // brush), eyewear (monocle, pincenez, spectacles), hat (top, bowler, cap, peaked,
-// pickelhaube, bonnet, bandage), hatColor, apron, shawl, cape, cane, lantern, umbrella (Farbe), pipe, glass, sabre,
-// chain, piping, buttons, build (slim, normal, stout), height, pose (stand, sit).
+// pickelhaube, bonnet, bandage), hatColor, apron, shawl, cape, cane, lantern, umbrella (Farbe), pipe, glass, punch, sabre,
+// chain, piping, buttons, build (slim, normal, stout), height, pose (stand, sit),
+// habit (tidy, lean, punch: kleine Eigenheit im Stand, siehe idleFigure).
 // Ältere Angaben wie skirt: true oder beard: true werden weiter verstanden.
 export function makeFigure(look = {}) {
   const L = normalize(look);
@@ -636,7 +655,9 @@ export function makeFigure(look = {}) {
     shinR: legR?.shin ?? null,
     female: L.female,
     sitting: L.pose === 'sit',
+    habit: L.habit,
     talkUntil: 0,
+    attending: false,
   };
   return root;
 }
@@ -650,41 +671,132 @@ const approach = (obj, key, target, k) => {
   obj[key] += (target - obj[key]) * k;
 };
 
+// Pseudozufall je Zeitfenster: wann jemand das Standbein wechselt, wegsieht oder etwas tut.
+const hash = (n) => {
+  const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+const ease = (x) => THREE.MathUtils.smoothstep(x, 0, 1);
+// 0 → 1 → 0 über ein Fenster der Länge len mit weichen Rampen.
+const pulse = (t, len, ramp) => Math.max(0, Math.min(ease(t / ramp), ease((len - t) / ramp)));
+const wrap = (a) => a - Math.round(a / (Math.PI * 2)) * Math.PI * 2;
+const clamp = THREE.MathUtils.clamp;
+const lerp = THREE.MathUtils.lerp;
+
 // Atmen, Gewicht verlagern, blinzeln und zum Spieler hinsehen.
-// Die Kopfdrehung bleibt unter 60 Grad, sonst wirkt sie unheimlich.
+// Wer Holmes vor sich bemerkt, dreht erst den Kopf und dann den Oberkörper mit; im Gespräch
+// bleibt der Blick bei ihm, sonst sieht man zwischendurch auch einmal weg. Der Kopf allein
+// dreht nie mehr als gut 50 Grad, das wirkt sonst unheimlich.
 export function idleFigure(figure, time, lookAt) {
   const f = figure.userData.figure;
   const phase = figure.id * 0.73;
-  const breath = Math.sin(time * 1.4 + phase);
-  f.torso.scale.set(1 + breath * 0.008, 1, 1 + breath * 0.012);
-  f.body.position.y = breath * 0.003;
-  f.body.rotation.z = Math.sin(time * 0.31 + phase) * 0.012;
-  f.body.position.x = Math.sin(time * 0.31 + phase) * 0.01;
+  const seed = figure.id * 17.3;
+  const talking = f.talkUntil > time;
+
+  // Einatmen etwas schneller als Ausatmen; Brust weitet sich, die Schultern heben sich.
+  const bx = time * 1.35 + phase;
+  const breath = Math.sin(bx + 0.35 * Math.sin(bx));
+  f.torso.scale.set(1 + breath * 0.012, 1 + breath * 0.004, 1 + breath * 0.022);
+  f.armL.position.y = f.armR.position.y = 1.43 + breath * 0.004;
+  f.head.position.y = 1.555 + breath * 0.0025;
+
+  // Standbein: Alle paar Sekunden wandert die Hüfte über das andere Bein, das freie Knie
+  // gibt nach. Wer sich auf einen Stock stützt, bleibt auf der Stockseite.
+  let side = 0;
+  if (!f.sitting) {
+    const span = 7 + hash(seed) * 6;
+    const k = Math.floor((time + phase * 4) / span);
+    const local = (time + phase * 4) / span - k;
+    const pick = (n) => (f.habit === 'lean' ? 0.75 + hash(seed + n) * 0.25 : hash(seed + n) < 0.5 ? -1 : 1);
+    side = lerp(pick(k - 1), pick(k), ease((local * span) / 1.6));
+  }
+  approach(f.body.rotation, 'z', -side * 0.022, 0.1);
+  const free = (s) => Math.max(0, -s * side);
+  const legs = [[f.legL, f.shinL, -1], [f.legR, f.shinR, 1]];
+  for (const [thigh, shin, s] of legs) {
+    if (!thigh || f.sitting) continue;
+    approach(thigh.rotation, 'x', -0.07 * free(s), 0.12);
+    approach(shin.rotation, 'x', 0.16 * free(s), 0.12);
+  }
 
   const cycle = (time + phase * 3.1) % 3.7;
   f.eyes.scale.y = cycle < 0.12 ? 0.12 : 1;
 
-  const talking = f.talkUntil > time;
-  let yaw = Math.sin(time * 0.23 + phase) * 0.25;
+  // Blick: ohne Anlass wandert er langsam, sonst geht er zum Ziel.
+  let turn = Math.sin(time * 0.23 + phase) * 0.25;
+  let pitch = Math.sin(time * 0.5 + phase) * 0.02;
   if (lookAt) {
-    const dx = lookAt.x - figure.position.x;
-    const dz = lookAt.z - figure.position.z;
-    if (dx * dx + dz * dz < 30) {
-      yaw = Math.atan2(dx, dz) - figure.rotation.y;
-      while (yaw > Math.PI) yaw -= Math.PI * 2;
-      while (yaw < -Math.PI) yaw += Math.PI * 2;
-      yaw = THREE.MathUtils.clamp(yaw, -1, 1);
+    const e = f.head.matrixWorld.elements;
+    const dx = lookAt.x - e[12];
+    const dz = lookAt.z - e[14];
+    const dist2 = dx * dx + dz * dz;
+    const rel = wrap(Math.atan2(dx, dz) - figure.rotation.y);
+    // Bemerkt wird nur, wer im Blickfeld auftaucht; wen man schon im Auge hat, verfolgt man weiter.
+    const near = dist2 < (f.attending ? 42 : 20);
+    const seen = Math.abs(rel) < (f.attending ? 2.4 : 1.7);
+    f.attending = talking || (near && seen);
+    if (f.attending) {
+      turn = clamp(rel, -2.1, 2.1);
+      const eyeY = lookAt.y < 0.8 ? lookAt.y + 1.5 : lookAt.y;
+      pitch = clamp(-Math.atan2(eyeY - e[13], Math.sqrt(dist2)), -0.35, 0.3);
+      // Wer nicht spricht, sieht ab und zu kurz zur Seite.
+      const k = Math.floor((time + phase * 5) / 8);
+      const away = talking ? 0 : hash(seed + k * 3.1) < 0.4 ? pulse(((time + phase * 5) / 8 - k) * 8, 1.8, 0.4) : 0;
+      turn = lerp(turn, turn + (hash(seed + k) < 0.5 ? -0.7 : 0.7), away);
+      pitch = lerp(pitch, 0.12, away);
     }
+  } else {
+    f.attending = false;
   }
-  approach(f.head.rotation, 'y', yaw, 0.06);
-  approach(f.head.rotation, 'x', talking ? Math.sin(time * 6.5) * 0.04 - 0.02 : Math.sin(time * 0.5 + phase) * 0.02, 0.15);
-  approach(f.head.rotation, 'z', talking ? Math.sin(time * 1.7) * 0.03 : 0, 0.05);
+
+  // Eigenheit, solange niemand mit der Figur spricht.
+  const habit = f.habit;
+  let busy = 0;
+  if (habit && !talking) {
+    const span = habit === 'tidy' ? 11 : 9;
+    const k = Math.floor((time + phase) / span);
+    const local = time + phase - k * span;
+    busy = habit === 'punch' ? 1 : pulse(local, habit === 'tidy' ? 5.5 : 1.1, habit === 'tidy' ? 0.9 : 0.35);
+    if (habit === 'lean' && hash(seed + k) < 0.3) busy = 0;
+  }
+  // Seidel räumt am Tresen und sieht dabei auf seine Hände, solange Holmes nicht vor ihm steht.
+  if (habit === 'tidy' && !f.attending) pitch = lerp(pitch, 0.4, busy);
+
+  const bodyTurn = clamp(turn * 0.45, f.sitting ? -0.12 : -0.6, f.sitting ? 0.12 : 0.6);
+  approach(f.body.rotation, 'y', bodyTurn, 0.05);
+  approach(f.body.rotation, 'x', habit === 'tidy' ? busy * 0.07 : 0, 0.06);
+  approach(f.head.rotation, 'y', clamp(turn - f.body.rotation.y, -0.95, 0.95), 0.08);
+  approach(f.head.rotation, 'x', talking ? pitch + Math.sin(time * 6.5) * 0.04 - 0.02 : pitch, 0.1);
+  approach(f.head.rotation, 'z', (talking ? Math.sin(time * 1.7) * 0.03 : 0) + side * 0.028, 0.05);
 
   const sway = (t) => Math.sin(time * t + phase) * 0.025;
   let armRx = f.umbrella ? 0.1 : sway(1.1);
   let foreR = f.restR;
   let armLx = sway(0.9);
   let foreL = f.restL;
+  let armRz = 0.1;
+  let armLz = -0.1;
+  if (habit === 'tidy') {
+    // Beide Hände auf dem Tresen, sie schieben und rücken etwas zurecht.
+    armRx = lerp(armRx, -0.6 + Math.sin(time * 2.1) * 0.06, busy);
+    armLx = lerp(armLx, -0.6 + Math.sin(time * 1.6 + 1) * 0.05, busy);
+    foreR = lerp(foreR, -0.75 + Math.sin(time * 3.1) * 0.1, busy);
+    foreL = lerp(foreL, -0.75 + Math.cos(time * 2.3) * 0.07, busy);
+    armRz = lerp(armRz, -0.05 + Math.sin(time * 1.3) * 0.06, busy);
+    armLz = lerp(armLz, 0.05, busy);
+  } else if (habit === 'lean') {
+    // Die Hand liegt schwer auf dem Knauf, der Stock steht etwas seitlich vor dem Fuß;
+    // zwischendurch hebt er ihn kurz an und setzt ihn neu auf.
+    armRx = -0.06 - busy * 0.12;
+    armRz = 0.16;
+    foreR = f.restR - busy * 0.22;
+  } else if (habit === 'punch') {
+    // Die Knipszange wippt in der Hand, ab und zu klappt sie zweimal ins Leere.
+    const k = Math.floor((time + phase) / 6.5);
+    const local = time + phase - k * 6.5;
+    const click = local < 0.5 && hash(seed + k) < 0.6 ? Math.sin(local * 25) * 0.09 : 0;
+    foreR = lerp(f.restR, f.restR + Math.sin(time * 2.4 + phase) * 0.07 + click, busy);
+  }
   if (talking && f.gesture === 'R') {
     armRx = -0.18 - Math.sin(time * 2.3) * 0.08;
     foreR = f.restR - 0.75 - Math.sin(time * 2.3 + 0.6) * 0.25;
@@ -694,14 +806,10 @@ export function idleFigure(figure, time, lookAt) {
   }
   approach(f.armR.rotation, 'x', armRx, 0.08);
   approach(f.armL.rotation, 'x', armLx, 0.08);
+  approach(f.armR.rotation, 'z', armRz, 0.08);
+  approach(f.armL.rotation, 'z', armLz, 0.08);
   approach(f.foreR.rotation, 'x', foreR, 0.08);
   approach(f.foreL.rotation, 'x', foreL, 0.08);
-  // Wer eben noch ging, kommt in den Stand.
-  if (!f.sitting) {
-    for (const leg of [f.legL, f.legR]) if (leg) approach(leg.rotation, 'x', 0, 0.12);
-    for (const shin of [f.shinL, f.shinR]) if (shin) approach(shin.rotation, 'x', 0, 0.12);
-  }
-  approach(f.body.rotation, 'y', 0, 0.1);
   if (f.umbrella) f.umbrella.rotation.x = UMBRELLA_TILT - (f.armR.rotation.x + f.foreR.rotation.x);
 }
 

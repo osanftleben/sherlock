@@ -434,7 +434,7 @@ export const uhrmacher = {
         entlassen: { text: 'Hab ’ne Taschenuhr vom Kommerzienrat fallen lassen, besoffen. Hat er bezahlt, aus eijener Tasche. Dann hat er jesacht: Otto, wenn du nüchtern bist, kommste wieder. Ick war noch nich nüchtern.', opts: [{ t: 'Das tut mir leid.', go: 'hub' }] },
         arbeit: { give: ['c_ritz'], text: 'Akkurat bis zum Jehtnichtmehr. Buch, Zettel, Haken. Und in jedes Jehäuse hat er innen die Nummer jeritzt, und dit Jahr dazu, janz kleen, siebzehn Strich zweenneunzig, sowat. Sieht keen Kunde. Hat er von seinem Lehrmeister. Kriegste nich weg, ohne dass et jeder Uhrmacher merkt.', opts: [{ t: 'Das ist eine sehr nützliche Gewohnheit.', go: 'hub' }] },
         repetier: { text: 'Feinet Stück! Drücken Se uffn Bügel, schlägt se Ihnen die Stunde und die Viertel vor. Hell, wie ’n Glöckchen. Damit Se im Dunkeln wissen, wie spät et is, ohne Licht zu machen. Kostet mehr, als ick im Leben verdient hab. Und im Deckel is Platz. Da is schon mancher Liebesbrief rumjefahren.', opts: [{ t: 'Platz im Deckel. Danke.', go: 'hub' }] },
-        feind: { text: 'Feinde? Der Rathen hat rumjebrüllt, der schuldet ihm für drei Uhren und will ’ne vierte versetzen. Aber der brüllt immer. Dit janze Bein kaputt und dit janze Jeld weg.', opts: [{ t: 'Verstehe.', go: 'hub' }] },
+        feind: { text: 'Feinde? Der Rathen hat rumjebrüllt, der schuldet ihm für drei Reparaturen, und seine goldne Uhr hat der Meester als Pfand behalten, bis er zahlt. Aber der brüllt immer. Dit janze Bein kaputt und dit janze Jeld weg.', opts: [{ t: 'Verstehe.', go: 'hub' }] },
       },
     },
 
@@ -515,7 +515,7 @@ export const uhrmacher = {
         text: 'Wer hat Emil Kessler getötet?',
         options: [
           { t: 'Otto Brandt, der entlassene Geselle', wrong: 'Der Mann saß von sieben bis Mitternacht vor Zeugen in der Schrippe, und Kessler lebte um acht noch. Sehen Sie doch nach, wann die Uhren aufgezogen wurden.' },
-          { t: 'Egon von Rathen, der verschuldete Leutnant', wrong: 'Ohne Stock fällt er um, sagt die Wirtin. Und der Nachtwächter sah keinen Stock. Außerdem erbt die Nichte seine Schulden: Was hätte er davon?' },
+          { t: 'Egon von Rathen, der verschuldete Leutnant', wrong: 'Ohne Stock fällt er um, sagt die Wirtin. Und der Nachtwächter sah keinen Stock. Außerdem erbt die Nichte, was er Kessler schuldet, samt der Uhr im Pfand: Was hätte er davon?' },
           { t: 'Reinhold Wendt, der Prokurist', correct: true },
           { t: 'Apotheker Seidel', wrong: 'Der Mann hat Ihnen sein Rezeptbuch gezeigt, ohne zu zögern. Und wozu sollte ein Apotheker ausgerechnet Chloral aus dem eigenen Buch nehmen?' },
         ],
@@ -535,7 +535,7 @@ export const uhrmacher = {
           { t: 'Aus Rache für die Entlassung', wrong: 'Das passt zu Brandt, und Brandt war es nicht. Lesen Sie das Löschblatt noch einmal.' },
           { t: 'Wegen einer Geldschuld', wrong: 'Der Schuldner bleibt schuldig, auch wenn der Gläubiger tot ist. Lesen Sie das Löschblatt noch einmal.' },
           { t: 'Er fand in der Uhr den Beweis einer Unterschlagung, und am Montag kommt die Revision', correct: true },
-          { t: 'Wegen der Erbschaft', wrong: 'Welcher Erbschaft? Das Mädchen erbt eine Werkstatt und Rathens Schulden. Es muss um etwas gehen, das Kessler wusste, nicht um etwas, das er besaß.' },
+          { t: 'Wegen der Erbschaft', wrong: 'Welcher Erbschaft? Das Mädchen erbt eine Werkstatt und das Geld, das Rathen ihm schuldet. Es muss um etwas gehen, das Kessler wusste, nicht um etwas, das er besaß.' },
         ],
       },
       {

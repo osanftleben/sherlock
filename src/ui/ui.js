@@ -156,12 +156,15 @@ export class UI {
     };
   }
 
-  dialog({ who, obs, text, options, onChoose }) {
+  // obs steht über der Zeile (was Holmes sieht, während die Figur spricht), after darunter
+  // (was er aus dem Gesagten schließt).
+  dialog({ who, obs, text, after, options, onChoose }) {
     this.clear();
     const d = el('div', 'dialog');
     d.append(el('h3', '', who));
     if (obs) d.append(el('p', 'obs', obs));
     d.append(el('p', 'line', text));
+    if (after) d.append(el('p', 'obs after', after));
     const opts = el('div', 'opts');
     options.forEach((o, i) => {
       const b = button('', '', () => onChoose(o));

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
-import { ARCH_FRONT, archFronts, fogPuff, hallWindow, rng, signTexture, softDisc, viaductBrick } from '../textures.js';
+import { ARCH_FRONT, TIMETABLE_SIZE, archFronts, fogPuff, hallWindow, rng, signTexture, softDisc, stationTimetable, viaductBrick } from '../textures.js';
 import { grimy } from './grime.js';
 import { addSign } from './facades.js';
 import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
@@ -427,6 +427,7 @@ function buildEntrance(loc, x, z0) {
   for (const dx of [-0.36, 0.36]) counter.box(0x2a1e14, 0.04, 0.16, 0.16, x + 2.95 + dx, 0.87, z0 - 0.08);
   addMesh(scene, counter.build(), std({ vertexColors: true, roughness: 0.7 }));
   loc.anchor('knipser', x + 1.5, 0, z0 - 0.42, Math.PI - 0.45);
+  timetableBoard(scene, x - 2.95, 1.75, z0);
   loc.anchor('fahrplan', x - 2.95, 1.75, z0 - 0.06);
   loc.addHotspot({
     id: 'fahrplan',
@@ -447,6 +448,28 @@ function buildEntrance(loc, x, z0) {
     label: 'Treppe zum Bahnsteig',
     action: { say: 'Granitstufen, in der Mitte ausgetreten, als wäre die halbe Stadt sie schon hinaufgehastet. Von oben dringen das Zischen der Lokomotiven und die Rufe der Aufsicht herab.' },
   });
+}
+
+// Fahrplan unter Glas in einem Holzrahmen vor der Bogenfront (Wand bei z = z0, Ansicht von -z).
+// Auf der Front selbst stünde er mit knapp 90 Pixeln je Meter nur als Striche; die eigene Textur
+// hat 640. Das Papier leuchtet ein wenig selbst: Die Wandlaterne daneben hängt nur als Schein auf
+// der Mauer, und der Rahmen stünde sonst dunkler da als die Wand um ihn herum.
+function timetableBoard(scene, cx, cy, z0) {
+  const { w, h } = TIMETABLE_SIZE;
+  const frame = new Bag();
+  frame.box(0x2a2016, w + 0.04, h + 0.04, 0.04, cx, cy, z0 - 0.02);
+  const bar = 0.06;
+  for (const s of [-1, 1]) {
+    frame.box(0x3a2a1a, w + 0.04, bar, 0.02, cx, cy + s * (h / 2 - bar / 2 + 0.02), z0 - 0.05);
+    frame.box(0x3a2a1a, bar, h + 0.04, 0.02, cx + s * (w / 2 - bar / 2 + 0.02), cy, z0 - 0.05);
+  }
+  addMesh(scene, frame.build(), std({ vertexColors: true, roughness: 0.6 }));
+  const map = stationTimetable();
+  const paper = new THREE.PlaneGeometry(w - 0.08, h - 0.08).rotateY(Math.PI).translate(cx, cy, z0 - 0.041);
+  addMesh(scene, paper, std({ map, roughness: 0.85, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.2 }));
+  const glass = new THREE.PlaneGeometry(w - 0.08, h - 0.08).rotateY(Math.PI).translate(cx, cy, z0 - 0.05);
+  const pane = addMesh(scene, glass, std({ color: 0x10141a, roughness: 0.05, transparent: true, opacity: 0.14, depthWrite: false }));
+  pane.renderOrder = 1;
 }
 
 function buildTrain() {

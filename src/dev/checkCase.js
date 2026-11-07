@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CASE_LIST } from '../cases/index.js';
+import { PROPS } from '../world/props.js';
 
 // Entwicklerwerkzeug: prüft den geladenen Fall gegen die gebauten Orte.
 // Aufruf im Entwicklungsmodus mit http://localhost:5173/?pruefen
@@ -83,6 +84,11 @@ function checkReferences(c, locations, errors) {
         need(o.req, `Dialog ${did}/${nid}`);
       }
     }
+  }
+  for (const p of c.props || []) {
+    if (!locations[p.location]?.anchors[p.anchor]) errors.push(`Requisit ${p.make}: Anker ${p.location}/${p.anchor} gibt es nicht.`);
+    if (!PROPS[p.make]) errors.push(`Requisit ${p.make} gibt es nicht.`);
+    need(p.when, `Requisit ${p.make}`);
   }
   for (const o of c.objectives) need(o.until, `Ziel „${o.text}“`);
   for (const p of c.people) need(p.when, `Person ${p.name}`);

@@ -51,6 +51,10 @@ export function buildBank() {
   deskSet(room, 0.87);
   loc.anchor('zigarren', 0.8, 0.98, -1.2);
   loc.anchor('kurse', -0.95, 0.9, -0.95);
+  // Mitten auf der grünen Schreibunterlage, eine Armlänge vor Wendt: Dort legt er im Fall 1 seine
+  // Uhr hin. Die XII zeigt zum Besucher, gelesen wird sie von Wendts Seite.
+  loc.anchor('savonnette', 0.05, 0.869, -1.36, Math.PI - 0.4);
+  loc.anchor('wendtsUhr', 0.05, 0.89, -1.36);
 
   // Tresor mit Rad und Messingbeschlägen
   room.metalBag.box(0x1c2024, 1.3, 2.1, 0.9, 3.5, 1.05, -2.9);

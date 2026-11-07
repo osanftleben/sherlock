@@ -101,6 +101,9 @@ export const uhrmacher = {
     { until: ['c_alibi', 'c_rathen', 'c_glocke', 'c_rezept', 'c_aussage'], text: 'Zeugen und Verdächtige befragen: Goldene Schrippe, Apotheke, Bankhaus, Nachtwächter', hint: 'Sie reden noch nicht mit genug Leuten. Die Schrippe in der Sophienstraße, Seidels Apotheke, das Bankhaus am Markt, und nachts läuft an der Ecke Sophienstraße ein Wächter herum.' },
     { until: ['d_mord', 'd_repetier', 'd_luege', 'd_motiv'], text: 'Hinweise im Notizbuch verknüpfen (N)', hint: 'Sie haben genug Fäden. Verknüpfen Sie im Notizbuch je zwei Hinweise miteinander. Etwa: Was sagt uns der Abdruck im Buch über das, was der Wächter gehört hat? Und lesen Sie, was an der Litfaßsäule am Markt klebt. Ganz Berlin redet von Lindner & Sohn.' },
     { until: ['c_uhr17'], text: 'Wendt mit seiner Uhr stellen', hint: 'Wenn Sie recht haben, trägt der Prokurist den Beweis in der Weste. Lassen Sie ihn die Uhr vorführen. Und fragen Sie vorher Brandt, woran man eine Uhr aus Kesslers Werkstatt erkennt.' },
+    // Ohne dieses Ziel ginge es von der Uhr direkt zur Anklage, und „Der Zettel ist fort“ bliebe liegen.
+    // Die Anklage sperrt es nicht; es lenkt nur den Blick zurück aufs Löschblatt.
+    { until: ['d_zettel'], text: 'Den leeren Staubdeckel erklären (N)', hint: 'Ein leerer Staubdeckel und ein Rest Siegellack? Dann lag dort etwas, das niemand finden sollte. Und Kessler schrieb doch von einem Zettel. Legen Sie das zusammen, ehe Sie mir den Täter nennen.' },
     { until: ['f_geloest'], text: 'Dr. Voss die Lösung darlegen', hint: 'Mir scheint, Sie sind so weit. Sagen Sie mir, wer es war.' },
   ],
 
@@ -125,6 +128,12 @@ export const uhrmacher = {
     { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, neck: 'scarf', tie: 0x3a3428, hat: 'cap', beard: 'full', glass: true, build: 'stout', pose: 'sit' }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
     { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: 'walrus', hair: 0x5a5048, glass: true, pose: 'sit' }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
     { id: 'gast3', location: 'destille', anchor: 'gast3', name: 'Kartenspieler', look: { outfit: 'jacket', coat: 0x3a3a2c, vest: 0x5a4a2a, neck: 'tie', tie: 0x2a2a24, hair: 0x6a5a48, hairStyle: 'receding', beard: 'mutton', moustache: 'brush', build: 'stout', pose: 'sit' }, say: '„Der Herr Leutnant spielt nur noch uff Ehrenwort. Ick nehm’ lieber Jroschen, die kann man wenigstens zählen.“ Er mischt weiter, ohne aufzusehen.' },
+  ],
+
+  // Dinge, die erst im Lauf des Falls in einem Ort liegen (world/props.js).
+  props: [
+    // Wendt legt die Uhr im Gespräch auf die Schreibunterlage und rührt sie nicht wieder an.
+    { location: 'bank', anchor: 'savonnette', make: 'savonnette', when: ['f_savonnette'] },
   ],
 
   hotspots: [
@@ -213,6 +222,7 @@ export const uhrmacher = {
     { location: 'bank', anchor: 'buecher', label: 'Hauptbücher', radius: 0.5, action: { say: 'Hauptbuch, Depotbuch, Kontokorrent, frisch gestapelt und mit Papierstreifen gespickt. Für Montag. Niemand räumt so gründlich auf wie jemand, der Besuch erwartet.' } },
     { location: 'bank', anchor: 'kurse', label: 'Kurszettel', radius: 0.25, action: { say: 'Der Kurszettel von gestern, mit Bleistift bearbeitet. Argentinier, Portugiesen, Laurahütte, alle eingekreist, alle fallend. Für einen Bankmann ist das Berufslektüre. Für einen Spieler auch. Am Rand, mehrfach durchgestrichen: „Deckung bis Montag?“' } },
     { location: 'bank', anchor: 'tresor', label: 'Tresor', radius: 0.8, action: { say: 'Ein Panzerschrank von Arnheim, Berliner Wertarbeit. Die Tür ist tadellos. Das Unheil wohnt selten im Schloss, meist bei dem, der den Schlüssel hat.' } },
+    { location: 'bank', anchor: 'wendtsUhr', label: 'Wendts Uhr', radius: 0.12, when: ['f_savonnette'], action: { say: 'Die Savonnette liegt aufgeklappt auf der grünen Schreibunterlage, und die kleine Sekunde läuft. Das Schlagwerk hakt nicht mehr. Kessler hat die Uhr noch gerichtet, ehe er ihretwegen sterben musste.' } },
     { location: 'bank', anchor: 'wanduhr', label: 'Wanduhr', radius: 0.5, range: 4, action: { say: 'Eine schöne Regulatoruhr, genau auf die Minute. Der Prokurist schaut oft hinauf.' } },
 
     // Destille
@@ -325,7 +335,7 @@ export const uhrmacher = {
       nodes: {
         a: {
           give: ['f_krause'],
-          obs: 'Horn am Gürtel, Schlüsselbund groß wie ein Kohlkopf. Graue Stoppeln, aber wache Augen. Dreißig Jahre Nächte, und er hat keine davon verschlafen, was man ihm nur schwer ansieht.',
+          obs: 'Laterne in der einen Hand, Stock in der anderen, und unter dem Umhang klirrt ein Schlüsselbund, dem Klang nach groß wie ein Kohlkopf. Grauer Vollbart, darüber wache Augen. Dreißig Jahre Nächte, und er hat keine davon verschlafen, was man ihm nur schwer ansieht.',
           text: 'N’Abend, der Herr. Keen Schlüssel dabei? Fuffzehn Pfennich, denn schließ ick uff. Oder wolln Se nur quatschen? Quatschen kost’ nüscht, is aber ooch nüscht wert.',
           opts: [{ t: 'Haben Sie am Freitagabend etwas bei Kessler bemerkt?', go: 'freitag' }, { t: 'Ein andermal.', end: true }],
         },
@@ -426,7 +436,7 @@ export const uhrmacher = {
       nodes: {
         a: {
           give: ['f_kluge'],
-          obs: 'Unterarme wie ein Droschkenkutscher, Schürze frisch gewendet. Hier wird nicht angeschrieben, und wenn doch, dann merkt sie es sich bis zum Jüngsten Gericht.',
+          obs: 'Unterarme wie ein Droschkenkutscher, Schürze frisch gewendet. Wer bei ihr in der Kreide steht, steht dort bis zum Jüngsten Gericht.',
           text: 'Na, Männecken? ’ne Molle und ’n Korn? Sie sehn aus, als ob Se’s brauchen könnten. Wat’n Sie für eener? Dit Reden is nich berlinisch.',
           opts: [{ t: 'Sigerson, aus Norwegen. Ich habe Fragen zu Otto Brandt.', go: 'hub' }],
         },
@@ -531,13 +541,13 @@ export const uhrmacher = {
         portier: { text: 'Lemke? Gewiss, um acht geht er. Danach war ich allein hier, mit den Büchern. Ist Fleiß neuerdings verdächtig, Herr Sigerson?', obs: 'Er streicht über die Weste, als wolle er sie glätten. Die Kette ist noch immer straff.', opts: [{ t: 'Fleiß nicht.', go: 'hub' }] },
         stellen: { text: 'Meine Uhr? Ich sagte Ihnen bereits, sie liegt bei Kessler. Ich lasse sie abholen, sobald …', obs: 'Er bricht ab. Die Kette spannt sich über der Weste, und er legt die flache Hand darauf.', opts: [{ t: 'Dann hängt an Ihrer Kette ein auffallend schweres Nichts.', go: 'kette' }] },
         kette: { text: 'Ein Ersatz. Eine einfache Taschenuhr, für die paar Tage. Ich wüsste nicht, was Sie das angeht.', opts: [{ t: 'Lemke hörte sie heute früh in Ihrer Weste schlagen. Krause hörte sie Freitag um zehn, unter der kaputten Laterne.', go: 'schlag' }] },
-        schlag: { text: '…', obs: 'Eine lange Weile sagt er nichts. Dann zieht er die Uhr aus der Tasche und legt sie auf die Schreibunterlage, als wäre sie heiß: eine goldene Savonnette mit Repetierschieber am Rand.', opts: [{ t: '(Den Repetierschieber ziehen)', go: 'repetition' }] },
+        schlag: { give: ['f_savonnette'], text: '…', obs: 'Eine lange Weile sagt er nichts. Dann zieht er die Uhr aus der Tasche und legt sie auf die Schreibunterlage, als wäre sie heiß: eine goldene Savonnette mit Repetierschieber am Rand.', opts: [{ t: '(Den Repetierschieber ziehen)', go: 'repetition' }] },
         repetition: { sound: 'repetition', text: 'Das beweist gar nichts. Repetieruhren verkauft jeder Juwelier Unter den Linden.', obs: 'Neun tiefe Schläge, dann dreimal hell und tief: drei Viertel zehn. Und darüber derselbe feine Ton, den Krause für ein Glöckchen hielt.', opts: [{ t: '(Den Rückdeckel aufklappen)', go: 'deckel' }] },
         deckel: { give: ['c_uhr17'], text: 'Ich … ich habe sie am Freitag abgeholt. Das ist kein Verbrechen.', obs: 'Innen im Rückdeckel, wo kein Kunde hinsieht, eine feine Ritzung: 17/92. Der Staubdeckel darunter ist leer, nur am Rand klebt ein Rest Siegellack.', opts: [{ t: 'Um neun Uhr abends, mit Chloral in der Tasche. Erzählen Sie das morgen Kommissar Lehmann.', go: 'ende' }] },
-        ende: { text: 'Gehen Sie. Bitte, gehen Sie.', obs: 'Er steckt die Uhr nicht wieder ein. Er hält sie in beiden Händen und sieht dem Sekundenzeiger zu. Piefke wird die Nacht über die Hofpforte im Auge behalten; dafür sorge ich auf dem Rückweg.', opts: [{ t: 'Gute Nacht, Herr Prokurist.', end: true }] },
+        ende: { text: 'Gehen Sie. Bitte, gehen Sie.', obs: 'Er steckt die Uhr nicht wieder ein. Sie liegt aufgeklappt vor ihm auf der Schreibunterlage, und er sieht dem Sekundenzeiger zu, als zähle er mit. Piefke wird die Nacht über die Hofpforte im Auge behalten; dafür sorge ich auf dem Rückweg.', opts: [{ t: 'Gute Nacht, Herr Prokurist.', end: true }] },
         danach: { text: 'Ich habe Ihnen nichts mehr zu sagen. Sagen Sie es dem Kommissar.', obs: 'Die Uhr liegt noch immer vor ihm auf der Schreibunterlage. Er hat sie nicht wieder angerührt.', opts: [{ t: 'Eine Frage noch: Ihre Zigarren.', go: 'zigarre2', req: ['!c_havanna'] }, { t: 'Das werde ich.', end: true }] },
         zigarre2: { give: ['c_havanna'], text: 'H. Upmann. Nehmen Sie die ganze Kiste, wenn Sie wollen. Ich werde sie nicht mehr brauchen.', obs: 'Im Aschenbecher liegt ein Stück Asche, lang, weiß und fest.', opts: [{ t: 'Danke, nein.', end: true }] },
-        zug: { text: 'Ich sagte Ihnen ja, dass ich mit der Stadtbahn gefahren bin. Wann genau, weiß ich nicht mehr. Ich hatte meine Uhr ja nicht bei mir.', obs: 'Er sagt es zu schnell. Nach der Uhr hatte ich nicht gefragt.', opts: [{ t: 'Natürlich nicht.', go: 'hub' }] },
+        zug: { text: 'Ich sagte Ihnen ja, dass ich mit der Stadtbahn gefahren bin. Wann genau, weiß ich nicht mehr. Ich hatte meine Uhr ja nicht bei mir.', after: 'Er sagt es zu schnell. Nach der Uhr hatte ich nicht gefragt.', opts: [{ t: 'Natürlich nicht.', go: 'hub' }] },
         schlaf: { text: 'Das sieht man mir an? Die Geschäfte. Dr. Lessing verschreibt mir etwas dagegen, Seidel hat es vorrätig. Ich nehme es selten. Sehr selten. Warum fragen Sie?', opts: [{ t: 'Reine Teilnahme.', go: 'hub' }] },
       },
     },

@@ -15,6 +15,7 @@ import { UI } from './ui/ui.js';
 import { buildBerlin } from './world/berlin/index.js';
 import { buildInteriors } from './world/interiors/index.js';
 import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
+import { makeProp } from './world/props.js';
 import { ShadowSelf } from './world/holmes.js';
 import { sparkle } from './world/textures.js';
 import { CASES, CASE_LIST, FIRST_CASE } from './cases/index.js';
@@ -167,6 +168,23 @@ class Game {
           range: 3.2,
           label: npc.name,
           action: npc.dialog ? { dialog: npc.dialog } : { say: npc.say },
+        }),
+      });
+    }
+    // Requisiten erscheinen, sobald ihre Bedingung erfüllt ist. Beim Aufbau sind sie sichtbar,
+    // damit useCase ihre Shader gleich mit übersetzt und es beim Erscheinen nicht ruckelt.
+    for (const def of c.props || []) {
+      const loc = this.locations[def.location];
+      const a = loc.anchors[def.anchor];
+      const prop = makeProp(def.make);
+      prop.position.copy(a.pos);
+      prop.rotation.y = a.yaw;
+      loc.scene.add(prop);
+      keep(loc, {
+        object: prop,
+        updater: loc.onUpdate((dt, t) => {
+          prop.visible = this.state.check(def.when);
+          if (prop.visible) prop.userData.update?.(dt, t);
         }),
       });
     }
@@ -418,6 +436,7 @@ class Game {
       who: node.who || dlg.who,
       obs: override ? null : node.obs,
       text: override || node.text,
+      after: override ? null : node.after,
       options,
       onChoose: (o) => {
         this.audio.page();

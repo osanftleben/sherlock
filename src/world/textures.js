@@ -975,7 +975,9 @@ export function uraniaCases() {
     title(1, 'Stadtbahn', 'Abfahrt Bahnhof Börse');
     ctx.font = `17px ${U_SERIF}`;
     ctx.textAlign = 'left';
-    const rows = [['9.44', 'Charlottenburg'], ['9.47', 'Schles. Bahnhof'], ['9.52', 'Westend'], ['9.58', 'Stralau-Rummelsb.'], ['10.04', 'Grunewald'], ['10.09', 'Schles. Bahnhof'], ['10.14', 'Charlottenburg'], ['10.21', 'Potsdam']];
+    // Derselbe Takt wie am Aushang im Bahnhof (stationTimetable): nach Westen :17, :37, :57, der
+    // letzte um 10.17; nach Osten :07, :27, :47.
+    const rows = [['9.27', 'Schles. Bahnhof'], ['9.37', 'Charlottenburg'], ['9.47', 'Schles. Bahnhof'], ['9.57', 'Charlottenburg'], ['10.07', 'Schles. Bahnhof'], ['10.17', 'Charlottenb., letzter'], ['10.27', 'Schles. Bahnhof'], ['10.47', 'Schles. Bahnhof']];
     rows.forEach(([time, to], k) => {
       ctx.fillText(time, PW + 22, 96 + k * 32);
       ctx.fillText(to, PW + 82, 96 + k * 32, PW - 96);
@@ -1887,6 +1889,243 @@ export function clockFace(hour = 9, minute = 40, size = 256) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
+}
+
+// Zifferblatt einer Taschenuhr: weißes Email, Minutenkreis, radial gestellte römische Ziffern,
+// kleine Sekunde bei der VI (darum fehlt die VI), gebläute Breguet-Zeiger auf 9.46 Uhr. Den
+// Sekundenzeiger setzt die Uhr selbst darauf (props.js). Außen Gold, damit am Rand kein Saum bleibt.
+export function watchDial() {
+  return cached('watchDial', () => {
+    const size = 512;
+    const c = canvas(size);
+    const ctx = c.getContext('2d');
+    const m = size / 2;
+    ctx.fillStyle = '#b8913e';
+    ctx.fillRect(0, 0, size, size);
+    const enamel = ctx.createRadialGradient(m * 0.8, m * 0.7, 0, m, m, m);
+    enamel.addColorStop(0, '#fbf8f0');
+    enamel.addColorStop(1, '#e9e2d0');
+    ctx.fillStyle = enamel;
+    ctx.beginPath();
+    ctx.arc(m, m, m - 4, 0, Math.PI * 2);
+    ctx.fill();
+    const INK = '#1c1a18';
+    ctx.strokeStyle = INK;
+    ctx.fillStyle = INK;
+    // Minutenkreis: zwei feine Ringe, dazwischen 60 Striche, die Fünfer als Punkte.
+    for (const r of [0.9, 0.82]) {
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(m, m, m * r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    for (let k = 0; k < 60; k++) {
+      const a = (k / 60) * Math.PI * 2;
+      const s = Math.sin(a);
+      const co = -Math.cos(a);
+      if (k % 5 === 0) {
+        ctx.beginPath();
+        ctx.arc(m + s * m * 0.86, m + co * m * 0.86, 5, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(m + s * m * 0.82, m + co * m * 0.82);
+        ctx.lineTo(m + s * m * 0.9, m + co * m * 0.9);
+        ctx.stroke();
+      }
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.round(size * 0.1)}px "EB Garamond", serif`;
+    const numerals = ['XII', 'I', 'II', 'III', 'IIII', 'V', '', 'VII', 'VIII', 'IX', 'X', 'XI'];
+    numerals.forEach((n, i) => {
+      if (!n) return;
+      const a = (i / 12) * Math.PI * 2;
+      ctx.save();
+      ctx.translate(m + Math.sin(a) * m * 0.66, m - Math.cos(a) * m * 0.66);
+      ctx.rotate(a);
+      ctx.fillText(n, 0, 0);
+      ctx.restore();
+    });
+    ctx.font = `italic ${Math.round(size * 0.04)}px "EB Garamond", serif`;
+    ctx.fillText('Glashütte i/S.', m, m - m * 0.36);
+    // Kleine Sekunde: eigener Kreis mit Strichen, Zahlen alle zehn Sekunden.
+    const sy = m + m * 0.5;
+    const sr = m * 0.22;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(m, sy, sr, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let k = 0; k < 60; k += 5) {
+      const a = (k / 60) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(m + Math.sin(a) * sr, sy - Math.cos(a) * sr);
+      ctx.lineTo(m + Math.sin(a) * sr * (k % 15 === 0 ? 0.78 : 0.86), sy - Math.cos(a) * sr * (k % 15 === 0 ? 0.78 : 0.86));
+      ctx.stroke();
+    }
+    // Breguet-Zeiger: schmaler Schaft, offener Apfel kurz vor der Spitze, gebläuter Stahl.
+    const BLUE = '#1c2848';
+    const hand = (angle, len, width, apple) => {
+      ctx.save();
+      ctx.translate(m, m);
+      ctx.rotate(angle);
+      ctx.fillStyle = BLUE;
+      ctx.strokeStyle = BLUE;
+      ctx.beginPath();
+      ctx.moveTo(-width, m * 0.08);
+      ctx.lineTo(width, m * 0.08);
+      ctx.lineTo(width * 0.6, -len * 0.7);
+      ctx.lineTo(-width * 0.6, -len * 0.7);
+      ctx.fill();
+      ctx.lineWidth = width * 0.9;
+      ctx.beginPath();
+      ctx.arc(0, -len * 0.7 - apple, apple, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-width * 0.7, -len * 0.7 - apple * 2);
+      ctx.lineTo(0, -len);
+      ctx.lineTo(width * 0.7, -len * 0.7 - apple * 2);
+      ctx.fill();
+      ctx.restore();
+    };
+    const hour = 9;
+    const minute = 46;
+    hand(((hour % 12) + minute / 60) * (Math.PI / 6), m * 0.5, 5, m * 0.06);
+    hand(minute * (Math.PI / 30), m * 0.78, 4, m * 0.05);
+    ctx.fillStyle = BLUE;
+    ctx.beginPath();
+    ctx.arc(m, m, 9, 0, Math.PI * 2);
+    ctx.fill();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Aushang im Bahnhof Börse, 1,8 × 1,6 m unter Glas: Abfahrten nach Stunden und Minuten, wie in
+// den Fahrplänen der Zeit. Die Nachtzeit (6 Uhr abends bis 5.59 Uhr früh) ist durch
+// unterstrichene Minuten bezeichnet; vierundzwanzig Stunden zählte die Bahn erst ab 1927.
+// Nach Westen :17, :37, :57, der letzte um 10.17 (Fall 1, Zühlke), nach Osten :07, :27, :47;
+// morgens und abends im Berufsverkehr alle zehn Minuten.
+export const TIMETABLE_SIZE = { w: 1.8, h: 1.6 };
+export function stationTimetable() {
+  return cached('stationTimetable', () => {
+    const W = 1152;
+    const H = 1024;
+    const c = canvas(W, H);
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#e4d9bf';
+    ctx.fillRect(0, 0, W, H);
+    // Vergilbt vom Gaslicht, mit Wasserrändern vom feuchten Glas.
+    const r = rng(1017);
+    for (let k = 0; k < 14; k++) {
+      const x = r() * W;
+      const y = r() * H;
+      const rad = 60 + r() * 200;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, `rgba(150,110,50,${0.05 + r() * 0.07})`);
+      g.addColorStop(1, 'rgba(150,110,50,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+    const edge = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, H * 0.8);
+    edge.addColorStop(0, 'rgba(90,60,20,0)');
+    edge.addColorStop(1, 'rgba(90,60,20,0.3)');
+    ctx.fillStyle = edge;
+    ctx.fillRect(0, 0, W, H);
+
+    const INK = '#221c14';
+    const SERIF = '"EB Garamond", serif';
+    const FRAKTUR = '"UnifrakturMaguntia", serif';
+    ctx.fillStyle = INK;
+    ctx.strokeStyle = INK;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = `26px ${SERIF}`;
+    ctx.fillText('Königliche Eisenbahn-Direction zu Berlin', W / 2, 52);
+    ctx.font = `92px ${FRAKTUR}`;
+    ctx.fillText('Berliner Stadtbahn', W / 2, 140);
+    ctx.font = `34px ${SERIF}`;
+    ctx.fillText('Abfahrt der Züge vom Bahnhof Börse', W / 2, 186);
+    ctx.font = `italic 26px ${SERIF}`;
+    ctx.fillText('Winterfahrplan, gültig vom 1. October 1892 ab', W / 2, 222);
+    const rule = (y, w = 3) => ctx.fillRect(40, y, W - 80, w);
+    rule(242);
+    rule(249, 1);
+
+    // Stunden und Minuten je Richtung. Die Minuten stehen auf einem Raster von zehn Minuten.
+    const day = ['07', '17', '27', '37', '47', '57'];
+    const rush = (h, pm) => (!pm && (h === 7 || h === 8)) || (pm && h === 6);
+    const west = (h, pm) => (!pm && h === 5 ? ['37', '57'] : rush(h, pm) ? day : pm && h === 10 ? ['17'] : ['17', '37', '57']);
+    const east = (h, pm) => (!pm && h === 5 ? ['27', '47'] : rush(h, pm) ? ['02', '12', '22', '32', '42', '52'] : ['07', '27', '47']);
+    const hours = [];
+    for (let h = 5; h <= 11; h++) hours.push({ h, pm: false, tag: h === 5 ? 'Vm.' : '' });
+    hours.push({ h: 12, pm: true, tag: 'Mitt.' });
+    for (let h = 1; h <= 10; h++) hours.push({ h, pm: true, tag: h === 1 ? 'Nm.' : '' });
+    const night = ({ h, pm }) => (!pm && h < 6) || (pm && h >= 6 && h !== 12);
+    const top = 330;
+    const rowH = 31;
+    const columns = [
+      { x0: 50, title: 'Richtung Charlottenburg', via: 'über Friedrichstraße, Thiergarten, Zoolog. Garten', mins: west },
+      { x0: W / 2 + 26, title: 'Richtung Schlesischer Bahnhof', via: 'über Alexanderplatz, Jannowitzbrücke', mins: east },
+    ];
+    for (const col of columns) {
+      const cw = W / 2 - 76;
+      const mid = col.x0 + cw / 2;
+      ctx.textAlign = 'center';
+      ctx.font = `40px ${FRAKTUR}`;
+      ctx.fillText(col.title, mid, 284, cw);
+      ctx.font = `italic 21px ${SERIF}`;
+      ctx.fillText(col.via, mid, 310, cw);
+      ctx.font = `20px ${SERIF}`;
+      ctx.fillText('Uhr', col.x0 + 78, top + 2);
+      ctx.fillText('Minuten', col.x0 + 110 + 3 * 62, top + 2);
+      ctx.fillRect(col.x0, top + 10, cw, 1.5);
+      hours.forEach((row, k) => {
+        const y = top + 10 + (k + 1) * rowH;
+        const base = y - 8;
+        ctx.textAlign = 'left';
+        ctx.font = `italic 19px ${SERIF}`;
+        if (row.tag) ctx.fillText(row.tag, col.x0 + 2, base);
+        ctx.textAlign = 'right';
+        ctx.font = `600 26px ${SERIF}`;
+        ctx.fillText(String(row.h), col.x0 + 96, base);
+        ctx.textAlign = 'center';
+        ctx.font = `26px ${SERIF}`;
+        for (const mm of col.mins(row.h, row.pm)) {
+          const slot = Math.floor(Number(mm) / 10);
+          const x = col.x0 + 140 + slot * 62;
+          ctx.fillText(mm, x, base);
+          if (night(row)) ctx.fillRect(x - 13, base + 4, 26, 2);
+        }
+        ctx.fillStyle = 'rgba(34,28,20,0.35)';
+        ctx.fillRect(col.x0, y, cw, 1);
+        ctx.fillStyle = INK;
+      });
+      ctx.fillRect(col.x0 + 108, top + 10, 1.5, hours.length * rowH);
+    }
+    // Hinter dem letzten Zug nach Westen ein Vermerk, wie ihn Zühlke zitiert.
+    {
+      const k = hours.findIndex((row) => row.pm && row.h === 10);
+      const base = top + 10 + (k + 1) * rowH - 8;
+      ctx.textAlign = 'left';
+      ctx.font = `italic 22px ${SERIF}`;
+      ctx.fillText('letzter Zug', columns[0].x0 + 140 + 62 + 26, base);
+    }
+    ctx.fillRect(W / 2 - 1, 262, 2, top + 10 + hours.length * rowH - 262);
+    rule(top + 18 + hours.length * rowH, 1);
+    ctx.textAlign = 'center';
+    ctx.font = `italic 21px ${SERIF}`;
+    const foot = top + 50 + hours.length * rowH;
+    ctx.fillText('Die Nachtzeit von 6 Uhr Abends bis 5 Uhr 59 Min. früh ist durch Unterstreichung der Minutenziffern bezeichnet.', W / 2, foot, W - 90);
+    ctx.fillText('Die Fahrkarten sind beim Betreten des Bahnsteigs dem Beamten an der Sperre zur Lochung vorzuzeigen.', W / 2, foot + 28, W - 90);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
 }
 
 // Erleuchtetes Fenster von außen: warmer Schein hinter Spitzengardinen, seitlich

@@ -146,6 +146,7 @@ button {
 .dialog .obs { font-style: italic; color: #b9c3cf; margin: 0 0 8px; }
 .dialog .obs::before { content: 'Holmes bemerkt: '; color: var(--gold); }
 .dialog .line { margin: 0 0 12px; font-size: 19px; }
+.dialog .line + .after { margin: -4px 0 12px; }
 .dialog .opts { display: flex; flex-direction: column; gap: 2px; }
 .dialog .opts button {
   text-align: left;

@@ -673,6 +673,12 @@ export function idleFigure(figure, time, lookAt) {
   approach(f.armL.rotation, 'x', armLx, 0.08);
   approach(f.foreR.rotation, 'x', foreR, 0.08);
   approach(f.foreL.rotation, 'x', foreL, 0.08);
+  // Wer eben noch ging, kommt in den Stand.
+  if (!f.sitting) {
+    for (const leg of [f.legL, f.legR]) if (leg) approach(leg.rotation, 'x', 0, 0.12);
+    for (const shin of [f.shinL, f.shinR]) if (shin) approach(shin.rotation, 'x', 0, 0.12);
+  }
+  approach(f.body.rotation, 'y', 0, 0.1);
   if (f.umbrella) f.umbrella.rotation.x = UMBRELLA_TILT - (f.armR.rotation.x + f.foreR.rotation.x);
 }
 

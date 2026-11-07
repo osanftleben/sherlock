@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, merge, std } from '../kit.js';
-import { makeFigure, makeHorse, trotHorse, walkFigure } from '../figures.js';
+import { idleFigure, makeFigure, makeHorse, trotHorse, walkFigure } from '../figures.js';
 import { rng, signTexture } from '../textures.js';
 
 const toSource = new THREE.Vector3();
@@ -260,25 +260,95 @@ export function buildTraffic(loc, r) {
     scene.add(fig);
     return w;
   });
+  // Wer am Ende seines Wegs ankommt, biegt dort ab oder geht ins Haus, wenn man es nicht sieht:
+  // Er verschwindet und kommt nach einer Weile an einem Ende wieder, das ebenfalls nicht im Blick
+  // liegt. Sieht man das Ende, bleibt er stehen, sieht sich um und kehrt um. Unterwegs bleibt
+  // ab und zu jemand kurz stehen.
+  const frustum = new THREE.Frustum();
+  const viewProj = new THREE.Matrix4();
+  const probe = new THREE.Sphere(new THREE.Vector3(), 1.2);
+  let cam = null;
+  const seen = (x, z) => {
+    const dx = x - cam.position.x;
+    const dz = z - cam.position.z;
+    if (dx * dx + dz * dz > 70 * 70) return false;
+    probe.center.set(x, 1, z);
+    return frustum.intersectsSphere(probe);
+  };
+  const at = (w, s) => [w.from.x + (w.to.x - w.from.x) * (s / w.len), w.from.y + (w.to.y - w.from.y) * (s / w.len)];
+  const heading = (w) => Math.atan2((w.to.x - w.from.x) * w.dir, (w.to.y - w.from.y) * w.dir);
+  for (const w of walkers) {
+    w.state = 'walk';
+    w.timer = 0;
+    w.yaw = heading(w);
+    w.untilStop = 30 + Math.random() * 80;
+  }
   loc.onUpdate((dt, t, { camera }) => {
+    cam = camera;
+    viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(viewProj);
     for (const w of walkers) {
-      const a = w.from;
-      const b = w.to;
-      const k = w.s / w.len;
-      const x = a.x + (b.x - a.x) * k;
-      const z = a.y + (b.y - a.y) * k;
-      const dx = camera.position.x - x;
-      const dz = camera.position.z - z;
-      const near = dx * dx + dz * dz < 1.3;
-      if (!near) {
-        w.s += w.dir * w.speed * dt;
-        w.phase += dt * w.speed * 5.2;
-        if (w.s > w.len) w.dir = -1;
-        if (w.s < 0) w.dir = 1;
-        walkFigure(w.fig, w.phase);
+      if (w.state === 'gone') {
+        w.timer -= dt;
+        if (w.timer > 0) continue;
+        // Wiederkommen an einem Ende, das man gerade nicht sieht.
+        const start = Math.random() < 0.5 ? 0 : w.len;
+        const [sx, sz] = at(w, start);
+        if (seen(sx, sz)) {
+          w.timer = 1;
+          continue;
+        }
+        w.s = start;
+        w.dir = start === 0 ? 1 : -1;
+        w.yaw = heading(w);
+        w.state = 'walk';
+        w.fig.visible = true;
       }
+      let [x, z] = at(w, w.s);
+      if (w.state === 'walk') {
+        const dx = camera.position.x - x;
+        const dz = camera.position.z - z;
+        if (dx * dx + dz * dz > 1.3) {
+          w.s += w.dir * w.speed * dt;
+          w.phase += dt * w.speed * 5.2;
+          w.untilStop -= w.speed * dt;
+          walkFigure(w.fig, w.phase);
+        }
+        if (w.s >= w.len || w.s <= 0) {
+          w.s = THREE.MathUtils.clamp(w.s, 0, w.len);
+          [x, z] = at(w, w.s);
+          if (!seen(x, z)) {
+            w.state = 'gone';
+            w.fig.visible = false;
+            w.timer = 3 + Math.random() * 12;
+            continue;
+          }
+          w.state = 'turn';
+          w.timer = 1.6 + Math.random() * 2.4;
+          w.dir = -w.dir;
+        } else if (w.untilStop < 0) {
+          w.state = 'stop';
+          w.timer = 1.5 + Math.random() * 3.5;
+          w.untilStop = 30 + Math.random() * 80;
+        }
+      } else {
+        // Stehen: Beine zurück in den Stand, umsehen; beim Umkehren in der zweiten Hälfte drehen.
+        idleFigure(w.fig, t, camera.position);
+        w.timer -= dt;
+        if (w.state === 'turn' && w.timer < 1) {
+          let d = heading(w) - w.yaw;
+          while (d > Math.PI) d -= Math.PI * 2;
+          while (d < -Math.PI) d += Math.PI * 2;
+          w.yaw += d * Math.min(1, dt * 4);
+        }
+        if (w.timer < 0) {
+          w.state = 'walk';
+          w.yaw = heading(w);
+        }
+      }
+      if (w.state === 'walk') w.yaw = heading(w);
       w.fig.position.set(x, loc.heightAt(x, z), z);
-      w.fig.rotation.y = Math.atan2((b.x - a.x) * w.dir, (b.y - a.y) * w.dir);
+      w.fig.rotation.y = w.yaw;
     }
   });
 }

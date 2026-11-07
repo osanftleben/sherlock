@@ -3022,14 +3022,77 @@ export function archFronts() {
         pane(0.6, 1.0, 2.3, 2.35, 3, 2, '#2a2016', false);
         rect(cx, 0.45, 0.88, 2.45, 1.0, '#3a2c1e');
         lettering('Fahrkarten-Ausgabe', 1.45, 2.68, 22, '#e6dcc2');
+        // Hinter der Mattscheibe der Beamte, unscharf wie jeder Schatten hinter geätztem Glas:
+        // Dienstmütze, Schultern, die Arme mit Ärmelschonern auf dem Pult. Links hinter ihm das
+        // Gestell mit den Pappkarten. Unten in der Scheibe die klare Durchreiche mit Messingrand,
+        // durch die man seine Uniform scharf sieht. Sprossen kommen danach wieder darüber.
+        const sil = (ctx) => {
+          ctx.beginPath();
+          // Mütze: Deckel etwas breiter als das Band.
+          ctx.moveTo(X(1.29), Y(2.27));
+          ctx.lineTo(X(1.61), Y(2.27));
+          ctx.lineTo(X(1.58), Y(2.13));
+          ctx.lineTo(X(1.32), Y(2.13));
+          ctx.closePath();
+          ctx.moveTo(X(1.56), Y(2.02));
+          ctx.ellipse(X(1.45), Y(2.02), 0.11 * sx, 0.13 * sy, 0, 0, Math.PI * 2);
+          ctx.rect(X(1.405), Y(1.9), 0.09 * sx, 0.1 * sy);
+          // Rumpf: runde Schultern, nach unten zu den aufgestützten Ellbogen breiter.
+          ctx.moveTo(X(1.4), Y(1.86));
+          ctx.quadraticCurveTo(X(1.14), Y(1.85), X(1.1), Y(1.66));
+          ctx.lineTo(X(1.08), Y(1.2));
+          ctx.lineTo(X(0.98), Y(1.12));
+          ctx.lineTo(X(0.98), Y(0.98));
+          ctx.lineTo(X(1.92), Y(0.98));
+          ctx.lineTo(X(1.92), Y(1.12));
+          ctx.lineTo(X(1.82), Y(1.2));
+          ctx.lineTo(X(1.8), Y(1.66));
+          ctx.quadraticCurveTo(X(1.76), Y(1.85), X(1.5), Y(1.86));
+          ctx.closePath();
+          ctx.fill();
+        };
         for (const ctx of [cx, gx]) {
-          ctx.fillStyle = ctx === gx ? 'rgba(0,0,0,0.6)' : 'rgba(40,24,10,0.55)';
+          const glowing = ctx === gx;
+          ctx.save();
           ctx.beginPath();
-          ctx.ellipse(X(1.5), Y(1.95), 0.17 * sx, 0.2 * sy, 0, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.rect(X(0.6), Y(2.35), 1.7 * sx, 1.35 * sy);
+          ctx.clip();
+          ctx.filter = 'blur(4px)';
+          // Kartengestell: Fächer in Reihen, nur als schwache Schatten.
+          ctx.fillStyle = glowing ? 'rgba(0,0,0,0.25)' : 'rgba(60,36,14,0.28)';
+          for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 3; col++) ctx.fillRect(X(0.68 + col * 0.12), Y(2.2 - row * 0.15), 0.09 * sx, 0.1 * sy);
+          }
+          ctx.fillStyle = glowing ? 'rgba(0,0,0,0.72)' : 'rgba(40,22,8,0.76)';
+          sil(ctx);
+          // Ärmelschoner: hellere Unterarme vor dem Rumpf.
+          ctx.fillStyle = glowing ? 'rgba(0,0,0,0.2)' : 'rgba(150,120,80,0.35)';
+          ctx.fillRect(X(1.0), Y(1.2), 0.3 * sx, 0.1 * sy);
+          ctx.fillRect(X(1.6), Y(1.2), 0.3 * sx, 0.1 * sy);
+          ctx.filter = 'none';
+          // Durchreiche: klar, also scharf, darin dunkles Tuch und ein Messingknopf.
           ctx.beginPath();
-          ctx.ellipse(X(1.5), Y(1.2), 0.42 * sx, 0.42 * sy, 0, Math.PI, 0);
+          ctx.moveTo(X(1.25), Y(1.0));
+          ctx.lineTo(X(1.25), Y(1.1));
+          ctx.ellipse(X(1.45), Y(1.1), 0.2 * sx, 0.12 * sy, 0, Math.PI, 0);
+          ctx.lineTo(X(1.65), Y(1.0));
+          ctx.closePath();
+          ctx.fillStyle = glowing ? 'rgba(0,0,0,0.85)' : '#2a2018';
           ctx.fill();
+          if (!glowing) {
+            ctx.strokeStyle = '#a07a38';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.fillStyle = '#b8963f';
+            ctx.beginPath();
+            ctx.arc(X(1.45), Y(1.08), 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          // Sprossen wieder darüber.
+          ctx.fillStyle = '#121212';
+          for (const c of [1, 2]) ctx.fillRect(X(0.6 + (1.7 * c) / 3) - 2, Y(2.35), 4, 1.35 * sy);
+          ctx.fillRect(X(0.6), Y(1.675) - 2, 1.7 * sx, 4);
+          ctx.restore();
         }
         rect(cx, 6.45, 0.95, 8.25, 2.55, '#2a2016');
         rect(cx, 6.55, 1.05, 8.15, 2.45, '#d8d0bc');

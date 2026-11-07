@@ -350,7 +350,13 @@ function buildEntrance(loc, x, z0) {
   addMesh(scene, new THREE.PlaneGeometry(3.2, 3.4).rotateX(-Math.PI / 2).translate(x, 0.031, z0 - 2.2), lightPool(0xd09050, 0.35));
 
   // Von außen gesehen (Blick nach +z) liegt der Schalter links der Tür (x größer), der Fahrplan rechts.
-  loc.anchor('knipser', x + 1.65, 0, z0 - 0.62, Math.PI - 0.3);
+  // Unter der Durchreiche ein Zahlbrett aus Holz auf zwei Konsolen, abgegriffen an der Kante.
+  const counter = new Bag();
+  counter.box(0x3e2c1c, 0.95, 0.05, 0.24, x + 2.95, 0.975, z0 - 0.12);
+  counter.box(0x5a422a, 0.95, 0.012, 0.03, x + 2.95, 1.0, z0 - 0.225);
+  for (const dx of [-0.36, 0.36]) counter.box(0x2a1e14, 0.04, 0.16, 0.16, x + 2.95 + dx, 0.87, z0 - 0.08);
+  addMesh(scene, counter.build(), std({ vertexColors: true, roughness: 0.7 }));
+  loc.anchor('knipser', x + 1.5, 0, z0 - 0.42, Math.PI - 0.45);
   loc.anchor('fahrplan', x - 2.95, 1.75, z0 - 0.06);
   loc.addHotspot({
     id: 'fahrplan',

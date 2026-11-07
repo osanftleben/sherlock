@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
-import { Bag, addMesh, box, matte, std } from '../kit.js';
+import { Bag, addMesh, box, matte, merge, std } from '../kit.js';
 import { brick, cobble, plaster, signTexture, slate, softDisc, rng, streetWet } from '../textures.js';
 import { BAY_W, addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
@@ -9,7 +9,7 @@ import { buildRiver } from './river.js';
 import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { grimy } from './grime.js';
-import { buildLamps } from './lamps.js';
+import { LANTERN_GLASS, buildLamps, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -323,19 +323,18 @@ export function buildBerlin() {
   };
   // Türlaterne an einem Eisenausleger rechts neben der Tür, unter dem Ladenschild: Das Schild hängt
   // über derselben Achse (3,3 bis 4,6 m hoch), die Laterne darf es nicht verdecken.
-  const lampGlass = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) });
+  // Dieselbe Wandlaterne wie an den Viaduktbögen (wallLantern), die Mitte des Glases in 2,75 m.
+  const doorIron = new Bag();
+  const doorGlass = [];
+  const doorGlow = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
   const lanternOver = (bld, bay) => {
     const side = bay + 1.15 / BAY_W;
-    const p = bld.at(side, 2.75, 0.45);
-    const arm = bld.at(side, 3.0, 0.24);
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xffb060, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    glow.position.copy(p);
+    const wall = bld.at(side, 3.07, 0);
+    const out = bld.at(side, 3.07, 1).sub(wall);
+    const glow = new THREE.Sprite(doorGlow);
+    glow.position.copy(wallLantern(doorIron, doorGlass, wall, out, 0.45));
     glow.scale.setScalar(1.5);
     scene.add(glow);
-    addMesh(scene, box(0.16, 0.26, 0.16, p.x, p.y, p.z), lampGlass);
-    addMesh(scene, box(0.24, 0.06, 0.24, p.x, p.y + 0.16, p.z), ironMat);
-    addMesh(scene, new THREE.BoxGeometry(0.04, 0.04, 0.44).rotateY(bld.rot).translate(arm.x, arm.y, arm.z), ironMat);
-    addMesh(scene, box(0.03, 0.06, 0.03, p.x, p.y + 0.22, p.z), ironMat);
   };
 
   shopSign(kessler, 2.5, 'Uhrmacher E. Kessler');
@@ -353,6 +352,8 @@ export function buildBerlin() {
   shopSign(pension, 2, 'Pension Puhlmann', 6);
   doorSpot('pension', pension.at(2, 1.5, 0.2), 'Pension Puhlmann', 'pension');
   lanternOver(pension, 2);
+  addMesh(scene, doorIron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
+  addMesh(scene, merge(doorGlass), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
   buildShopWindows(loc, { kessler, apotheke, destille, bank, pension });
 
   // Rückwege aus den Häusern: ein Schritt vor der Tür, mit Blick auf die Straße.

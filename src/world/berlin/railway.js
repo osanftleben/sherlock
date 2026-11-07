@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
 import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
 import { addSign } from './facades.js';
-import { lightPool } from './lamps.js';
+import { LANTERN_GLASS, lightPool, wallLantern } from './lamps.js';
 import { hearing } from './traffic.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
@@ -85,24 +85,7 @@ export function buildRailway(loc, r, brickMat) {
       if (lit && Math.abs(x) < 70) {
         const lx = x + (entrance ? -1.5 : cell === 0 ? 0.9 : 3.2);
         const lz = VZ0 + 1.14;
-        // Wandlaterne: Arm mit Strebe aus der Wand, daran ein eisernes Gehäuse mit vier
-        // Scheiben, Eckstreben, Boden und spitzem Dach. Die Scheiben leuchten, ein Hof umgibt sie.
-        const ly = 2.88;
-        const lc = lz - 0.52;
-        lanterns.box(0x161616, 0.035, 0.035, 0.56, lx, 3.2, lz - 0.28);
-        const brace = new THREE.BoxGeometry(0.025, 0.025, 0.5);
-        brace.rotateX(Math.atan2(0.32, 0.36));
-        lanterns.add(brace.translate(lx, 3.04, lz - 0.2), 0x161616);
-        lanterns.box(0x161616, 0.012, 0.08, 0.012, lx, 3.14, lc);
-        for (const dx of [-0.09, 0.09]) {
-          for (const dz of [-0.09, 0.09]) lanterns.box(0x161616, 0.022, 0.3, 0.022, lx + dx, ly, lc + dz);
-        }
-        lanterns.box(0x161616, 0.22, 0.035, 0.22, lx, ly - 0.16, lc);
-        lanterns.box(0x161616, 0.08, 0.05, 0.08, lx, ly - 0.2, lc);
-        lanterns.add(new THREE.CylinderGeometry(0.02, 0.17, 0.12, 4).rotateY(Math.PI / 4).translate(lx, ly + 0.21, lc), 0x161616);
-        lanterns.add(new THREE.SphereGeometry(0.025, 6, 4).translate(lx, ly + 0.29, lc), 0x161616);
-        flames.push(new THREE.BoxGeometry(0.17, 0.28, 0.17).translate(lx, ly, lc));
-        glows.push([lx, ly, lc]);
+        glows.push(wallLantern(lanterns, flames, new THREE.Vector3(lx, 3.2, lz), new THREE.Vector3(0, 0, -1)));
         pools.push(new THREE.PlaneGeometry(5.5, 4.5).rotateX(-Math.PI / 2).translate(x, 0.03, VZ0 - 0.4));
       }
       if (entrance) {
@@ -127,11 +110,11 @@ export function buildRailway(loc, r, brickMat) {
   const af = archFronts();
   addMesh(scene, merge(fronts), std({ map: af.map, emissive: 0xffffff, emissiveMap: af.emissiveMap, emissiveIntensity: 0.9, roughness: 0.8 }));
   addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
-  addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.85, 0.35) }));
+  addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
   const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
-  for (const [gx, gy, gz] of glows) {
+  for (const p of glows) {
     const s = new THREE.Sprite(glowMat);
-    s.position.set(gx, gy, gz);
+    s.position.copy(p);
     s.scale.setScalar(1.5);
     scene.add(s);
   }

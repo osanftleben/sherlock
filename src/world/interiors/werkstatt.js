@@ -220,7 +220,9 @@ function policeLantern(room, [lx, ly, lz], [tx, ty, tz]) {
   fill.position.copy(from).addScaledVector(dir, 0.2);
   scene.add(fill);
 
-  // Sichtbarer Lichtkegel: additive, zum Ende hin ausgeblendet.
+  // Sichtbarer Lichtkegel: additiv, zum Ende hin ausgeblendet. Wo man flach auf seinen Mantel
+  // schaut, also an den Rändern, läuft er weich aus; sonst zöge er harte, gerade Kanten als
+  // hellen Keil quer über Wand und Decke.
   const len = from.distanceTo(to) + 0.6;
   const radius = Math.tan(0.3) * len;
   const cone = new THREE.ConeGeometry(radius, len, 28, 6, true);
@@ -232,8 +234,32 @@ function policeLantern(room, [lx, ly, lz], [tx, ty, tz]) {
     colors.set([v * 1.0, v * 0.78, v * 0.52], i * 3);
   }
   cone.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  const beam = new THREE.Mesh(cone, new THREE.MeshBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 0.035, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
+  const beam = new THREE.Mesh(cone, new THREE.ShaderMaterial({
+    uniforms: { opacity: { value: 0.1 } },
+    vertexShader: `
+      attribute vec3 color;
+      varying vec3 vColor;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        vColor = color;
+        vNormal = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vView = -mv.xyz;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float opacity;
+      varying vec3 vColor;
+      varying vec3 vNormal;
+      varying vec3 vView;
+      void main() {
+        float face = abs(dot(normalize(vNormal), normalize(vView)));
+        gl_FragColor = vec4(vColor, opacity * face * face);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide,
   }));
   beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), dir);
   beam.position.copy(from).addScaledVector(dir, len / 2 + 0.1);

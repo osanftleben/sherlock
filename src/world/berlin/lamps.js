@@ -131,3 +131,30 @@ function buildBrokenLamp(scene, x, y, z) {
   const glass = std({ color: 0x1a1c1e, roughness: 0.15, metalness: 0.6, side: THREE.DoubleSide });
   scene.add(new THREE.Mesh(merge([...panes, ...shards]), glass));
 }
+
+// Wandlaterne an einem eisernen Arm mit Strebe: Gehäuse mit vier Scheiben, Eckstreben, Boden
+// und spitzem Dach. base ist der Punkt an der Wand in Höhe des Arms, out die waagrechte
+// Richtung von der Wand weg, reach der Abstand der Laterne von der Wand. Das Eisen kommt in die
+// Bag iron, das Glas als Geometrie in die Liste glass (Material setzt der Aufrufer, siehe
+// LANTERN_GLASS). Zurück kommt die Mitte des Glases, etwa für Lichthof und Lichtfleck.
+export const LANTERN_GLASS = new THREE.Color(1.5, 0.85, 0.35);
+export const LANTERN_IRON = 0x161616;
+export function wallLantern(iron, glass, base, out, reach = 0.52) {
+  const m = new THREE.Matrix4().makeRotationY(Math.atan2(out.x, out.z)).setPosition(base);
+  const put = (geo) => geo.applyMatrix4(m);
+  const part = (w, h, d, x, y, z) => iron.add(put(new THREE.BoxGeometry(w, h, d).translate(x, y, z)), LANTERN_IRON);
+  // Lokal: z von der Wand weg, y = 0 in Höhe des Arms.
+  part(0.035, 0.035, reach + 0.04, 0, 0, reach / 2);
+  const brace = new THREE.BoxGeometry(0.025, 0.025, 0.5).rotateX(-Math.atan2(0.32, 0.36)).translate(0, -0.16, 0.2);
+  iron.add(put(brace), LANTERN_IRON);
+  part(0.012, 0.08, 0.012, 0, -0.06, reach);
+  for (const dx of [-0.09, 0.09]) {
+    for (const dz of [-0.09, 0.09]) part(0.022, 0.3, 0.022, dx, -0.32, reach + dz);
+  }
+  part(0.22, 0.035, 0.22, 0, -0.48, reach);
+  part(0.08, 0.05, 0.08, 0, -0.52, reach);
+  iron.add(put(new THREE.CylinderGeometry(0.02, 0.17, 0.12, 4).rotateY(Math.PI / 4).translate(0, -0.11, reach)), LANTERN_IRON);
+  iron.add(put(new THREE.SphereGeometry(0.025, 6, 4).translate(0, -0.03, reach)), LANTERN_IRON);
+  glass.push(put(new THREE.BoxGeometry(0.17, 0.28, 0.17).translate(0, -0.32, reach)));
+  return new THREE.Vector3(0, -0.32, reach).applyMatrix4(m);
+}

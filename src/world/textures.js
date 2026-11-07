@@ -1823,6 +1823,495 @@ export function laceCurtain() {
   });
 }
 
+// Auslage einer Fleischerei um 1892: gekachelte Wand in gedämpftem Cremeweiß mit dunkelgrüner
+// Borte, oben eine Messingstange mit Haken für Schinken, Speckseiten, Fleischwurstringe und
+// Würste, darunter ein Marmorbord mit Schmalztöpfen, Sülze und angeschnittener Wurst, unten die
+// Marmorplatte mit Emailleplatten (Hackepeter, Koteletts, Rollbraten, Leber), Bratwurst,
+// Petersilie, Tannengrün und Preisschildern. Alles ist schattiert und wirft Schatten auf Wand
+// und Platte. Weiß bleibt gedämpft, die Lampe und die Augenanpassung hellen es ohnehin auf.
+function butcherDisplay(ctx, S, r) {
+  const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const tone = (hex, k) => {
+    const c = rgb(hex).map((v) => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
+  };
+  // Verlauf über einen runden Körper: dunkle Kanten, Glanz kurz vor der Mitte.
+  const round = (x0, y0, x1, y1, hex) => {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, tone(hex, -0.5));
+    g.addColorStop(0.32, tone(hex, 0.2));
+    g.addColorStop(0.55, hex);
+    g.addColorStop(1, tone(hex, -0.6));
+    return g;
+  };
+  const shadow = (on, blur = 7, dx = 4, dy = 6) => {
+    ctx.shadowColor = on ? 'rgba(20,10,4,0.6)' : 'transparent';
+    ctx.shadowBlur = on ? blur : 0;
+    ctx.shadowOffsetX = on ? dx : 0;
+    ctx.shadowOffsetY = on ? dy : 0;
+  };
+  const pick = (list) => list[Math.floor(r() * list.length)];
+  const ellipse = (x, y, rx, ry, fill) => {
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  const marble = (x, y, w, h, base) => {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.fillStyle = base;
+    ctx.fillRect(x, y, w, h);
+    ctx.lineWidth = 1;
+    for (let i = 0; i < (w * h) / 900; i++) {
+      const sx = x - 40 + r() * (w + 40);
+      const sy = y + r() * h;
+      ctx.strokeStyle = `rgba(70,68,74,${0.12 + r() * 0.18})`;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.bezierCurveTo(sx + 20 + r() * 20, sy + (r() - 0.5) * 30, sx + 40 + r() * 30, sy + (r() - 0.5) * 30, sx + 70 + r() * 50, sy + (r() - 0.5) * 20);
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  // Kacheln, jede etwas anders getönt, zur Platte hin im Schatten dunkler
+  const T = 21;
+  for (let y = 0; y < 368; y += T) {
+    for (let x = 0; x < S; x += T) {
+      const v = r() * 16 - 8 - Math.max(0, y - 290) * 0.4;
+      ctx.fillStyle = y === 2 * T ? `rgb(${Math.round(42 + v / 2)},${Math.round(66 + v / 2)},${Math.round(52 + v / 2)})` : `rgb(${Math.round(150 + v)},${Math.round(141 + v)},${Math.round(120 + v)})`;
+      ctx.fillRect(x + 1, y + 1, T - 2, T - 2);
+      ctx.fillStyle = 'rgba(255,250,235,0.1)';
+      ctx.fillRect(x + 2, y + 2, T - 5, 3);
+    }
+  }
+
+  // Messingstange mit Wandhaltern
+  const railY = 84;
+  shadow(true, 4, 2, 4);
+  ctx.fillStyle = round(0, railY - 4, 0, railY + 4, '#a8843a');
+  ctx.fillRect(0, railY - 4, S, 8);
+  for (const x of [26, S - 34]) {
+    ctx.fillStyle = round(x, 0, x + 8, 0, '#8a6a2a');
+    ctx.fillRect(x, railY - 14, 8, 22);
+  }
+
+  // Was an den Haken hängt
+  const hang = (kind, cx, w) => {
+    shadow(false);
+    ctx.strokeStyle = '#2a2420';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 3, railY - 5);
+    ctx.quadraticCurveTo(cx + 6, railY - 2, cx, railY + 12);
+    ctx.stroke();
+    ctx.strokeStyle = '#b8a880';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, railY + 11);
+    ctx.lineTo(cx, railY + 20);
+    ctx.stroke();
+    const top = railY + 18 + r() * 4;
+    shadow(true);
+    if (kind === 'schinken') {
+      const h = 128 + r() * 30;
+      const bw = w / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, top);
+      ctx.quadraticCurveTo(cx - bw * 0.5, top + h * 0.35, cx - bw, top + h * 0.72);
+      ctx.quadraticCurveTo(cx - bw * 0.9, top + h, cx, top + h);
+      ctx.quadraticCurveTo(cx + bw * 0.95, top + h, cx + bw * 0.92, top + h * 0.7);
+      ctx.quadraticCurveTo(cx + bw * 0.45, top + h * 0.3, cx + 5, top);
+      ctx.closePath();
+      const g = ctx.createRadialGradient(cx - bw * 0.3, top + h * 0.62, 3, cx, top + h * 0.6, bw * 1.4);
+      g.addColorStop(0, '#b0602e');
+      g.addColorStop(0.5, '#7a3618');
+      g.addColorStop(1, '#341408');
+      ctx.fillStyle = g;
+      ctx.fill();
+      shadow(false);
+      ellipse(cx, top + 1, 5, 3, '#cfc2a4');
+      // Schnur kreuzweise um die Keule
+      ctx.strokeStyle = 'rgba(220,200,160,0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const y = top + h * (0.3 + i * 0.16);
+        ctx.beginPath();
+        ctx.moveTo(cx - bw * (0.4 + i * 0.15), y - 4);
+        ctx.quadraticCurveTo(cx, y + 6, cx + bw * (0.4 + i * 0.15), y - 4);
+        ctx.stroke();
+      }
+    } else if (kind === 'speck') {
+      const h = 88 + r() * 22;
+      const x0 = cx - w / 2;
+      ctx.fillStyle = round(x0, 0, x0 + w, 0, '#a46c2c');
+      ctx.beginPath();
+      ctx.roundRect(x0, top, w, h, [10, 10, 3, 3]);
+      ctx.fill();
+      shadow(false);
+      // Anschnitt unten: Schwarte, Fett und Fleisch in Lagen
+      let y = top + h - 15;
+      for (const [c, d] of [['#d4c2a0', 4], ['#9a4232', 3], ['#d8c8a8', 4], ['#8a3a2a', 2], ['#cdbb98', 2]]) {
+        ctx.fillStyle = c;
+        ctx.fillRect(x0 + 1, y, w - 2, d);
+        y += d;
+      }
+      ctx.fillStyle = '#5a3216';
+      ctx.fillRect(x0, top + h - 1, w, 2);
+      // Räucherflecken und der violette Stempel der Fleischbeschau
+      for (let i = 0; i < 5; i++) ellipse(x0 + 6 + r() * (w - 12), top + 12 + r() * (h - 34), 4 + r() * 6, 3 + r() * 4, 'rgba(60,28,8,0.22)');
+      ctx.strokeStyle = 'rgba(80,40,110,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx + 4, top + h * 0.45, 7, 0, Math.PI * 2);
+      ctx.moveTo(cx - 1, top + h * 0.45);
+      ctx.lineTo(cx + 9, top + h * 0.45);
+      ctx.stroke();
+      ellipse(cx, top + 6, 3, 3, '#3a2010');
+    } else if (kind === 'ring') {
+      const h = 58 + r() * 18;
+      const rx = w / 2 - 5;
+      const loop = () => {
+        ctx.beginPath();
+        ctx.moveTo(cx, top);
+        ctx.bezierCurveTo(cx - rx * 1.7, top + h * 0.35, cx - rx * 1.25, top + h, cx, top + h);
+        ctx.bezierCurveTo(cx + rx * 1.25, top + h, cx + rx * 1.7, top + h * 0.35, cx, top);
+      };
+      const c = pick(['#8a3a24', '#9a4a2c', '#7a3020']);
+      loop();
+      ctx.strokeStyle = tone(c, -0.55);
+      ctx.lineWidth = 11;
+      ctx.stroke();
+      shadow(false);
+      loop();
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 7.5;
+      ctx.stroke();
+      ctx.save();
+      ctx.translate(-1.5, -1);
+      loop();
+      ctx.strokeStyle = 'rgba(235,175,135,0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    } else if (kind === 'wurst') {
+      // zwei Dauerwürste nebeneinander, manche im Netz
+      for (const [dx, len] of [[-7, 118 + r() * 50], [7, 96 + r() * 60]]) {
+        const x0 = cx + dx - 6;
+        const c = pick(['#7a2e1e', '#8a4a2a', '#6a2a1c', '#9a5034']);
+        shadow(true);
+        ctx.fillStyle = round(x0, 0, x0 + 12, 0, c);
+        ctx.beginPath();
+        ctx.roundRect(x0, top + 2, 12, len, 6);
+        ctx.fill();
+        shadow(false);
+        if (r() < 0.5) {
+          ctx.strokeStyle = 'rgba(225,210,175,0.45)';
+          ctx.lineWidth = 1;
+          for (let y = top + 10; y < top + len; y += 9) {
+            ctx.beginPath();
+            ctx.moveTo(x0, y);
+            ctx.lineTo(x0 + 12, y + 3);
+            ctx.stroke();
+          }
+        }
+        ctx.strokeStyle = '#b8a880';
+        ctx.beginPath();
+        ctx.moveTo(cx, top);
+        ctx.lineTo(x0 + 6, top + 3);
+        ctx.stroke();
+      }
+    } else {
+      // Kette Knackwürstchen, leicht gegeneinander versetzt
+      const n = 4 + Math.floor(r() * 2);
+      for (let i = 0; i < n; i++) {
+        const y = top + 12 + i * 22;
+        const sx = cx + Math.sin(i * 1.7) * 2;
+        shadow(true, 5, 3, 4);
+        ctx.fillStyle = round(sx - 7, 0, sx + 7, 0, '#a8583a');
+        ctx.beginPath();
+        ctx.ellipse(sx, y, 7, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    shadow(false);
+  };
+  const order = ['schinken', 'wurst', 'ring', 'speck', 'kette', 'wurst', 'ring', 'schinken', 'kette', 'speck', 'wurst', 'ring'];
+  const widths = { schinken: 68, speck: 54, ring: 40, wurst: 30, kette: 18 };
+  for (let x = 12, k = 0; x < S - 24; k++) {
+    const kind = order[k % order.length];
+    const w = widths[kind];
+    if (x + w > S - 6) break;
+    hang(kind, x + w / 2, w);
+    x += w + 1 + r() * 4;
+  }
+
+  // Marmorbord mit Schatten an der Wand
+  const shelfY = 296;
+  const under = ctx.createLinearGradient(0, shelfY + 18, 0, shelfY + 40);
+  under.addColorStop(0, 'rgba(15,8,2,0.5)');
+  under.addColorStop(1, 'rgba(15,8,2,0)');
+  ctx.fillStyle = under;
+  ctx.fillRect(0, shelfY + 18, S, 22);
+  marble(0, shelfY, S, 6, '#aaa498');
+  marble(0, shelfY + 6, S, 12, '#8a857a');
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, shelfY + 16, S, 2);
+
+  const onShelf = {
+    topf(cx) {
+      // Schmalztopf aus grauem Steinzeug mit blauem Band
+      shadow(true, 6, 4, 3);
+      ctx.fillStyle = round(cx - 16, 0, cx + 16, 0, '#8c8a84');
+      ctx.fillRect(cx - 16, shelfY - 38, 32, 40);
+      shadow(false);
+      ctx.fillStyle = 'rgba(40,60,120,0.75)';
+      ctx.fillRect(cx - 16, shelfY - 24, 32, 7);
+      ellipse(cx, shelfY - 38, 16, 4, '#5a5852');
+      ellipse(cx, shelfY - 38, 13, 3, '#cfc6b0');
+      return 36;
+    },
+    suelze(cx) {
+      ellipse(cx, shelfY, 26, 4, '#a49e90');
+      shadow(true, 6, 4, 3);
+      ctx.beginPath();
+      ctx.moveTo(cx - 21, shelfY - 1);
+      ctx.bezierCurveTo(cx - 21, shelfY - 30, cx + 21, shelfY - 30, cx + 21, shelfY - 1);
+      ctx.closePath();
+      const g = ctx.createRadialGradient(cx - 7, shelfY - 16, 2, cx, shelfY - 10, 24);
+      g.addColorStop(0, '#c87a52');
+      g.addColorStop(0.6, '#8a3a24');
+      g.addColorStop(1, '#4a1a0e');
+      ctx.fillStyle = g;
+      ctx.fill();
+      shadow(false);
+      ctx.fillStyle = 'rgba(240,215,170,0.5)';
+      for (let i = 0; i < 6; i++) ctx.fillRect(cx - 12 + r() * 22, shelfY - 18 + r() * 14, 3, 2);
+      ellipse(cx - 8, shelfY - 18, 5, 2.5, 'rgba(255,235,200,0.45)');
+      return 54;
+    },
+    wurst(cx) {
+      // angeschnittene Dauerwurst, liegend, mit Schnittfläche
+      const c = pick(['#7a2e20', '#8a4a2a']);
+      shadow(true, 5, 4, 2);
+      ctx.fillStyle = round(0, shelfY - 18, 0, shelfY, c);
+      ctx.beginPath();
+      ctx.roundRect(cx - 30, shelfY - 18, 56, 18, [9, 2, 2, 9]);
+      ctx.fill();
+      shadow(false);
+      ellipse(cx + 26, shelfY - 9, 6, 9, '#b04a44');
+      ctx.fillStyle = '#e8d6c0';
+      for (let i = 0; i < 7; i++) ctx.fillRect(cx + 23 + r() * 5, shelfY - 15 + r() * 12, 1.5, 1.5);
+      // daneben zwei Scheiben
+      for (const dx of [36, 44]) ellipse(cx + dx, shelfY - 3, 7, 3, '#a8443e');
+      return 82;
+    },
+    leber(cx) {
+      // Leberwurst im hellen Darm
+      shadow(true, 5, 4, 2);
+      ctx.fillStyle = round(0, shelfY - 14, 0, shelfY, '#9a7e66');
+      ctx.beginPath();
+      ctx.roundRect(cx - 24, shelfY - 14, 48, 14, 7);
+      ctx.fill();
+      shadow(false);
+      return 52;
+    },
+  };
+  const shelfOrder = ['topf', 'wurst', 'suelze', 'leber', 'topf', 'suelze', 'wurst', 'topf'];
+  for (let x = 14, k = 0; x < S - 30; k++) {
+    const kind = shelfOrder[k % shelfOrder.length];
+    const w = { topf: 36, suelze: 54, wurst: 82, leber: 52 }[kind];
+    if (x + w > S - 6) break;
+    onShelf[kind](x + w / 2);
+    x += w + 8 + r() * 10;
+  }
+
+  // Marmorplatte der Auslage; hinten im Schatten der Wand
+  const slab = 362;
+  marble(0, slab, S, S - slab, '#8c877c');
+  const back = ctx.createLinearGradient(0, slab, 0, slab + 34);
+  back.addColorStop(0, 'rgba(10,6,2,0.5)');
+  back.addColorStop(1, 'rgba(10,6,2,0)');
+  ctx.fillStyle = back;
+  ctx.fillRect(0, slab, S, 34);
+  // Die unterste Zeile wird im Schaukasten zum Boden (displayMaterial), darum dort dunkler,
+  // sonst liegt vor der Ware eine leere helle Fläche.
+  const front = ctx.createLinearGradient(0, 470, 0, S);
+  front.addColorStop(0, 'rgba(24,16,8,0)');
+  front.addColorStop(1, 'rgba(24,16,8,0.45)');
+  ctx.fillStyle = front;
+  ctx.fillRect(0, 470, S, S - 470);
+
+  // hinten: Bleche mit Bratwurst, dazwischen ein Brett mit Kasseler
+  const tray = (x0) => {
+    shadow(true, 5, 3, 4);
+    ctx.fillStyle = '#a8a294';
+    ctx.fillRect(x0, slab + 6, 92, 18);
+    shadow(false);
+    ctx.fillStyle = '#7a7468';
+    ctx.fillRect(x0, slab + 22, 92, 2);
+    for (let i = 0; i < 5; i++) {
+      const sx = x0 + 12 + i * 17;
+      ctx.fillStyle = round(sx - 5, 0, sx + 5, 0, '#c4987a');
+      ctx.beginPath();
+      ctx.roundRect(sx - 5, slab + 8, 10, 13, 5);
+      ctx.fill();
+    }
+  };
+  tray(22);
+  tray(S - 114);
+  shadow(true, 5, 3, 4);
+  ctx.fillStyle = '#6a4a2a';
+  ctx.fillRect(196, slab + 16, 120, 14);
+  ctx.fillStyle = round(0, slab + 4, 0, slab + 20, '#9a5a32');
+  ctx.beginPath();
+  ctx.roundRect(206, slab + 4, 100, 16, 6);
+  ctx.fill();
+  shadow(false);
+  ctx.strokeStyle = 'rgba(230,200,160,0.4)';
+  ctx.lineWidth = 1;
+  for (let x = 216; x < 300; x += 12) {
+    ctx.beginPath();
+    ctx.moveTo(x, slab + 6);
+    ctx.lineTo(x - 2, slab + 19);
+    ctx.stroke();
+  }
+
+  // vorn: Emailleplatten, weiß mit blauem Rand
+  const parsley = (x, y, n) => {
+    for (let i = 0; i < n; i++) ellipse(x + (r() - 0.5) * 18, y + (r() - 0.5) * 7, 2.5 + r() * 2, 2 + r() * 1.5, pick(['#2e5a24', '#3e6e2a', '#4a7a30', '#24481c']));
+  };
+  const platter = (cx, y, what) => {
+    shadow(true, 6, 3, 5);
+    ellipse(cx, y, 57, 17, '#a39d8f');
+    shadow(false);
+    ctx.strokeStyle = '#34496a';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, y, 55, 16, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ellipse(cx, y + 1, 44, 11, '#968f81');
+    // Inhalt etwas größer als gezeichnet
+    ctx.save();
+    ctx.translate(cx, y);
+    ctx.scale(1.25, 1.25);
+    ctx.translate(-cx, -y);
+    if (what === 'hack') {
+      // Hackepeter, rohes Gehacktes mit Zwiebeln
+      shadow(true, 4, 2, 3);
+      const g = ctx.createRadialGradient(cx - 8, y - 12, 2, cx, y - 6, 30);
+      g.addColorStop(0, '#d0705e');
+      g.addColorStop(0.6, '#a83e32');
+      g.addColorStop(1, '#6a2018');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(cx, y - 4, 28, 13, 0, Math.PI, 0);
+      ctx.ellipse(cx, y - 4, 28, 5, 0, 0, Math.PI);
+      ctx.fill();
+      shadow(false);
+      for (let i = 0; i < 26; i++) ctx.fillRect(cx - 22 + r() * 44, y - 14 + r() * 11, 1.5, 1.5);
+      ctx.fillStyle = 'rgba(235,225,200,0.8)';
+      for (let i = 0; i < 10; i++) ctx.fillRect(cx - 18 + r() * 36, y - 12 + r() * 9, 2, 1.5);
+      parsley(cx - 34, y + 2, 6);
+    } else if (what === 'kotelett') {
+      for (const [dx, dy] of [[-18, -2], [0, -4], [18, -2]]) {
+        shadow(true, 3, 2, 2);
+        ellipse(cx + dx, y + dy, 17, 9, '#d4c4a8');
+        shadow(false);
+        ellipse(cx + dx + 2, y + dy + 1, 12, 6.5, '#a83a30');
+        ellipse(cx + dx, y + dy - 1, 5, 2.5, 'rgba(230,140,120,0.35)');
+        ctx.fillStyle = '#d8ccb4';
+        ctx.fillRect(cx + dx - 17, y + dy - 2, 6, 3);
+      }
+      parsley(cx + 30, y + 3, 5);
+    } else if (what === 'braten') {
+      shadow(true, 4, 3, 3);
+      ctx.fillStyle = round(0, y - 18, 0, y + 2, '#9a3a2a');
+      ctx.beginPath();
+      ctx.roundRect(cx - 28, y - 18, 56, 20, 9);
+      ctx.fill();
+      shadow(false);
+      ctx.strokeStyle = '#d8ccaa';
+      ctx.lineWidth = 1.2;
+      for (let x = cx - 20; x <= cx + 20; x += 10) {
+        ctx.beginPath();
+        ctx.moveTo(x, y - 18);
+        ctx.lineTo(x + 1, y + 2);
+        ctx.stroke();
+      }
+      parsley(cx + 34, y, 4);
+      parsley(cx - 34, y, 4);
+    } else {
+      // Leber, dunkel und glänzend
+      for (const [dx, rx] of [[-10, 18], [10, 15]]) {
+        shadow(true, 4, 2, 3);
+        const g = ctx.createRadialGradient(cx + dx - 5, y - 9, 1, cx + dx, y - 5, rx);
+        g.addColorStop(0, '#9a4a40');
+        g.addColorStop(0.5, '#5a1c18');
+        g.addColorStop(1, '#2e0c0a');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.ellipse(cx + dx, y - 5, rx, 9, dx * 0.02, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      shadow(false);
+      parsley(cx + 30, y + 2, 5);
+    }
+    ctx.restore();
+  };
+  ['kotelett', 'hack', 'braten', 'leber'].forEach((what, i) => platter(64 + i * 128, 440, what));
+
+  // Tannengrün in Büscheln zwischen den Platten
+  const sprig = (x, y, len, a) => {
+    ctx.strokeStyle = '#3a2a18';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len);
+    ctx.stroke();
+    ctx.lineWidth = 1.2;
+    for (let t = 0.05; t < 1; t += 0.07) {
+      const px = x + Math.cos(a) * len * t;
+      const py = y + Math.sin(a) * len * t;
+      for (const s of [-1, 1]) {
+        ctx.strokeStyle = pick(['#1e3a22', '#2a4a2a', '#24442a']);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.cos(a + s * 1.0) * 7, py + Math.sin(a + s * 1.0) * 5);
+        ctx.stroke();
+      }
+    }
+  };
+  shadow(true, 3, 2, 3);
+  for (let x = 0; x <= S; x += 128) {
+    for (let i = 0; i < 4; i++) sprig(x + (r() - 0.5) * 10, 476 + r() * 8, 26 + r() * 14, -Math.PI / 2 + (i - 1.5) * 0.7 + (r() - 0.5) * 0.3);
+  }
+  shadow(false);
+
+  // Preisschilder auf Stecknadeln
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ['-.70', '-.60', '-.80', '-.40'].forEach((price, i) => {
+    const cx = 64 + i * 128 + 30;
+    const cy = 412;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate((r() - 0.5) * 0.25);
+    shadow(true, 3, 2, 3);
+    ctx.fillStyle = '#c8c0aa';
+    ctx.fillRect(-15, -8, 30, 16);
+    shadow(false);
+    ctx.fillStyle = '#1a1410';
+    ctx.font = 'bold 11px serif';
+    ctx.fillText(price, 0, 1);
+    ctx.restore();
+  });
+  ctx.textBaseline = 'alphabetic';
+}
+
 // Gemalte Auslagen gewöhnlicher Läden, wie man sie abends durch die Scheibe sieht:
 // Rückwand mit Borden im Lampenlicht, Waren, unten die Auslage, oben Goldschrift.
 export const SHOP_KINDS = ['baecker', 'fleischer', 'kolonial', 'tuche', 'buch', 'zigarren', 'hut'];
@@ -1843,15 +2332,9 @@ export function shopDisplay(kind) {
     const ctx = c.getContext('2d');
     const r = rng(SHOP_KINDS.indexOf(kind) * 97 + 5);
     const pick = (list) => list[Math.floor(r() * list.length)];
-    const wall = { baecker: '#b88a52', fleischer: '#a8a296', kolonial: '#7a5a34', tuche: '#6a4a3a', buch: '#5a3a26', zigarren: '#4a2e1c', hut: '#7a6a58' }[kind];
+    const wall = { baecker: '#b88a52', fleischer: '#5e584c', kolonial: '#7a5a34', tuche: '#6a4a3a', buch: '#5a3a26', zigarren: '#4a2e1c', hut: '#7a6a58' }[kind];
     ctx.fillStyle = wall;
     ctx.fillRect(0, 0, S, S);
-    if (kind === 'fleischer') {
-      // weiße Kacheln
-      ctx.strokeStyle = 'rgba(120,110,100,0.5)';
-      ctx.lineWidth = 2;
-      for (let y = 0; y < S; y += 32) for (let x = 0; x < S; x += 32) ctx.strokeRect(x, y, 32, 32);
-    }
     const shelves = [170, 285];
     const shelf = (y) => {
       ctx.fillStyle = '#3a2414';
@@ -1900,27 +2383,7 @@ export function shopDisplay(kind) {
         ctx.stroke();
       }
     } else if (kind === 'fleischer') {
-      ctx.fillStyle = '#5a5a5a';
-      ctx.fillRect(0, 96, S, 8);
-      for (let x = 18; x < S; x += 30 + r() * 12) {
-        const len = 60 + r() * 120;
-        ctx.fillStyle = pick(['#7a2a1a', '#8a3a22', '#5a2414', '#a85a3a']);
-        ctx.fillRect(x, 104, 13 + r() * 8, len);
-        ctx.beginPath();
-        ctx.arc(x + 9, 104 + len, 9, 0, Math.PI);
-        ctx.fill();
-      }
-      shelf(330);
-      for (let x = 30; x < S; x += 90) blob(x + 20, 300, 40, 26, pick(['#b8645a', '#c87a6a', '#a04a3a']));
-      ctx.fillStyle = bed;
-      ctx.fillRect(0, 400, S, S - 400);
-      for (let x = 20; x < S; x += 80) {
-        ctx.fillStyle = '#eae6dc';
-        ctx.beginPath();
-        ctx.ellipse(x + 30, 445, 38, 12, 0, 0, 7);
-        ctx.fill();
-        blob(x + 30, 438, 26, 12, pick(['#b8443a', '#c86a5a', '#d8a090']));
-      }
+      butcherDisplay(ctx, S, r);
     } else if (kind === 'kolonial') {
       for (const y of shelves) {
         shelf(y);

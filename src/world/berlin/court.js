@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, box, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 import { BAY_W } from './facades.js';
-import { LANTERN_GLASS, lampWash, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
 
 // Hinterhof hinter der Tordurchfahrt neben Kesslers Werkstatt (Rosenthaler Straße, Ostseite).
 // Der Hof reicht von der Rückseite der Straßenhäuser (x = 23) bis zum Quergebäude und von
@@ -15,10 +15,10 @@ export function buildCourt(loc, facades, { brickMat, ironMat }) {
   const { x0, x1, z0, z1 } = COURT;
 
   // Rückseiten der Straßenhäuser; die unterste Achse ganz im Norden ist die Hofseite des Tors.
-  facades.courtWall({ x: x0, z: z1, face: 'east', bays: 3, ground: ['ground', 'ground', null], color: 0x8a8070, lit: 0.12 });
+  facades.courtWall({ x: x0, z: z1, face: 'east', bays: 3, ground: ['ground', 'ground', null], color: 0x8a8070, lit: 0.12, glow: [1] });
   // Quergebäude mit Hauseingang, Seitenflügel.
-  const quer = facades.courtWall({ x: x1, z: -81.4, face: 'west', bays: 3, ground: ['ground', 'door', 'ground'], color: 0x847a6a, lit: 0.3 });
-  facades.courtWall({ x: x1, z: z1, face: 'north', bays: 3, color: 0x8e8472, lit: 0.25 });
+  const quer = facades.courtWall({ x: x1, z: -81.4, face: 'west', bays: 3, ground: ['ground', 'door', 'ground'], color: 0x847a6a, lit: 0.3, glow: [0] });
+  facades.courtWall({ x: x1, z: z1, face: 'north', bays: 3, color: 0x8e8472, lit: 0.25, glow: [2] });
 
   // Brandmauer: nackter Ziegel, so hoch wie die Hofwände.
   const H = quer.H + 0.3;
@@ -66,6 +66,8 @@ export function buildCourt(loc, facades, { brickMat, ironMat }) {
   addMesh(scene, b.build(), std({ vertexColors: true, roughness: 0.8, metalness: 0.15 }));
 
   // Laterne neben dem Eingang zum Quergebäude: ein warmer Fleck im Hof, ohne eigenes Licht.
+  // Ihr Schein liegt auf dem Pflaster bis zur Pumpe; die Erdgeschossfenster (glow) hellen die
+  // Ecken bei Teppichstange und Handwagen auf, damit beide sich gegen die Steine abzeichnen.
   const at = (lx, y, lz) => new THREE.Vector3(lx, y, lz).applyMatrix4(quer.base);
   const wall = at(1.5 * BAY_W + 1.2, 3.07, 0);
   const lanternIron = new Bag();
@@ -79,6 +81,11 @@ export function buildCourt(loc, facades, { brickMat, ironMat }) {
   glow.position.copy(door);
   glow.scale.setScalar(1.5);
   scene.add(glow);
+  const out = at(1.5 * BAY_W + 1.2, 0, 1).sub(at(1.5 * BAY_W + 1.2, 0, 0));
+  const pool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), lightPool(0xc77b38, 0.42));
+  pool.position.set(door.x + out.x * 1.6, 0.03, door.z + out.z * 1.6);
+  pool.scale.set(9, 1, 9);
+  scene.add(pool);
 
   loc.addHotspot({
     pos: [px, 1.2, pz],

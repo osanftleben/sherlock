@@ -771,9 +771,11 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
   // Hofwand: Fensterachsen ohne Hauskörper, Dach und Gehweg, für Hinterhöfe. Eigener Zufall
   // (courtRand), damit die Häuser an den Straßen bleiben, wie sie sind. ground[i] = null lässt
-  // das Erdgeschoss frei, etwa für die Hofseite einer Tordurchfahrt. Gibt die Lage der Wand zurück.
+  // das Erdgeschoss frei, etwa für die Hofseite einer Tordurchfahrt. glow nennt Achsen, deren
+  // Erdgeschossfenster sicher erleuchtet sind und Licht auf das Pflaster werfen; der Zufall
+  // läuft dabei gleich weiter. Gibt die Lage der Wand zurück.
   const courtRand = rng(1899);
-  const courtWall = ({ x, z, face, bays, ground = [], color = 0x8c8474, lit = 0.2, floors = 3 }) => {
+  const courtWall = ({ x, z, face, bays, ground = [], color = 0x8c8474, lit = 0.2, floors = 3, glow = [] }) => {
     const base = new THREE.Matrix4().multiplyMatrices(new THREE.Matrix4().makeTranslation(x, 0, z), new THREE.Matrix4().makeRotationY(FACING[face]));
     const W = bays * BAY_W;
     const cell = (on) => ({
@@ -788,9 +790,10 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       const tg = ground[i] === undefined ? 'ground' : ground[i];
       const gx = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(i * BAY_W, 0, 0));
       if (tg) {
-        const on = courtRand() < lit;
+        const on = (courtRand() < lit) || glow.includes(i);
         batcher.place(tg, gx, color, on, true, null, tg === 'ground' ? cell(on) : null);
-        if (on && tg === 'ground') spills.push({ matrix: gx, k: 0.45, y: 0 });
+        // Im Hof brennt keine Laterne: Was aus den Fenstern fällt, zeichnet sich stärker ab.
+        if (on && tg === 'ground') spills.push({ matrix: gx, k: 0.7, y: 0 });
         loc.collide(...toWorld(i * BAY_W, (i + 1) * BAY_W, -0.34, 0.05));
       }
       for (let f = 0; f < floors; f++) {

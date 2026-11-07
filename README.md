@@ -49,7 +49,7 @@ src/
       index.js       Straßenzüge, Eingänge, Anker, Stadtplan
       facades.js     Häuserzeilen: Fensterachsen, Hauskörper, Erker, Balkone, Gauben, Durchfahrten, Gehwege
       court.js       Hinterhof hinter der Durchfahrt neben Kesslers Werkstatt
-      railway.js     Stadtbahn, Bahnhof Börse, Zug
+      railway.js     Stadtbahn, Bahnhof Börse mit Eingang im Viaduktbogen neben dem Bankhaus, Zug
       plaza.js       Platz: Bäume, Litfaßsäule, Urania-Säule, Achteck
       shopwindows.js Schaufenster und Fenster der Schauplätze von Fall 1
       lamps.js       Gaslaternen, die nächsten sechs werfen Licht; kaputte bleiben dunkel

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
-import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture } from '../textures.js';
+import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
 import { addSign } from './facades.js';
 import { lightPool } from './lamps.js';
 import { hearing } from './traffic.js';
@@ -38,23 +38,19 @@ export function buildRailway(loc, r, brickMat) {
   const pools = [];
   const rf = rng(1892);
   const stationArches = new Set([-3, -2, 2, 3]);
+  // Im Bogen neben dem Bankhaus liegt der Eingang zum Bahnhof: Tür, Schalter, Fahrplan, Treppe.
+  const ENTRANCE = -2;
   // Front einer Bogenöffnung aus dem Atlas archFronts, mit der Ansichtsseite nach -z (side -1,
-  // zum Platz) oder +z (side 1, zur Spree).
+  // zum Platz) oder +z (side 1, zur Spree). Beim Eingang ist die Tür ausgespart.
   const front = (cell, x, z, side) => {
-    const { w, h, spring } = ARCH_FRONT;
-    const s = new THREE.Shape();
-    s.moveTo(-w / 2, 0);
-    s.lineTo(w / 2, 0);
-    s.lineTo(w / 2, spring);
-    s.absarc(0, spring, w / 2, 0, Math.PI, false);
-    s.closePath();
-    const g = new THREE.ShapeGeometry(s, 16);
+    const { w, h, rows } = ARCH_FRONT;
+    const g = new THREE.ShapeGeometry(archOutline(cell === ARCH_FRONT.station), 16);
     const pos = g.attributes.position;
     const uv = g.attributes.uv;
     const cu = cell % 2;
     const cv = Math.floor(cell / 2);
     for (let k = 0; k < pos.count; k++) {
-      uv.setXY(k, (cu + (pos.getX(k) + w / 2) / w) / 2, (1 - cv + Math.min(1, pos.getY(k) / h)) / 2);
+      uv.setXY(k, (cu + (pos.getX(k) + w / 2) / w) / 2, (rows - 1 - cv + Math.min(1, pos.getY(k) / h)) / rows);
     }
     if (side < 0) g.rotateY(Math.PI);
     fronts.push(g.translate(x, 0, z));
@@ -76,15 +72,17 @@ export function buildRailway(loc, r, brickMat) {
       // Destille oder Schlosserei mit Licht, sonst Kohlenhandlung oder Lager. Die Zahl aus r
       // bleibt, damit sich der Zufall des Viertels dahinter nicht verschiebt.
       const lit = r() < 0.28 || stationArches.has(i);
-      const cell = (lit ? 0 : 2) + (rf() < 0.5 ? 0 : 1);
+      const drawn = (lit ? 0 : 2) + (rf() < 0.5 ? 0 : 1);
+      const entrance = i === ENTRANCE;
+      const cell = entrance ? ARCH_FRONT.station : drawn;
       const x = i * SEG;
-      infill.box(0xa88872, SEG - 2, 8, 0.3, x, 4, VZ0 + 1.3);
+      if (!entrance) infill.box(0xa88872, SEG - 2, 8, 0.3, x, 4, VZ0 + 1.3);
       infill.box(0xa88872, SEG - 2, 8, 0.3, x, 4, VZ1 - 1.3);
       front(cell, x, VZ0 + 1.14, -1);
       front(2 + Math.floor(rf() * 2), x, VZ1 - 1.14, 1);
       // Vor den hellen Bögen am Platz eine Wandlaterne und ein Lichtfleck auf dem Pflaster.
       if (lit && Math.abs(x) < 70) {
-        const lx = x + (cell === 0 ? 0.9 : 3.2);
+        const lx = x + (entrance ? -1.5 : cell === 0 ? 0.9 : 3.2);
         const lz = VZ0 + 1.14;
         lanterns.box(0x161616, 0.04, 0.04, 0.5, lx, 3.05, lz - 0.25);
         lanterns.box(0x161616, 0.26, 0.05, 0.26, lx, 3.08, lz - 0.55);
@@ -92,7 +90,16 @@ export function buildRailway(loc, r, brickMat) {
         flames.push(new THREE.BoxGeometry(0.16, 0.3, 0.16).translate(lx, 2.9, lz - 0.55));
         pools.push(new THREE.PlaneGeometry(5.5, 4.5).rotateX(-Math.PI / 2).translate(x, 0.03, VZ0 - 0.4));
       }
-      loc.collide(ax, ax + SEG, VZ0, VZ1);
+      if (entrance) {
+        // In die Nische vor der Tür kann man hineintreten, durch die Tür nicht.
+        loc.collide(ax, ax + 1.1, VZ0, VZ1);
+        loc.collide(ax + SEG - 1.1, ax + SEG, VZ0, VZ1);
+        loc.collide(ax + 1.1, ax + SEG - 1.1, VZ0 + 1.1, VZ1);
+        (loc.dry ??= []).push({ minX: ax + 1.1, maxX: ax + SEG - 1.1, minZ: VZ0, maxZ: VZ0 + 1.14, top: ARCH_FRONT.spring });
+        buildEntrance(loc, x, VZ0 + 1.14);
+      } else {
+        loc.collide(ax, ax + SEG, VZ0, VZ1);
+      }
     } else {
       loc.collide(ax, ax + 1.1, VZ0, VZ1);
       loc.collide(ax + SEG - 1.1, ax + SEG, VZ0, VZ1);
@@ -250,6 +257,116 @@ export function buildRailway(loc, r, brickMat) {
       p.s.scale.set(size, size, 1);
       p.s.material.opacity = p.life * 0.5;
     }
+  });
+}
+
+// Umriss einer Bogenfront (Mitte unten im Ursprung). Mit door ist die Tür als Kerbe von unten
+// ausgespart; ein Loch im Umriss gäbe beim Zerlegen in Dreiecke feine Ritzen neben der Tür.
+function archOutline(door) {
+  const { w, spring, door: d } = ARCH_FRONT;
+  const s = new THREE.Shape();
+  s.moveTo(-w / 2, 0);
+  if (door) {
+    s.lineTo(-d.w / 2, 0);
+    s.lineTo(-d.w / 2, d.h);
+    s.lineTo(d.w / 2, d.h);
+    s.lineTo(d.w / 2, 0);
+  }
+  s.lineTo(w / 2, 0);
+  s.lineTo(w / 2, spring);
+  s.absarc(0, spring, w / 2, 0, Math.PI, false);
+  s.closePath();
+  return s;
+}
+
+// Hinter der Tür des Bahnhofseingangs (Front bei z = z0): ein Flur mit Treppe zum Bahnsteig, von
+// einer Gaslampe oben am Treppenabsatz beleuchtet. Das Licht ist in die Farben eingerechnet.
+// Dazu Anker für die Fälle und die Fundstellen, die ohne Fall da sind.
+function buildEntrance(loc, x, z0) {
+  const { scene } = loc;
+  const { w: dw, h: dh } = ARCH_FRONT.door;
+  const half = dw / 2;
+  const STEPS = 14;
+  const RISE = 0.18;
+  const TREAD = 0.32;
+  const zStair = z0 + 0.7;
+  const zTop = zStair + STEPS * TREAD;
+  const zBack = zTop + 0.9;
+  const top = STEPS * RISE;
+  const lampY = top + 2.3;
+  const lampZ = zBack - 0.5;
+  const bag = new Bag();
+  // Helligkeit nach dem Abstand zur Lampe: am Absatz hell, an der Tür nur noch ein Rest.
+  const lit = (base, z, y) => new THREE.Color(base).multiplyScalar(0.16 + 0.6 * Math.max(0, 1 - Math.hypot(lampZ - z, lampY - y) / 6.5));
+  // Dunkle Rückseite hinter der Front, damit vom Flur nichts an der Front vorbei scheint.
+  const back = new THREE.ShapeGeometry(archOutline(true), 16).rotateY(Math.PI).translate(x, 0, z0 + 0.03);
+  addMesh(scene, back, new THREE.MeshBasicMaterial({ color: 0x0a0806, side: THREE.DoubleSide }));
+  // Wände in drei Abschnitten, damit der Lichtverlauf sichtbar wird; unten ein dunkler Sockel.
+  for (let k = 0; k < 3; k++) {
+    const za = z0 + ((zBack - z0) * k) / 3;
+    const zb = z0 + ((zBack - z0) * (k + 1)) / 3;
+    const zm = (za + zb) / 2;
+    for (const sx of [-1, 1]) {
+      bag.box(lit(0xb8a27c, zm, 3.5), 0.08, 5.3, zb - za, x + sx * (half + 0.04), 3.75, zm);
+      bag.box(lit(0x4a3a2c, zm, 0.6), 0.1, 1.1, zb - za, x + sx * (half + 0.03), 0.55, zm);
+    }
+  }
+  bag.box(lit(0xb8a27c, zBack, lampY), dw + 0.2, 6.4, 0.08, x, 3.2, zBack + 0.04);
+  bag.box(lit(0x5a544c, z0 + 0.35, 0), dw, 0.04, zStair - z0, x, 0.02, (z0 + zStair) / 2);
+  for (let k = 0; k < STEPS; k++) {
+    const zc = zStair + (k + 0.5) * TREAD;
+    const y = (k + 1) * RISE;
+    bag.box(lit(0x6a625a, zc, y), dw, y, TREAD, x, y / 2, zc);
+    // Abgetretene, hellere Stufenkante.
+    bag.box(lit(0x8a8276, zc, y), dw, 0.03, 0.05, x, y + 0.005, zc - TREAD / 2 + 0.025);
+  }
+  bag.box(lit(0x6a625a, lampZ, top), dw, top, zBack - zTop, x, top / 2, (zTop + zBack) / 2);
+  // Decke: von der Türoberkante mit der Treppe ansteigend bis über den Absatz.
+  const rise = lampY + 0.6 - dh;
+  const ceil = new THREE.PlaneGeometry(dw, Math.hypot(zBack - z0, rise));
+  ceil.rotateX(Math.PI / 2 - Math.atan2(rise, zBack - z0));
+  ceil.translate(x, dh + rise / 2, (z0 + zBack) / 2);
+  bag.add(ceil, lit(0x8a7658, zBack - 1, lampY));
+  // Handlauf aus Eisen an der einen Wand.
+  const rail = new THREE.BoxGeometry(0.05, 0.05, Math.hypot(zTop - zStair, top));
+  rail.rotateX(-Math.atan2(top, zTop - zStair));
+  rail.translate(x - half + 0.06, 0.95 + top / 2, (zStair + zTop) / 2);
+  bag.add(rail, 0x141414);
+  // Türflügel aus Holz, ganz nach innen an die Wände geklappt.
+  for (const sx of [-1, 1]) {
+    bag.box(lit(0x3a2a1a, z0 + 0.6, 1.5), 0.06, dh - 0.05, half - 0.05, x + sx * (half - 0.03), dh / 2, z0 + (half - 0.05) / 2 + 0.02);
+  }
+  addMesh(scene, bag.build(), new THREE.MeshBasicMaterial({ vertexColors: true }));
+  // Die Gaslampe über dem Absatz.
+  addMesh(scene, new THREE.BoxGeometry(0.16, 0.24, 0.16).translate(x, lampY, lampZ), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) }));
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xffb060, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.position.set(x, lampY, lampZ);
+  glow.scale.setScalar(1.6);
+  scene.add(glow);
+  // Durch die offene Tür fällt warmes Licht auf das Pflaster vor der Nische.
+  addMesh(scene, new THREE.PlaneGeometry(3.2, 3.4).rotateX(-Math.PI / 2).translate(x, 0.031, z0 - 2.2), lightPool(0xd09050, 0.35));
+
+  // Von außen gesehen (Blick nach +z) liegt der Schalter links der Tür (x größer), der Fahrplan rechts.
+  loc.anchor('knipser', x + 1.65, 0, z0 - 0.62, Math.PI - 0.3);
+  loc.anchor('fahrplan', x - 2.95, 1.75, z0 - 0.06);
+  loc.addHotspot({
+    id: 'fahrplan',
+    pos: [x - 2.95, 1.75, z0 - 0.06],
+    radius: 0.8,
+    label: 'Fahrplan',
+    action: { say: 'Stadtbahn, Winterfahrplan. Nach Westen wie nach Osten fährt alle zwanzig Minuten ein Zug, in kleiner, gedrängter Schrift. Berlin lebt nach der Uhr, und das hier ist sein Gesangbuch.' },
+  });
+  loc.addHotspot({
+    pos: [x + 2.95, 1.7, z0 - 0.06],
+    radius: 0.8,
+    label: 'Fahrkartenschalter',
+    action: { say: 'Hinter der Mattscheibe der Schatten eines Beamten mit Ärmelschonern. Ein Gestell voller Pappkarten und eine Datumspresse, die bei jedem Billet hart zuschlägt. Wer hier eine Fahrkarte kauft, bekommt den Tag gleich mit eingeprägt.' },
+  });
+  loc.addHotspot({
+    pos: [x, 1.4, z0 + 0.6],
+    radius: 0.8,
+    label: 'Treppe zum Bahnsteig',
+    action: { say: 'Granitstufen, in der Mitte ausgetreten, als wäre die halbe Stadt sie schon hinaufgehastet. Von oben dringen das Zischen der Lokomotiven und die Rufe der Aufsicht herab.' },
   });
 }
 

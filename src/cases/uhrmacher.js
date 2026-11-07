@@ -41,6 +41,8 @@ export const uhrmacher = {
     c_havanna: { title: 'Wendts Havanna', text: 'Auf Wendts Schreibtisch steht eine Kiste H. Upmann. Die Asche im Becher ist weiß, fest und lang.' },
     c_portier: { title: 'Der Portier', text: 'Portier Lemke schloss am Freitag um acht ab und ging. Wendt behielt den Schlüssel zur Hofpforte, um später selbst zu gehen; wann, weiß niemand. Seit Mittwoch fragte Wendt ihn nach der Zeit, die Uhr sei beim Uhrmacher. Heute früh schlug sie in Wendts Weste.' },
     c_uhr17: { title: 'Die Uhr Nr. 17', text: 'Wendt musste mir seine Repetieruhr zeigen. Sie schlägt mit demselben hellen Glöckchen, das Krause und Lemke gehört haben. Innen im Rückdeckel steht Kesslers Ritzung „17/92“. Der Staubdeckel darunter ist leer, am Rand klebt ein Rest Siegellack.' },
+    c_fahrplan: { title: 'Der letzte Zug', text: 'Laut Aushang am Bahnhof Börse fährt der letzte Stadtbahnzug nach Charlottenburg um 10.17 Uhr abends.' },
+    c_billet: { title: 'Der Billetknipser', text: 'Zühlke: Am Freitag kam Wendt erst kurz vor dem letzten Zug, im Laufschritt quer über den Platz, von der Rosenthaler Straße her und nicht aus dem Bankhaus nebenan. Als Zühlke ihn zur Eile mahnte, schlug es in seiner Weste.' },
     c_kette: { title: 'Die Uhrkette', text: 'Wendts Uhrkette spannt sich straff in die Westentasche: An ihrem Ende hängt ein Gewicht. Trotzdem liest er die Zeit von der Wanduhr ab, statt die Tasche zu berühren.' },
   },
 
@@ -56,6 +58,8 @@ export const uhrmacher = {
     d_asche: { title: 'Die Asche gehört Wendt', pairs: [['c_asche', 'c_havanna']], text: 'Dieselbe weiße Asche, dieselbe Zigarre. Über den Unterschied der Tabakaschen habe ich eine Monographie geschrieben; hier genügt ein Blick.' },
     d_luege: { title: 'Wendt lügt', pairs: [['c_aussage', 'c_haken'], ['c_aussage', 'c_kette']], text: 'Die Uhr soll noch bei Kessler liegen, aber der Haken ist leer und Wendts Kette trägt ein Gewicht. Er hat sie selbst geholt, und das nur am Freitagabend.' },
     d_alibi: { title: 'Wendts Alibi hat ein Loch', pairs: [['c_aussage', 'c_portier']], text: 'Sein einziger Zeuge ging um acht. Danach saß der Prokurist allein in der Bank, mit dem Schlüssel zur Hofpforte in der Tasche, und bis zur Rosenthaler Straße sind es zehn Minuten. Und die Uhr, die angeblich noch bei Kessler liegt, schlug heute früh in seiner Weste.' },
+    d_zug: { title: 'Zur letzten Stadtbahn', pairs: [['c_gang', 'c_fahrplan']], text: 'Krauses Fremder eilte kurz nach zehn Richtung Börse, wie einer, der die letzte Stadtbahn kriegen will. Die letzte nach Westen fährt um 10.17. Wer sie genommen hat, musste am Eingang am Billetknipser vorbei.' },
+    d_umweg: { title: 'Nicht aus der Bank', pairs: [['c_billet', 'c_aussage']], text: 'Wendt will bis spät in der Bank gesessen haben und von dort zur Stadtbahn gegangen sein. Von der Banktür bis zur Treppe sind es zwanzig Schritte. Er kam aber von der Rosenthaler Straße, aus Kesslers Richtung, kaum eine Viertelstunde nachdem Krause den Fremden aus dem Durchgang kommen sah. Und in seiner Weste schlug die Uhr, die angeblich noch bei Kessler lag.' },
     d_motiv: { title: 'Das Motiv', pairs: [['c_loesch', 'c_extrablatt']], text: 'Am Montag kommt die Revision. Der Zettel in der Uhr war der Beweis einer Unterschlagung, und Kessler drohte mit der Polizei. Dem Täter blieben drei Tage.' },
     d_zettel: { title: 'Der Zettel ist fort', pairs: [['c_uhr17', 'c_loesch']], text: 'Kessler schrieb von einem Zettel in der Uhr, und jetzt ist der Staubdeckel leer. Wendt hat ihn am Freitagabend herausgenommen, bevor er die Uhr einsteckte, und dazu die Seite aus dem Reparaturbuch. Nur der Bleistiftabdruck darunter ist ihm entgangen.' },
     d_beweis: { title: 'Der Beweis in der Weste', pairs: [['c_ritz', 'c_kette']], text: 'In Wendts Weste hängt eine Uhr, in deren Gehäuse Kessler „17/92“ geritzt hat. Ein Griff genügt, und seine Aussage ist widerlegt.' },
@@ -71,6 +75,7 @@ export const uhrmacher = {
     { name: 'Egon von Rathen', role: 'Leutnant a. D., spielt und hat Schulden bei Kessler.' },
     { name: 'Reinhold Wendt', role: 'Prokurist im Bankhaus Lindner & Sohn, Kunde bei Kessler.', when: ['f_wendt'] },
     { name: 'Apotheker Seidel', role: 'Apotheke zum Schwarzen Adler.', when: ['f_seidel'] },
+    { name: 'Billetknipser Zühlke', role: 'Steht am Eingang zum Bahnhof Börse und kennt jeden, der dort hinaufgeht.', when: ['f_zuehlke'] },
     { name: 'Portier Lemke', role: 'Hütet die Tür des Bankhauses Lindner & Sohn. Geht um acht nach Hause.', when: ['f_lemke'] },
   ],
 
@@ -101,6 +106,7 @@ export const uhrmacher = {
     { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { outfit: 'frock', coat: 0x2a2a30, vest: 0x5a1e22, neck: 'cravat', tie: 0xd8d2c4, trousers: 0x3a3a40, hair: 0x5a5048, hairStyle: 'parted', moustache: 'kaiser', eyewear: 'monocle', cane: 'silver', build: 'slim', height: 1.8 } },
     { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { outfit: 'frock', coat: 0x16181c, vest: 0x2a2a2e, trousers: 0x202024, hair: 0x2a241e, hairStyle: 'parted', beard: 'mutton', moustache: 'brush', eyewear: 'spectacles', chain: true, height: 1.8 } },
     { id: 'lemke', location: 'bank', anchor: 'portier', name: 'Portier Lemke', dialog: 'lemke', look: { outfit: 'overcoat', coat: 0x2c3a5c, buttons: 0xc8a048, trousers: 0x1c2030, neck: 'none', hat: 'peaked', hatColor: 0x222a40, moustache: 'walrus', hair: 0x8a8278, hairStyle: 'receding', build: 'stout', height: 1.74 } },
+    { id: 'zuehlke', location: 'berlin', anchor: 'knipser', name: 'Billetknipser Zühlke', dialog: 'zuehlke', look: { outfit: 'tunic', coat: 0x1c2436, piping: 0x9a2a1e, buttons: 0xb8963f, trousers: 0x161a24, hat: 'peaked', hatColor: 0x1a2030, moustache: 'brush', hair: 0x6a6258, hairStyle: 'receding', height: 1.7 } },
     { id: 'kassierer', location: 'bank', anchor: 'kassierer', name: 'Kassierer', look: { outfit: 'jacket', coat: 0x26262a, vest: 0x3a3a3c, shirt: 0xd8d2c4, neck: 'tie', tie: 0x1a1a1e, hair: 0x6a5a48, hairStyle: 'parted', moustache: 'brush', eyewear: 'spectacles', build: 'slim', height: 1.7 }, say: '„Der Herr Prokurist ist sehr beschäftigt, die Revision, Sie verstehen.“ Er senkt den Blick wieder auf seine Kolonnen. Seine Feder hat seit einer Viertelstunde keine Zahl mehr geschrieben.' },
     { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, neck: 'scarf', tie: 0x3a3428, hat: 'cap', beard: 'full', glass: true, build: 'stout', pose: 'sit' }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
     { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: 'walrus', hair: 0x5a5048, glass: true, pose: 'sit' }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
@@ -160,6 +166,11 @@ export const uhrmacher = {
     { location: 'berlin', anchor: 'durchgang', label: 'Durchfahrt zum Hof', radius: 0.9, range: 3.2, when: ['c_glocke'], action: { say: 'Hier kam Krauses Herr heraus. Wer Kesslers Laden verlässt, steht unter der Laterne über der Tür, und die brennt. Ein paar Schritte weiter, unter diesem Gewölbe, sieht ihn niemand mehr. Er hat hier gewartet, bis die Straße leer war.' } },
     { location: 'berlin', anchor: 'kaputteLaterne', label: 'Kaputte Laterne', radius: 0.6, range: 4, when: ['!c_glocke'], action: { say: 'Eine Scheibe eingeschlagen, der Brenner kalt, die Scherben liegen noch auf dem Gehweg. Zwischen den brennenden Laternen ist das hier das dunkelste Stück der Rosenthaler Straße.' } },
     { location: 'berlin', anchor: 'kaputteLaterne', label: 'Kaputte Laterne', radius: 0.6, range: 4, when: ['c_glocke'], action: { say: 'Krauses kaputte Laterne. Hier blieb der Mann stehen und ließ seine Uhr schlagen. Wer die Stunde im Dunkeln hören kann, muss kein Streichholz anreißen, das ihm ins Gesicht leuchtet.' } },
+
+    { location: 'berlin', anchor: 'fahrplan', replaces: 'fahrplan', label: 'Fahrplan', glint: true, radius: 0.8, action: { inspect: {
+      title: 'Der Fahrplan', give: ['c_fahrplan'],
+      text: 'Stadtbahn, Winterfahrplan, unter Glas neben dem Eingang. Nach Westen alle zwanzig Minuten, der letzte Zug nach Charlottenburg um 10.17 Uhr abends. Wer ihn verpasst, geht zu Fuß, eine gute Stunde durch den Tiergarten.',
+    } } },
 
     // Bank
     { location: 'bank', anchor: 'zigarren', label: 'Zigarrenkiste', glint: true, radius: 0.25, action: { inspect: {
@@ -295,6 +306,31 @@ export const uhrmacher = {
         freitag: { text: 'Freitag? Jejen zehn, kurz nach, kommt ’n Herr aus’m Durchgang neben Kesslern. Ick steh hinten im Dunkeln. Die Laterne da is ja kaputt, hab’s jemeldet, passiert aber nüscht. Und da bleibt der stehn und denn macht’s pling.', opts: [{ t: 'Es macht … pling?', go: 'glocke' }] },
         glocke: { give: ['c_glocke'], sound: 'repeater', text: 'Pling, pling, pling. Janz fein, wie ’n Glöckchen, und dit direkt aus seiner Weste. Hat er nich mal hinjekiekt, nur so rinjefasst. Hab ick noch nie jehört, ick dachte erst, ick hab wat am Ohr.', opts: [{ t: 'Wie sah der Mann aus?', go: 'mann', req: ['!c_gang'] }, { t: 'Danke, das hilft mir sehr.', go: 'hub' }] },
         mann: { give: ['c_gang'], text: 'Jesicht hab ick nich jesehn, war ja stockduster. Zylinder, feiner Überzieher, und flott unterwegs, Richtung Bahnhof Börse. Keen Stock, keen Humpeln. Wie eener, der die letzte Stadtbahn kriegen will.', opts: [{ t: 'Ausgezeichnet beobachtet.', go: 'hub' }] },
+      },
+    },
+
+    zuehlke: {
+      who: 'Billetknipser Zühlke',
+      start: [{ req: ['f_zuehlke'], node: 'hub' }, { node: 'a' }],
+      nodes: {
+        a: {
+          give: ['f_zuehlke'],
+          obs: 'Dienstmütze mit rotem Band, die Knipszange an einer Schnur am Knopfloch. Der rechte Daumen schwielig vom Lochen. Er sieht jedem ins Gesicht, der an ihm vorbei will, aus Gewohnheit, nicht aus Neugier.',
+          text: 'N’Abend, der Herr. Billet? Richtung Charlottenburg in sechs Minuten. Ohne Billet komm Se an mir nich vorbei, und an mir is noch keener vorbeijekommen.',
+          opts: [{ t: 'Kein Billet heute. Nur ein paar Fragen.', go: 'hub' }],
+        },
+        hub: {
+          text: 'Fragen Se, bis der Zug kommt.',
+          opts: [
+            { t: 'Sie sehen jeden, der hier hinaufgeht?', go: 'jeder', once: true },
+            { t: 'Wer kam am Freitag zum letzten Zug nach Westen?', go: 'freitag', req: ['c_gang', '!c_billet'] },
+            { t: 'Erzählen Sie noch einmal vom Freitag.', go: 'wendt', req: ['c_billet'] },
+            { t: 'Gute Nacht, Zühlke.', end: true },
+          ],
+        },
+        jeder: { text: 'Jeden. Zwölf Stunden am Tag, tausend Billets. Die Jesichter vergess ick, aber die Leute nich: wer immer um sieben fährt, wer mit’m Hund kommt, wer ’n Jroschen zu wenig hat. Wer zu spät kommt, den merk ick mir am längsten. Der rennt.', opts: [{ t: 'Das glaube ich.', go: 'hub' }] },
+        freitag: { text: 'Freitag? Der Letzte nach Westen jeht zehn Uhr siebzehn, steht da am Aushang. Da kam eener in letzter Minute, Zylinder, feiner Überzieher, im Laufschritt quer übern Platz. Von da drüben, von der Rosenthaler.', opts: [{ t: 'Nicht aus dem Bankhaus nebenan?', go: 'wendt' }] },
+        wendt: { give: ['c_billet'], sound: 'repeater', text: 'Nee, dit hätt ick jesehn, die Tür is ja jleich da. Komisch war et trotzdem, denn et war der Herr Prokurist Wendt von nebenan. Fährt mit Zeitkarte nach Charlottenburg. Ick sach noch: Herr Prokurist, drei Minuten! Und er fasst in die Weste, und denn macht’s pling, pling, janz fein. Hat nich mal hinjekiekt.', opts: [{ t: 'Sie haben ein gutes Gedächtnis, Zühlke.', go: 'hub' }] },
       },
     },
 
@@ -447,6 +483,7 @@ export const uhrmacher = {
             { t: 'Was hat es mit der Revision auf sich?', go: 'revision', once: true },
             { t: 'Sie schlafen schlecht, Herr Prokurist.', go: 'schlaf', once: true, req: ['c_rezept'] },
             { t: 'Ihr Portier ging am Freitag um acht.', go: 'portier', once: true, req: ['c_portier'] },
+            { t: 'Sie nahmen am Freitag den letzten Zug, Herr Prokurist.', go: 'zug', once: true, req: ['c_billet'] },
             { t: 'Herr Prokurist, Ihre Uhr. Lassen Sie sie mich hören.', go: 'stellen', req: ['d_beweis', 'd_repetier', 'c_portier'] },
             { t: 'Danke für Ihre Zeit.', end: true },
           ],
@@ -465,6 +502,7 @@ export const uhrmacher = {
         ende: { text: 'Gehen Sie. Bitte, gehen Sie.', obs: 'Er steckt die Uhr nicht wieder ein. Er hält sie in beiden Händen und sieht dem Sekundenzeiger zu. Piefke wird die Nacht über die Hofpforte im Auge behalten; dafür sorge ich auf dem Rückweg.', opts: [{ t: 'Gute Nacht, Herr Prokurist.', end: true }] },
         danach: { text: 'Ich habe Ihnen nichts mehr zu sagen. Sagen Sie es dem Kommissar.', obs: 'Die Uhr liegt noch immer vor ihm auf der Schreibunterlage. Er hat sie nicht wieder angerührt.', opts: [{ t: 'Eine Frage noch: Ihre Zigarren.', go: 'zigarre2', req: ['!c_havanna'] }, { t: 'Das werde ich.', end: true }] },
         zigarre2: { give: ['c_havanna'], text: 'H. Upmann. Nehmen Sie die ganze Kiste, wenn Sie wollen. Ich werde sie nicht mehr brauchen.', obs: 'Im Aschenbecher liegt ein Stück Asche, lang, weiß und fest.', opts: [{ t: 'Danke, nein.', end: true }] },
+        zug: { text: 'Ich sagte Ihnen ja, dass ich mit der Stadtbahn gefahren bin. Wann genau, weiß ich nicht mehr. Ich hatte meine Uhr ja nicht bei mir.', obs: 'Er sagt es zu schnell. Nach der Uhr hatte ich nicht gefragt.', opts: [{ t: 'Natürlich nicht.', go: 'hub' }] },
         schlaf: { text: 'Das sieht man mir an? Die Geschäfte. Dr. Lessing verschreibt mir etwas dagegen, Seidel hat es vorrätig. Ich nehme es selten. Sehr selten. Warum fragen Sie?', opts: [{ t: 'Reine Teilnahme.', go: 'hub' }] },
       },
     },

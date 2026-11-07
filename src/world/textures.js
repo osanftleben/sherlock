@@ -2831,24 +2831,27 @@ export function twigs() {
 // mit Licht, Kohlenhandlung (2) und Speditionslager (3) dunkel. Eine Zelle zeigt die ganze
 // Bogenöffnung, 8,8 m breit und 8,5 m hoch: unten die Ladenfront, darüber die verglaste
 // Lünette mit Strahlensprossen. map ist die Farbe, emissiveMap das Licht hinter den Scheiben.
-export const ARCH_FRONT = { w: 8.8, h: 8.5, spring: 4.1 };
+// Zellen im Atlas archFronts: 0 Destille, 1 Schlosserei (beide mit Licht), 2 Kohlenhandlung,
+// 3 Speditionslager, 4 Eingang zum Bahnhof Börse (mit Licht, die Tür ist ein Loch im Mesh).
+export const ARCH_FRONT = { w: 8.8, h: 8.5, spring: 4.1, rows: 3, station: 4, door: { w: 2.4, h: 3.0 } };
 export function archFronts() {
   return cached('archFronts', () => {
     const C = 768;
-    const color = canvas(C * 2);
-    const glow = canvas(C * 2);
+    // Zwei Spalten, drei Zeilen: vier Bogenarten und der Eingang zum Bahnhof Börse.
+    const color = canvas(C * 2, C * ARCH_FRONT.rows);
+    const glow = canvas(C * 2, C * ARCH_FRONT.rows);
     const cx = color.getContext('2d');
     const gx = glow.getContext('2d');
     gx.fillStyle = '#000';
-    gx.fillRect(0, 0, C * 2, C * 2);
+    gx.fillRect(0, 0, C * 2, C * ARCH_FRONT.rows);
     const { w: W, h: H, spring: SP } = ARCH_FRONT;
     const sx = C / W;
     const sy = C / H;
     const r = rng(1893);
-    for (let cell = 0; cell < 4; cell++) {
+    for (let cell = 0; cell < 5; cell++) {
       const ox = (cell % 2) * C;
       const oy = Math.floor(cell / 2) * C;
-      const lit = cell < 2;
+      const lit = cell < 2 || cell === ARCH_FRONT.station;
       // Meter (x von links, y von unten) in Pixel der Zelle.
       const X = (x) => ox + x * sx;
       const Y = (y) => oy + C - y * sy;
@@ -3007,6 +3010,34 @@ export function archFronts() {
         pane(0.9, 1.7, 1.9, 2.8, 2, 2, '#241c14', false);
         pane(6.9, 1.7, 7.9, 2.8, 2, 2, '#241c14', false);
         lettering('KOHLEN  ·  KOKS  ·  BRIKETTS', W / 2, 3.72, 34, 'rgba(232,226,210,0.85)');
+      } else if (cell === ARCH_FRONT.station) {
+        // Bahnhof Börse: Tür in der Mitte (im Mesh ausgespart), links der Fahrkartenschalter mit
+        // dem Schatten des Beamten hinter der Mattscheibe, rechts der Fahrplan unter Glas.
+        const { door } = ARCH_FRONT;
+        const d0 = (W - door.w) / 2;
+        rect(cx, 0.3, 3.3, W - 0.3, 3.95, '#16150f');
+        lettering('Bahnhof Börse  ·  Zu den Zügen', W / 2, 3.62, 44, '#e0c98a', '"UnifrakturMaguntia", serif');
+        rect(cx, d0 - 0.14, 0, d0 + door.w + 0.14, door.h + 0.14, '#2a2016');
+        rect(cx, d0, 0, d0 + door.w, door.h, '#000');
+        pane(0.6, 1.0, 2.3, 2.35, 3, 2, '#2a2016', false);
+        rect(cx, 0.45, 0.88, 2.45, 1.0, '#3a2c1e');
+        lettering('Fahrkarten-Ausgabe', 1.45, 2.68, 22, '#e6dcc2');
+        for (const ctx of [cx, gx]) {
+          ctx.fillStyle = ctx === gx ? 'rgba(0,0,0,0.6)' : 'rgba(40,24,10,0.55)';
+          ctx.beginPath();
+          ctx.ellipse(X(1.5), Y(1.95), 0.17 * sx, 0.2 * sy, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(X(1.5), Y(1.2), 0.42 * sx, 0.42 * sy, 0, Math.PI, 0);
+          ctx.fill();
+        }
+        rect(cx, 6.45, 0.95, 8.25, 2.55, '#2a2016');
+        rect(cx, 6.55, 1.05, 8.15, 2.45, '#d8d0bc');
+        lettering('Fahrplan', 7.35, 2.3, 18, '#1a1a1a');
+        cx.fillStyle = 'rgba(30,30,30,0.7)';
+        for (let k = 0; k < 9; k++) {
+          for (const c0 of [6.65, 7.4]) cx.fillRect(X(c0), Y(2.12 - k * 0.11), (0.65 - (k % 3) * 0.08) * sx, 2);
+        }
       } else {
         // Speditionslager: Doppeltür, kleine vergitterte Fenster, verblasste Schrift.
         planks(3.4, 0, 5.4, 2.9, '#33291f');

@@ -425,6 +425,7 @@ export function signTexture(lines, {
   border = true,
   font = '"UnifrakturMaguntia", serif',
   size = 104,
+  sub = 0.5,
 } = {}) {
   const c = canvas(width, height);
   const ctx = c.getContext('2d');
@@ -440,7 +441,7 @@ export function signTexture(lines, {
   ctx.textBaseline = 'middle';
   const list = Array.isArray(lines) ? lines : [lines];
   list.forEach((line, i) => {
-    const s = i === 0 ? size : size * 0.5;
+    const s = i === 0 ? size : size * sub;
     ctx.font = `${s}px ${i === 0 ? font : '"EB Garamond", serif'}`;
     const y = height / 2 + (i - (list.length - 1) / 2) * (list.length > 1 ? height * 0.42 : 0);
     ctx.fillText(line, width / 2, y, width - 60);

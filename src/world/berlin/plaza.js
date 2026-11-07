@@ -254,13 +254,16 @@ function buildCabRank(loc, ironMat) {
   const { scene } = loc;
   const sx = 21.4;
   const sz = -7.4;
-  addMesh(scene, cyl(0.04, 0.05, 2.6, sx, 1.3, sz, 8), ironMat);
+  addMesh(scene, merge([cyl(0.04, 0.05, 2.08, sx, 1.04, sz, 8), new THREE.SphereGeometry(0.05, 8, 6).translate(sx, 2.58, sz)]), ironMat);
   loc.collide(sx - 0.08, sx + 0.08, sz - 0.08, sz + 0.08);
-  const tex = signTexture(['Droschken', 'Halteplatz'], { width: 768, size: 110 });
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.24), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.25, side: THREE.DoubleSide }));
-  sign.position.set(sx, 2.45, sz);
-  sign.rotation.y = -Math.PI / 2;
-  scene.add(sign);
+  // Emailleschild 1,1 × 0,44 m im Eisenrahmen, auf beiden Seiten lesbar: zum Platz und zu den
+  // wartenden Wagen.
+  const tex = signTexture(['Droschken', 'HALTEPLATZ'], { width: 1024, height: 410, size: 170, sub: 0.62 });
+  const signMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0.3 });
+  for (const a of [-Math.PI / 2, Math.PI / 2]) {
+    addMesh(scene, new THREE.PlaneGeometry(1.1, 0.44).translate(0, 0, 0.022).rotateY(a).translate(sx, 2.3, sz), signMat);
+  }
+  addMesh(scene, new THREE.BoxGeometry(0.03, 0.5, 1.16).translate(sx, 2.3, sz), ironMat);
 
   // Kohlebecken: Eisenkorb auf drei Beinen, die Glut leuchtet.
   const bx = 19.4;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, merge, std } from '../kit.js';
 import { clockFace, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
-import { idleFigure, makeFigure } from '../figures.js';
+import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
 
@@ -108,16 +108,20 @@ export function buildPlaza(loc, r, ironMat) {
   });
 
   // Droschkenplatz mit wartender Droschke
-  const cab = makeDroschke();
+  const cab = makeDroschke({ horse: 0x3a2516 });
   cab.position.set(24, 0, -2);
   cab.rotation.y = Math.PI;
   scene.add(cab);
   loc.collide(22.8, 25.2, -8, 2.2);
   // Die zweite wartet ohne Kutscher, der steht mit dem Kollegen am Kohlebecken.
-  const cab2 = makeDroschke({ driver: false });
+  const cab2 = makeDroschke({ driver: false, horse: 0x1d1a17, waiting: true });
   cab2.position.set(24, 0, -12);
   cab2.rotation.y = Math.PI;
   scene.add(cab2);
+  loc.onUpdate((dt, t) => {
+    idleHorse(cab.userData.horse, t);
+    idleHorse(cab2.userData.horse, t + 7.3);
+  });
   loc.collide(22.8, 25.2, -17.2, -9.6);
   buildCabRank(loc, ironMat);
   loc.addHotspot({

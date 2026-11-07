@@ -672,36 +672,157 @@ export function walkFigure(figure, phase) {
   if (f.female) f.body.rotation.z = Math.sin(phase) * 0.015;
 }
 
-// Pferd aus wenigen Formen. Es läuft in +Z.
-export function makeHorse(color = 0x2e2018) {
+// Droschkenpferd mit Geschirr. Es läuft in +Z, die Hufe stehen auf y = 0.
+// Rumpf aus Brust, Bauch und Kruppe; Hals und Kopf hängen an einem Gelenk am Widerrist, damit
+// sie nicken können; der Schweif pendelt. Beine mit Knie, Sprunggelenk, Fessel und Huf.
+const HORSE_UP = new THREE.Vector3(0, 1, 0);
+const LEATHER = 0x17120e;
+const BRASS = 0x9a7c3c;
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// Kegelstumpf von a nach b, seitlich um sx gestaucht. Alle Teile liegen in Ebenen x = const,
+// die Drehung geht also um die x-Achse und sx bleibt die Breite.
+function strut(a, b, r0, r1, seg = 8, sx = 1) {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const len = d.length();
+  const g = new THREE.CylinderGeometry(r1, r0, len, seg).scale(sx, 1, 1).translate(0, len / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(HORSE_UP, d.normalize()));
+  return g.translate(a.x, a.y, a.z);
+}
+
+function ell(rx, ry, rz, x, y, z, w = 14, h = 9) {
+  return new THREE.SphereGeometry(1, w, h).scale(rx, ry, rz).translate(x, y, z);
+}
+
+const horseLegs = new Map();
+function horseLeg(color, hind) {
+  const key = `${color}-${hind}`;
+  if (!horseLegs.has(key)) {
+    const hoof = 0x141110;
+    const z = hind ? -0.12 : 0.02;
+    const parts = [
+      tint(hind ? strut(V3(0, 0.04, 0.03), V3(0, -0.42, z), 0.12, 0.06, 8, 0.7) : strut(V3(0, 0.05, 0), V3(0, -0.43, z), 0.09, 0.055, 8, 0.8), color),
+      tint(ell(0.05, 0.065, hind ? 0.07 : 0.055, 0, -0.45, z), color),
+      tint(strut(V3(0, -0.45, z), V3(0, -0.85, hind ? -0.05 : 0), 0.042, 0.036, 6), color),
+      tint(ell(0.046, 0.05, 0.05, 0, -0.87, hind ? -0.045 : 0.005, 8, 6), color),
+      tint(strut(V3(0, -0.87, hind ? -0.045 : 0.005), V3(0, -0.95, hind ? -0.01 : 0.04), 0.036, 0.042, 6), color),
+      tint(strut(V3(0, -1.02, hind ? 0 : 0.05), V3(0, -0.94, hind ? -0.01 : 0.04), 0.062, 0.046, 8), hoof),
+    ];
+    horseLegs.set(key, merge(parts));
+  }
+  return horseLegs.get(key);
+}
+
+let horseMat = null;
+
+export function makeHorse(color = 0x2e2018, { blanket = false, nosebag = false } = {}) {
+  horseMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 });
+  const mane = 0x14100c;
   const root = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.72 });
-  const bodyGeo = new THREE.CapsuleGeometry(0.34, 1.05, 6, 12);
-  bodyGeo.rotateX(Math.PI / 2);
-  bodyGeo.translate(0, 1.18, 0);
-  // Hals, Mähne und Kopf werden um ihre eigene Mitte gekippt und erst dann an den Rumpf gesetzt.
-  // Der Hals steigt vom Widerrist (z 0,6) schräg nach vorn zum Hinterkopf (z 1,0) auf.
-  const neck = cyl(0.13, 0.22, 0.8, 0, 0, 0, 10).rotateX(0.55).translate(0, 1.62, 0.8);
-  const mane = box(0.05, 0.75, 0.1).rotateX(0.55).translate(0, 1.7, 0.67);
-  const headGeo = box(0.17, 0.2, 0.5).rotateX(0.7).translate(0, 1.84, 1.17);
-  const ear1 = box(0.04, 0.12, 0.04, -0.06, 2.12, 0.97);
-  const ear2 = box(0.04, 0.12, 0.04, 0.06, 2.12, 0.97);
-  const tail = cyl(0.03, 0.09, 0.8, 0, 0.98, -0.92, 8);
-  root.add(new THREE.Mesh(merge([bodyGeo, neck, headGeo, ear1, ear2, mane, tail]), mat));
+  const body = [
+    tint(ell(0.33, 0.36, 0.72, 0, 1.17, -0.02), color),
+    tint(ell(0.3, 0.38, 0.34, 0, 1.2, 0.5), color),
+    tint(ell(0.33, 0.35, 0.38, 0, 1.25, -0.52), color),
+    tint(ell(0.14, 0.18, 0.3, 0, 1.4, 0.38), color),
+    tint(ell(0.06, 0.06, 0.1, 0, 1.47, -0.86), color),
+  ];
+  for (const s of [-1, 1]) {
+    body.push(tint(ell(0.1, 0.3, 0.2, s * 0.2, 1.14, 0.56), color));
+    body.push(tint(ell(0.12, 0.32, 0.26, s * 0.19, 1.1, -0.6), color));
+  }
+  // Geschirr: Kummet um den Halsansatz, Sellette mit Bauchgurt, Hinterzeug und Stränge.
+  body.push(tint(new THREE.TorusGeometry(0.27, 0.065, 6, 18).scale(0.78, 1.15, 1).rotateX(-0.6).translate(0, 1.5, 0.68), LEATHER));
+  for (const s of [-1, 1]) {
+    body.push(tint(ell(0.035, 0.035, 0.035, s * 0.12, 1.84, 0.5, 8, 6), BRASS));
+    body.push(tint(strut(V3(s * 0.27, 1.3, 0.62), V3(s * 0.36, 1.06, -0.62), 0.016, 0.016, 4), LEATHER));
+    body.push(tint(new THREE.TorusGeometry(0.035, 0.008, 4, 10).translate(s * 0.1, 1.64, 0.12), BRASS));
+  }
+  body.push(tint(new THREE.BoxGeometry(0.36, 0.08, 0.26).translate(0, 1.56, 0.12), LEATHER));
+  body.push(tint(new THREE.TorusGeometry(0.37, 0.025, 4, 22).scale(0.95, 1.02, 1).translate(0, 1.17, 0.12), LEATHER));
+  body.push(tint(new THREE.TorusGeometry(0.4, 0.028, 4, 16, Math.PI).rotateX(-Math.PI / 2).translate(0, 1.13, -0.5), LEATHER));
+  body.push(tint(strut(V3(0, 1.58, 0.0), V3(0, 1.58, -0.72), 0.018, 0.018, 4), LEATHER));
+  if (blanket) {
+    // Decke für die Wartezeit am Halteplatz, mit hellen Borten.
+    // Die Seiten fallen senkrecht und leicht gewellt bis unter den Bauch, die Borte sitzt am Saum.
+    const cloth = new THREE.CylinderGeometry(0.42, 0.42, 1.3, 24, 8, true, Math.PI - 1.75, 3.5).rotateX(Math.PI / 2);
+    const p = cloth.attributes.position;
+    for (let k = 0; k < p.count; k++) {
+      const x = p.getX(k);
+      const y = p.getY(k);
+      const z = p.getZ(k);
+      if (y < 0.05) {
+        const drop = (0.05 - y) * 2.5;
+        p.setXYZ(k, Math.sign(x) * (Math.abs(x) + drop * 0.25 + Math.sin(z * 14) * 0.012 * drop * 4), y - drop, z);
+      }
+    }
+    cloth.computeVertexNormals();
+    body.push(tint(cloth.translate(0, 1.22, -0.08), 0x4a2622));
+    for (const s of [-1, 1]) body.push(tint(new THREE.BoxGeometry(0.02, 0.06, 1.3).translate(s * 0.49, 0.85, -0.08), 0x9a7a48));
+  }
+  root.add(new THREE.Mesh(merge(body), horseMat));
+
+  // Hals und Kopf am Widerrist.
+  const head = new THREE.Group();
+  head.position.set(0, 1.45, 0.62);
+  const h = [
+    tint(strut(V3(0, -0.05, 0), V3(0, 0.3, 0.2), 0.25, 0.18, 12, 0.62), color),
+    tint(strut(V3(0, 0.3, 0.2), V3(0, 0.5, 0.4), 0.18, 0.13, 12, 0.62), color),
+    tint(strut(V3(0, 0.2, -0.1), V3(0, 0.62, 0.36), 0.05, 0.035, 4, 0.45), mane),
+    tint(strut(V3(0, 0.64, 0.38), V3(0, 0.55, 0.56), 0.04, 0.02, 4, 0.5), mane),
+    tint(ell(0.1, 0.13, 0.15, 0, 0.42, 0.47), color),
+    tint(strut(V3(0, 0.5, 0.45), V3(0, 0.02, 0.75), 0.11, 0.075, 10, 0.75), color),
+    tint(ell(0.075, 0.08, 0.09, 0, 0.02, 0.77), color),
+  ];
+  const headDir = V3(0, -0.48, 0.3).normalize();
+  for (const s of [-1, 1]) {
+    h.push(tint(strut(V3(s * 0.05, 0.6, 0.42), V3(s * 0.07, 0.75, 0.4), 0.03, 0.006, 5), color));
+    h.push(tint(new THREE.BoxGeometry(0.02, 0.09, 0.11).translate(s * 0.11, 0.42, 0.55), LEATHER));
+    h.push(tint(strut(V3(s * 0.09, 0.52, 0.46), V3(s * 0.075, 0.08, 0.71), 0.011, 0.011, 4), LEATHER));
+    h.push(tint(strut(V3(s * 0.08, 0.06, 0.71), V3(s * 0.1, 0.11, -0.5), 0.008, 0.008, 3), LEATHER));
+  }
+  h.push(tint(new THREE.TorusGeometry(0.088, 0.013, 4, 14).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), headDir)).translate(0, 0.16, 0.67), LEATHER));
+  h.push(tint(new THREE.TorusGeometry(0.115, 0.012, 4, 14).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), headDir)).translate(0, 0.5, 0.47), LEATHER));
+  if (nosebag) {
+    h.push(tint(strut(V3(0, 0.15, 0.68), V3(0, -0.12, 0.85), 0.11, 0.1, 10), 0x6e6048));
+    for (const s of [-1, 1]) h.push(tint(strut(V3(s * 0.1, 0.12, 0.69), V3(s * 0.085, 0.58, 0.42), 0.009, 0.009, 3), 0x6e6048));
+  }
+  head.add(new THREE.Mesh(merge(h), horseMat));
+  root.add(head);
+
+  const tail = new THREE.Group();
+  tail.position.set(0, 1.47, -0.88);
+  tail.add(new THREE.Mesh(merge([tint(strut(V3(0, 0, 0), V3(0, -0.28, -0.12), 0.05, 0.06, 6), mane), tint(strut(V3(0, -0.26, -0.11), V3(0, -0.72, -0.16), 0.065, 0.1, 6, 0.7), mane)]), horseMat));
+  root.add(tail);
+
   const legs = [];
-  for (const [x, z] of [[-0.2, 0.62], [0.2, 0.62], [-0.2, -0.62], [0.2, -0.62]]) {
+  for (const [x, z, hind] of [[-0.17, 0.55, false], [0.17, 0.55, false], [-0.17, -0.6, true], [0.17, -0.6, true]]) {
     const pivot = new THREE.Group();
-    pivot.position.set(x, 1.0, z);
-    pivot.add(new THREE.Mesh(cyl(0.065, 0.045, 1.0, 0, -0.5, 0, 8), mat));
+    pivot.position.set(x, 1.02, z);
+    pivot.add(new THREE.Mesh(horseLeg(color, hind), horseMat));
     root.add(pivot);
     legs.push(pivot);
   }
-  root.userData.legs = legs;
+  // Mit Futtersack hängt der Kopf tiefer.
+  const tilt = nosebag ? 0.35 : 0;
+  head.rotation.x = tilt;
+  root.userData = { legs, head, tail, tilt };
   return root;
 }
 
 export function trotHorse(horse, phase) {
-  horse.userData.legs.forEach((leg, i) => {
+  const { legs, head, tail, tilt } = horse.userData;
+  legs.forEach((leg, i) => {
     leg.rotation.x = Math.sin(phase + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.45;
   });
+  head.rotation.x = tilt + Math.sin(phase * 2) * 0.05;
+  tail.rotation.x = 0.15 + Math.sin(phase * 2 + 1) * 0.04;
+}
+
+// Stehendes Pferd: Kopf und Schweif bewegen sich ein wenig, ab und zu stampft ein Huf.
+export function idleHorse(horse, t) {
+  const { legs, head, tail, tilt } = horse.userData;
+  head.rotation.x = tilt + Math.sin(t * 0.6) * 0.03 + Math.max(0, Math.sin(t * 2.3)) * 0.02;
+  head.rotation.y = Math.sin(t * 0.23) * 0.08;
+  tail.rotation.z = Math.sin(t * 1.1) * Math.max(0, Math.sin(t * 0.17)) * 0.25;
+  legs[0].rotation.x = Math.max(0, Math.sin(t * 0.5) - 0.97) * 8;
 }

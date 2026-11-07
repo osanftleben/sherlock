@@ -3,7 +3,8 @@ import { Bag, std } from '../kit.js';
 import { makeFigure, makeHorse, trotHorse, walkFigure } from '../figures.js';
 import { rng } from '../textures.js';
 
-export function makeDroschke({ driver: withDriver = true } = {}) {
+// waiting: Das Pferd steht mit Decke und Futtersack am Halteplatz.
+export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x30221a, waiting = false } = {}) {
   const g = new THREE.Group();
   const mat = std({ vertexColors: true, roughness: 0.4, metalness: 0.2 });
   const body = new Bag();
@@ -11,8 +12,8 @@ export function makeDroschke({ driver: withDriver = true } = {}) {
   body.box(0x0b0d10, 1.5, 0.08, 1.9, 0, 1.76, -1.0);
   body.box(0x1a1208, 1.4, 0.5, 0.9, 0, 0.82, 0.3);
   body.box(0x101418, 1.0, 0.1, 0.5, 0, 1.45, 0.25);
-  body.box(0x1a1208, 0.06, 0.06, 2.6, -0.45, 0.72, 1.7);
-  body.box(0x1a1208, 0.06, 0.06, 2.6, 0.45, 0.72, 1.7);
+  // Deichseln steigen vom Wagen zur Sellette an.
+  for (const x of [-0.45, 0.45]) body.add(new THREE.BoxGeometry(0.06, 0.06, 2.7).rotateX(-0.11).translate(x, 0.95, 1.75), 0x1a1208);
   const wheel = (x, z, r) => {
     const w = new THREE.TorusGeometry(r, 0.03, 6, 22);
     w.rotateY(Math.PI / 2);
@@ -42,7 +43,7 @@ export function makeDroschke({ driver: withDriver = true } = {}) {
     driver.position.set(0, 0.2, 0.15);
     g.add(driver);
   }
-  const horse = makeHorse(0x30221a);
+  const horse = makeHorse(horseColor, { blanket: waiting, nosebag: waiting });
   horse.position.set(0, 0, 3.0);
   g.add(horse);
   g.userData.horse = horse;

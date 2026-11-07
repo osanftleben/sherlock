@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
-import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
+import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture } from '../textures.js';
 import { addSign } from './facades.js';
 import { lightPool } from './lamps.js';
 

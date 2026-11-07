@@ -168,7 +168,9 @@ export function buildDestille() {
   // Fenster, warmes Lampenlicht, Qualm unter der Decke
   // Ausschnitt mit erleuchtetem Fenster und Laterne gegenüber.
   room.window('east', 0.2, 1.8, 1.5, 1.5, 0.4);
-  room.lamp(-2.4, 2.45, -1.6, { intensity: 7 });
+  // Die hellste Hängelampe wirft Schatten (eine zweite kostete 1 ms und fiel kaum auf). near über
+  // dem Schirmrand (0,29 m), sonst legen Ölbehälter und Schirm einen dunklen Fleck auf den Tisch.
+  room.shadows(room.lamp(-2.4, 2.45, -1.6, { intensity: 7 }), { near: 0.35 });
   room.lamp(3, 2.45, -1.5, { intensity: 5 });
   room.lamp(3.3, 2.05, 1.7, { intensity: 3.8, glow: 0.6 });
   room.lamp(-1.8, 2.25, 1.4, { intensity: 3.6, glow: 0.6 });

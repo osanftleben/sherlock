@@ -76,7 +76,7 @@ export function buildPension() {
   palm(room, 3.45, -2.8);
 
   // Gaskrone, Fülllicht über dem Labor, bläuliches Laternenlicht von draußen
-  gasolier(room, 0.4, 0.2);
+  room.shadows(gasolier(room, 0.4, 0.2));
   room.lamp(-2.4, 2.6, -1.4, { intensity: 2.0, visible: false, hang: false });
   oilLamp(room, -3.71, 1.3, 0.6);
   oilLamp(room, 3.48, 0.75, 1.12);

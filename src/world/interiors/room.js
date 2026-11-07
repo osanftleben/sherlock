@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
+import { SHADOW_ONLY } from '../holmes.js';
 import { Bag, addMesh, box, cyl, merge, std } from '../kit.js';
 import { WINDOW_VIEW, clockFace, rainOnGlass, softDisc, windowView, wood } from '../textures.js';
 
@@ -307,6 +308,8 @@ export class Room {
     // die Karte entsteht aber mit dem alten, und es fällt gar kein Schatten.
     light.shadow.camera.near = near;
     light.shadow.camera.updateProjectionMatrix();
+    // Auch Holmes' Körper wirft Schatten, den nur die Schattenkamera sieht.
+    light.shadow.camera.layers.enable(SHADOW_ONLY);
     light.shadow.bias = -0.002;
     light.shadow.normalBias = 0.02;
     light.shadow.radius = 3;

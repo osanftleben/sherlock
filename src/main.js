@@ -15,6 +15,7 @@ import { UI } from './ui/ui.js';
 import { buildBerlin } from './world/berlin/index.js';
 import { buildInteriors } from './world/interiors/index.js';
 import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
+import { ShadowSelf } from './world/holmes.js';
 import { softDisc } from './world/textures.js';
 import { CASES, CASE_LIST, FIRST_CASE } from './cases/index.js';
 
@@ -49,6 +50,7 @@ class Game {
     this.ticking = new Ticking(this.audio);
     this.ui = new UI(document.getElementById('ui'));
     this.player = new Player(this.view.camera);
+    this.self = new ShadowSelf();
     this.locations = {};
     this.speakers = {};
     this.location = null;
@@ -262,6 +264,7 @@ class Game {
     this.location = this.locations[id];
     this.view.setLocation(this.location);
     this.player.teleport(spawn.pos, spawn.yaw, this.location);
+    this.self.attach(this.location.scene);
     this.audio.setEnvironment(this.location.ambience);
     this.ticking.setScene(this.location.scene);
     this.state.location = id;
@@ -551,7 +554,10 @@ class Game {
       this.player.yaw = Math.sin(this.titleYaw) * 0.5;
       this.player.apply();
     } else {
+      const bob = this.player.bob;
       safely('Spielerfigur', () => this.player.update(dt, this.input, this.location, this.audio, this.mode === 'play'));
+      // Holmes' eigener Schatten: Die Karte wird nur neu gerechnet, wenn er sich bewegt oder dreht.
+      if (this.self.update(this.player, this.player.bob !== bob, dt)) this.view.renderer.shadowMap.needsUpdate = true;
     }
 
     this.location.update(dt, this.time, { camera, player: this.player });

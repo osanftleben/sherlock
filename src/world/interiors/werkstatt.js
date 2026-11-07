@@ -52,7 +52,8 @@ export function buildWerkstatt() {
 
   // Das Gas ist abgestellt. Licht geben die Blendlaterne der Polizei, die auf den Sessel
   // gerichtet ist, ein schwaches Fülllicht und die Straßenlaterne vor dem Fenster.
-  policeLantern(room, [W - 0.75, 0.965, 2.05], [-0.6, 0.55, -1.3]);
+  // Die Blendlaterne wirft Schatten: Der Sessel zeichnet sich hart auf Boden und Wand ab.
+  room.shadows(policeLantern(room, [W - 0.75, 0.965, 2.05], [-0.6, 0.55, -1.3]));
   room.lamp(-1.2, 2.6, -0.6, { intensity: 3.2, range: 12, hang: false, visible: false, color: 0xffc080 });
   streetGlow(room, [W + 0.4, 2.9, 1.5], [2.2, 0, 0.6]);
   // Durch das nördliche Fenster fällt das Laternenlicht schräg auf die Werkbank, gerade hell
@@ -314,6 +315,7 @@ function policeLantern(room, [lx, ly, lz], [tx, ty, tz]) {
     }
     geo.attributes.position.needsUpdate = true;
   });
+  return spot;
 }
 
 function kettle(room, x, y, z) {

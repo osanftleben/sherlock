@@ -68,7 +68,7 @@ export function buildApotheke() {
   doorBell(room);
 
   // Helleres, saubereres Licht als im Bankhaus: Gaskrone, zwei Lampen über dem Tisch
-  gasolier(room, 0, 1.2);
+  room.shadows(gasolier(room, 0, 1.2));
   room.lamp(-1.6, 2.8, -0.62, { intensity: 3.0, color: 0xffcf98, range: 8, glow: 0.45 });
   room.lamp(1.6, 2.8, -0.62, { intensity: 3.0, color: 0xffcf98, range: 8, glow: 0.45 });
   streetGlow(room, [-2.2, 2.6, 3.9], [-1.4, 0, 0.6]);

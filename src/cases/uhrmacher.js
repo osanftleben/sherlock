@@ -197,9 +197,9 @@ export const uhrmacher = {
 
     // Pension
     { location: 'pension', anchor: 'violine', label: 'Violine', radius: 0.35, action: { play: 'violin', say: 'Sie hat nicht den Ton meiner Stradivari, die liegt in der Baker Street, bei einem Mann, der mich für tot hält. Aber sie tut es.' } },
-    { location: 'pension', anchor: 'pantoffel', label: 'Persischer Pantoffel', radius: 0.25, action: { say: 'Mein Tabak. Gewisse Gewohnheiten überleben sogar den eigenen Tod. Frau Puhlmann hält das für norwegische Sitte.' } },
+    { location: 'pension', anchor: 'pantoffel', label: 'Persischer Pantoffel', radius: 0.25, action: { say: 'Mein Tabak, in der Ofenröhre warm gehalten. Gewisse Gewohnheiten überleben sogar den eigenen Tod. Frau Puhlmann hält das für norwegische Sitte.' } },
     { location: 'pension', anchor: 'labor', label: 'Experimentiertisch', radius: 0.8, action: { say: 'Dr. Voss’ Reagenzien neben meinen. Sie behauptet, ihre seien besser beschriftet. Sie hat recht.' } },
-    { location: 'pension', anchor: 'briefe', label: 'Briefe am Kaminsims', radius: 0.25, action: { say: 'Unbeantwortete Post, mit dem Taschenmesser an den Sims geheftet. Frau Puhlmann nennt das einen Frevel an echtem Marmor. Ich nenne es Ordnung.' } },
+    { location: 'pension', anchor: 'briefe', label: 'Briefe an der Vertäfelung', radius: 0.25, action: { say: 'Unbeantwortete Post, mit dem Taschenmesser an die Vertäfelung geheftet. Frau Puhlmann nennt das einen Frevel an echter Eiche. Ich nenne es Ordnung.' } },
     { location: 'pension', anchor: 'zeitungen', label: 'Zeitungsstapel', radius: 0.35, action: { say: 'Die Vossische, das Tageblatt, der Börsen-Courier. Berlin druckt mehr Zeitungen als London, und alle sind sich nur in einem einig: dass die anderen lügen.' } },
     { location: 'pension', anchor: 'diplom', label: 'Gerahmtes Diplom', radius: 0.35, action: { say: 'Doctor medicinae, Universität Zürich, mit Auszeichnung. In Preußen hätte man Dr. Voss nicht einmal in den Hörsaal gelassen. Sie hängt das Diplom genau dorthin, wo jeder Besucher es sieht.' } },
     { location: 'pension', anchor: 'buecher', label: 'Bücherregal', radius: 0.9, action: { say: 'Fontane, Virchow, ein Baedeker von Berlin und ein Band über die Tabakaschen, den angeblich ein Toter geschrieben hat.' } },

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { addMesh, box, cyl, merge, std } from '../kit.js';
-import { diploma, landscape, mirrorGlass, rng, sheetMusic, softDisc, wallpaper, wood } from '../textures.js';
+import { Bag, addMesh, box, cyl, std } from '../kit.js';
+import { diploma, landscape, rng, sheetMusic, softDisc, wallpaper, wood } from '../textures.js';
 import { Room } from './room.js';
 import { gasolier, rug, streetGlow, wainscot, wingChair } from './fittings.js';
 
@@ -22,8 +22,8 @@ export function buildPension() {
   // Vertäfelung und Stuckleiste
   wainscot(room, 'south', -4, -0.7, 0.9);
   wainscot(room, 'south', 0.7, 4, 0.9);
-  wainscot(room, 'north', -4, 0.1, 0.9);
-  wainscot(room, 'north', 2.3, 4, 0.9);
+  wainscot(room, 'north', -4, 0.62, 0.9);
+  wainscot(room, 'north', 1.78, 4, 0.9);
   wainscot(room, 'west', -3.25, 3.25, 0.9);
   wainscot(room, 'east', -3.25, 3.25, 0.9);
   for (const s of [-1, 1]) {
@@ -31,13 +31,14 @@ export function buildPension() {
     room.plainBag.box(0xa89c84, 0.12, 0.12, 6.5, s * 3.94, 3.24, 0);
   }
 
-  // Kamin: Marmorsims, Spiegel, offenes Feuer im Korbrost
+  // Kachelofen an der Nordwand, im Wärmefach der Pantoffel; die Post steckt an der Vertäfelung.
   const fx = 1.2;
-  fireplace(room, fx);
-  loc.anchor('pantoffel', fx + 0.55, 1.68, -2.92);
-  loc.anchor('briefe', fx + 0.05, 1.45, -2.6);
+  const niche = tileStove(room, fx);
+  slipper(room, fx - 0.02, niche.floor, niche.front - 0.14);
+  pinnedLetters(room, 2.25, 0.9);
+  room.clock(2.95, 2.05, -room.d / 2 + 0.04, 0, 0.14);
 
-  // Zwei Ohrensessel zum Feuer gedreht, ein Rauchtisch, Zeitungsstapel
+  // Zwei Ohrensessel zum Ofen gedreht, ein Rauchtisch, Zeitungsstapel
   wingChair(room, -0.2, -1.5, 1.85, { cloth: 0x3a2a20, dark: 0x22180f, padColor: 0x4a3626, plaid: false });
   wingChair(room, 2.8, -1.5, -1.85, { cloth: 0x253a2c, dark: 0x18261c, padColor: 0x2e4636, plaid: false });
   smokingTable(room, -0.95, -2.45);
@@ -65,7 +66,7 @@ export function buildPension() {
   vertiko(room, -3.75, 1.2);
   chaise(room, 2.3, 2.78);
 
-  // Bilder: Abendlandschaft über der Chaiselongue, kleineres Bild neben dem Kamin
+  // Bilder: Abendlandschaft über der Chaiselongue, kleineres Bild neben dem Ofen
   painting(room, 2.3, 1.85, 3.23, Math.PI, 0.95, 0.68, 1);
   painting(room, -1.9, 1.95, -3.23, 0, 0.7, 0.5, 2);
 
@@ -89,105 +90,198 @@ export function buildPension() {
 
 // --- Ausstattung der Pension ------------------------------------------------------
 
-function fireplace(room, fx) {
-  const { scene, loc } = room;
-  const marble = 0x5e5850;
-  room.plainBag.box(0x3a3632, 2.1, 1.5, 0.5, fx, 0.75, -3.0);
-  for (const s of [-1, 1]) room.plainBag.box(marble, 0.24, 1.42, 0.12, fx + s * 0.86, 0.71, -2.71);
-  room.plainBag.box(marble, 2.4, 0.1, 0.62, fx, 1.53, -2.95);
-  room.plainBag.box(marble, 1.48, 0.2, 0.08, fx, 1.36, -2.71);
-  room.plainBag.box(0x0a0806, 1.1, 0.95, 0.04, fx, 0.48, -2.73);
-  room.plainBag.box(0x4a4640, 2.3, 0.04, 0.5, fx, 0.02, -2.45);
-  room.solid(fx, -2.9, 2.4, 0.7);
+// Berliner Kachelofen an der Nordwand: glasierte Rahmenkacheln über einem grauen Fugenkern,
+// Sockel mit Aschentür, Unterbau mit Messing-Feuertür, Zwischengesims, Mittelteil mit offener
+// Wärmeröhre (darin der persische Pantoffel), Obergesims und Krone mit Bogen und Urnen. Die
+// Kacheln glänzen: gewölbte Glasur mit Klarlackschicht. Ein schwacher Schein dringt durch die
+// Luftschlitze der Feuertür. Daneben der Kohleneimer mit den Zigarren und der Schürhaken.
+// Gibt die Höhe des Bodens der Wärmeröhre und die Vorderkante des Mittelteils zurück.
+// Einzelne Ofenkachel w × h, Vorderseite nach +Z, um lift nach vorn versetzt. Die Glasur wölbt
+// die Fläche um bulge auf: So fängt jede Kachel ihr eigenes Glanzlicht, nicht nur eine im ganzen
+// Feld. Die Normalen folgen der Wölbung, die Kanten bleiben scharf.
+function kachel(w, h, bulge, lift) {
+  const g = new THREE.BoxGeometry(w, h, 0.014, 5, 5, 1);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    if (p.getZ(i) <= 0) continue;
+    const u = (2 * p.getX(i)) / w;
+    const v = (2 * p.getY(i)) / h;
+    p.setZ(i, p.getZ(i) + bulge * (1 - u * u) * (1 - v * v));
+  }
+  g.computeVertexNormals();
+  return g.translate(0, 0, lift);
+}
 
-  // Korbrost mit Scheiten und Glut
-  room.metalBag.box(0x1a1a1a, 0.7, 0.03, 0.3, fx, 0.08, -2.58);
-  for (let i = 0; i < 5; i++) room.metalBag.box(0x1a1a1a, 0.02, 0.22, 0.02, fx - 0.3 + i * 0.15, 0.18, -2.44);
-  room.metalBag.box(0x1a1a1a, 0.7, 0.02, 0.02, fx, 0.28, -2.44);
-  for (const [dz, a] of [[-0.64, 0.15], [-0.54, -0.2]]) {
-    const log = cyl(0.05, 0.055, 0.6, 0, 0, 0, 10);
-    log.rotateZ(Math.PI / 2);
-    log.rotateY(a);
-    log.translate(fx, 0.15, dz);
-    room.woodBag.add(log, 0x2a1a10);
+function tileStove(room, fx) {
+  const { scene, loc } = room;
+  const glaze = new Bag();
+  const brass = 0xb08a3a;
+  const wallZ = -room.d / 2;
+  const r = rng(53);
+  // Dunkelgrüne Glasur wie bei vielen Gründerzeitöfen; jede Kachel brennt etwas anders.
+  const tone = () => new THREE.Color(0x2c4636).multiplyScalar(0.9 + r() * 0.2);
+  const grout = 0x2a2622;
+
+  // Kachelfelder vorn und an beiden Seiten eines Blocks mit Fugenkern. skip(row, col) lässt
+  // vorn Platz für Türen und Nischen; hole [hx, hy0, hy1, depth] spart im Kern eine Nische der
+  // halben Breite hx aus, die von vorn depth tief reicht.
+  const block = (y0, rows, cols, tw, th, d, sideCols, skip = () => false, hole = null) => {
+    const w = cols * tw;
+    const h = rows * th;
+    const zF = wallZ + d;
+    if (hole) {
+      const [hx, hy0, hy1, depth] = hole;
+      const side = w / 2 - hx;
+      for (const s of [-1, 1]) glaze.box(grout, side, h, d, fx + s * (hx + side / 2), y0 + h / 2, wallZ + d / 2);
+      glaze.box(grout, 2 * hx, hy0 - y0, d, fx, (y0 + hy0) / 2, wallZ + d / 2);
+      glaze.box(grout, 2 * hx, y0 + h - hy1, d, fx, (hy1 + y0 + h) / 2, wallZ + d / 2);
+      glaze.box(grout, 2 * hx, hy1 - hy0, d - depth, fx, (hy0 + hy1) / 2, wallZ + (d - depth) / 2);
+    } else {
+      glaze.box(grout, w, h, d, fx, y0 + h / 2, wallZ + d / 2);
+    }
+    const sd = d / sideCols;
+    // Kachel mit Spiegel; turn dreht sie auf eine Seitenfläche.
+    const tile = (a, x, y, z, turn = 0) => {
+      const c = tone();
+      glaze.add(kachel(a - 0.008, th - 0.008, 0.007, 0).rotateY(turn).translate(x, y, z), c);
+      glaze.add(kachel(a * 0.6, th * 0.6, 0.006, 0.005).rotateY(turn).translate(x, y, z), c.multiplyScalar(1.12));
+    };
+    for (let i = 0; i < rows; i++) {
+      const y = y0 + (i + 0.5) * th;
+      for (let j = 0; j < cols; j++) if (!skip(i, j)) tile(tw, fx - w / 2 + (j + 0.5) * tw, y, zF + 0.007);
+      for (const s of [-1, 1]) {
+        for (let k = 0; k < sideCols; k++) tile(sd, fx + s * (w / 2 + 0.007), y, wallZ + (k + 0.5) * sd, (s * Math.PI) / 2);
+      }
+    }
+    return zF;
+  };
+  // Gesims aus gestuften Platten, die oberste mit gerundeter Vorderkante. Gibt die Oberkante zurück.
+  const cornice = (y, steps) => {
+    let yy = y;
+    for (const [w, h, d] of steps) {
+      glaze.box(tone(), w, h, d, fx, yy + h / 2, wallZ + d / 2);
+      yy += h;
+    }
+    const [w, , d] = steps[steps.length - 1];
+    glaze.add(new THREE.CylinderGeometry(0.02, 0.02, w, 10).rotateZ(Math.PI / 2).translate(fx, yy - 0.02, wallZ + d), tone());
+    return yy;
+  };
+
+  // Sockel mit Aschentür
+  glaze.box(0x22362a, 1.0, 0.07, 0.66, fx, 0.035, wallZ + 0.33);
+  const zS = block(0.07, 1, 4, 0.235, 0.15, 0.62, 3);
+  room.metalBag.box(brass, 0.24, 0.1, 0.02, fx, 0.145, zS + 0.025);
+  room.metalBag.box(0x8a6a2a, 0.18, 0.012, 0.01, fx, 0.13, zS + 0.037);
+  room.metalBag.add(new THREE.SphereGeometry(0.012, 8, 6).translate(fx + 0.09, 0.145, zS + 0.045), brass);
+
+  // Unterbau mit Feuertür: Rahmen, Füllung mit Wulst, Luftschlitze, Riegel
+  const zU = block(0.22, 4, 4, 0.23, 0.225, 0.6, 3, (i, j) => i === 1 && (j === 1 || j === 2));
+  const dy = 0.22 + 1.5 * 0.225;
+  room.metalBag.box(brass, 0.46, 0.225, 0.02, fx, dy, zU + 0.01);
+  room.metalBag.box(brass, 0.36, 0.19, 0.03, fx, dy, zU + 0.03);
+  room.metalBag.add(new THREE.TorusGeometry(0.06, 0.008, 6, 20).translate(fx, dy + 0.02, zU + 0.046), brass);
+  for (let k = 0; k < 5; k++) room.glowBag.add(box(0.012, 0.035, 0.004, fx - 0.05 + k * 0.025, dy - 0.06, zU + 0.046), new THREE.Color(1.1, 0.34, 0.08));
+  room.metalBag.add(cyl(0.008, 0.008, 0.06, 0, 0, 0, 6).rotateX(Math.PI / 2).translate(fx + 0.14, dy, zU + 0.07), brass);
+  room.metalBag.add(new THREE.SphereGeometry(0.018, 8, 6).translate(fx + 0.14, dy, zU + 0.1), brass);
+
+  let y = cornice(1.12, [[0.98, 0.05, 0.65], [1.04, 0.05, 0.69]]);
+
+  // Mittelteil mit Wärmeröhre: Messingrahmen, dunkle Röhre, zwei aufgeklappte Türchen
+  const y0M = y;
+  const ny = y + 0.225;
+  const zM = block(y, 4, 4, 0.215, 0.225, 0.58, 3, (i, j) => i < 2 && (j === 1 || j === 2), [0.2, ny - 0.19, ny + 0.19, 0.33]);
+  room.plainBag.box(0x2a2420, 0.4, 0.38, 0.02, fx, ny, wallZ + 0.26);
+  room.plainBag.box(0x3a322a, 0.4, 0.02, 0.32, fx, ny - 0.18, zM - 0.16);
+  for (const s of [-1, 1]) room.plainBag.box(0x332c26, 0.02, 0.38, 0.32, fx + s * 0.2, ny, zM - 0.16);
+  room.plainBag.box(0x332c26, 0.4, 0.02, 0.32, fx, ny + 0.18, zM - 0.16);
+  for (const [w, h, x, yy] of [[0.46, 0.035, 0, ny + 0.2], [0.46, 0.035, 0, ny - 0.2], [0.035, 0.44, -0.215, ny], [0.035, 0.44, 0.215, ny]]) {
+    room.metalBag.box(brass, w, h, 0.02, fx + x, yy, zM + 0.012);
   }
-  const embers = [];
-  const er = rng(91);
-  for (let i = 0; i < 14; i++) embers.push(new THREE.SphereGeometry(0.03 + er() * 0.02, 6, 4).translate(fx - 0.28 + er() * 0.56, 0.11 + er() * 0.03, -2.65 + er() * 0.16));
-  addMesh(scene, merge(embers), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 0.5, 0.12) }));
-  const fire = new THREE.PointLight(0xff7a2c, 6, 8, 1.8);
-  fire.position.set(fx, 0.55, -2.3);
-  scene.add(fire);
-  const flames = [];
-  for (let i = 0; i < 5; i++) {
-    const f = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: i % 2 ? 0xff9a3a : 0xff6a1a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    f.position.set(fx - 0.2 + i * 0.1, 0.3, -2.58);
-    scene.add(f);
-    flames.push(f);
+  for (const s of [-1, 1]) {
+    const leaf = box(0.19, 0.36, 0.012, s * 0.095, 0, 0);
+    leaf.rotateY(s * -0.6);
+    leaf.translate(fx + s * 0.2, ny, zM + 0.02);
+    room.metalBag.add(leaf, brass);
   }
+  loc.anchor('pantoffel', fx, ny - 0.1, zM - 0.12);
+
+  y = cornice(y0M + 0.9, [[0.92, 0.05, 0.61], [0.98, 0.05, 0.65], [1.04, 0.05, 0.7]]);
+
+  // Krone: Kachelfries, Bogen mit Mittelkachel, Urnen an den Ecken
+  const zK = block(y, 1, 4, 0.2, 0.17, 0.52, 3);
+  y += 0.17;
+  glaze.box(tone(), 0.86, 0.04, 0.56, fx, y + 0.02, wallZ + 0.28);
+  y += 0.04;
+  const arch = new THREE.CylinderGeometry(0.26, 0.26, 0.06, 20, 1, false, -Math.PI / 2, Math.PI);
+  arch.rotateX(Math.PI / 2);
+  glaze.add(arch.translate(fx, y, zK - 0.12), tone());
+  glaze.add(new THREE.TorusGeometry(0.24, 0.014, 6, 20, Math.PI).translate(fx, y, zK - 0.085), tone());
+  glaze.box(tone().multiplyScalar(1.15), 0.14, 0.12, 0.02, fx, y + 0.11, zK - 0.08);
+  for (const s of [-1, 1]) {
+    const ux = fx + s * 0.38;
+    glaze.add(cyl(0.035, 0.045, 0.04, ux, y + 0.02, zK - 0.08, 12), tone());
+    glaze.add(new THREE.SphereGeometry(0.05, 12, 8).scale(1, 1.2, 1).translate(ux, y + 0.09, zK - 0.08), tone());
+    glaze.add(cyl(0.012, 0.02, 0.05, ux, y + 0.17, zK - 0.08, 8), tone());
+  }
+
+  // Glasur als dünne Klarlackschicht über matterem Scherben: weiche Glanzlichter der Lampen und
+  // ein zurückhaltender Spiegel der Umgebung.
+  addMesh(scene, glaze.build(), new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.6, clearcoat: 0.45, clearcoatRoughness: 0.2, envMapIntensity: 1 }));
+  room.solid(fx, wallZ + 0.35, 1.06, 0.72);
+
+  // Schwacher Schein aus den Luftschlitzen auf die Dielen
+  const glow = new THREE.PointLight(0xff7a2c, 0.9, 2.5, 2);
+  glow.position.set(fx, 0.35, zU + 0.3);
+  scene.add(glow);
   loc.onUpdate((dt, t) => {
-    fire.intensity = 5.5 + 1.6 * Math.sin(t * 7.1) * Math.sin(t * 3.3) + 0.8 * Math.sin(t * 13);
-    flames.forEach((f, i) => {
-      const k = Math.sin(t * (6 + i) + i * 1.7) * 0.5 + 0.5;
-      f.scale.set(0.16 + 0.06 * k, 0.32 + 0.16 * k, 1);
-      f.position.y = 0.3 + 0.05 * k;
-    });
+    glow.intensity = 0.8 + 0.15 * Math.sin(t * 3.1) * Math.sin(t * 1.7);
   });
 
-  // Messingvorsetzer, Kaminbesteck, Kohleneimer mit Zigarren
-  room.metalBag.box(0xb08a3a, 1.6, 0.05, 0.02, fx, 0.05, -2.18);
-  for (const s of [-1, 1]) room.metalBag.box(0xb08a3a, 0.02, 0.05, 0.3, fx + s * 0.8, 0.05, -2.33);
-  const ix = fx + 1.0;
-  room.metalBag.add(cyl(0.07, 0.08, 0.02, ix, 0.01, -2.5, 10), 0x1e1e1e);
-  room.metalBag.add(cyl(0.008, 0.008, 0.7, ix, 0.36, -2.5, 6), 0x1e1e1e);
-  for (const [dx, dz] of [[0.04, 0.01], [-0.03, 0.03], [0.0, -0.04]]) {
-    room.metalBag.add(cyl(0.006, 0.006, 0.62, ix + dx, 0.36, -2.5 + dz, 6), 0x2a2a2a);
-    room.metalBag.add(new THREE.SphereGeometry(0.014, 6, 4).translate(ix + dx, 0.68, -2.5 + dz), 0xb08a3a);
-  }
-  const cx = fx - 1.0;
-  room.metalBag.add(cyl(0.13, 0.11, 0.3, cx, 0.15, -2.45, 14), 0x1a1a1a);
+  // Kohleneimer mit Zigarren links, Ständer mit Schürhaken und Schaufel rechts
+  const cx = fx - 0.78;
+  const cz = wallZ + 0.4;
+  room.metalBag.add(cyl(0.13, 0.11, 0.3, cx, 0.15, cz, 14), 0x1a1a1a);
   for (let i = 0; i < 6; i++) {
     const c = cyl(0.009, 0.009, 0.14, 0, 0, 0, 6);
     c.rotateZ((i - 2.5) * 0.12);
-    c.translate(cx - 0.06 + i * 0.024, 0.32, -2.45 + (i % 2) * 0.03);
+    c.translate(cx - 0.06 + i * 0.024, 0.32, cz + (i % 2) * 0.03);
     room.plainBag.add(c, 0x5a3418);
   }
-
-  // Spiegel im Goldrahmen
-  room.metalBag.box(0xb08a3a, 1.32, 0.97, 0.04, fx, 2.32, -3.23);
-  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(1.18, 0.83), new THREE.MeshStandardMaterial({ map: mirrorGlass(), emissive: 0xffffff, emissiveMap: mirrorGlass(), emissiveIntensity: 0.55, roughness: 0.08 }));
-  mirror.position.set(fx, 2.32, -3.205);
-  scene.add(mirror);
-
-  // Auf dem Sims: Uhr, Leuchter, der persische Pantoffel
-  room.clock(fx - 0.72, 1.74, -2.95, 0, 0.14);
-  for (const s of [-1, 1]) {
-    const lx = fx + s * 1.05;
-    room.metalBag.add(cyl(0.04, 0.05, 0.02, lx, 1.59, -2.95, 10), 0xb08a3a);
-    room.metalBag.add(cyl(0.012, 0.016, 0.16, lx, 1.68, -2.95, 8), 0xb08a3a);
-    room.plainBag.add(cyl(0.012, 0.012, 0.12, lx, 1.82, -2.95, 8), 0xe8e0c8);
-    addMesh(scene, new THREE.SphereGeometry(0.009, 6, 4).scale(1, 1.8, 1), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.4, 0.5) }), lx, 1.895, -2.95);
+  room.solid(cx, cz, 0.3, 0.3);
+  const ix = fx + 0.72;
+  const iz = wallZ + 0.3;
+  room.metalBag.add(cyl(0.07, 0.08, 0.02, ix, 0.01, iz, 10), 0x1e1e1e);
+  room.metalBag.add(cyl(0.008, 0.008, 0.7, ix, 0.36, iz, 6), 0x1e1e1e);
+  for (const [dx, dz] of [[0.04, 0.01], [-0.03, 0.03], [0.0, -0.04]]) {
+    room.metalBag.add(cyl(0.006, 0.006, 0.62, ix + dx, 0.36, iz + dz, 6), 0x2a2a2a);
+    room.metalBag.add(new THREE.SphereGeometry(0.014, 6, 4).translate(ix + dx, 0.68, iz + dz), brass);
   }
-  const sx = fx + 0.55;
-  const sy = 1.58;
-  const sz = -2.92;
-  room.plainBag.box(0x4a1a14, 0.24, 0.015, 0.1, sx, sy + 0.0075, sz);
-  room.plainBag.add(new THREE.SphereGeometry(0.06, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.9, 0.9, 0.85).translate(sx + 0.01, sy + 0.012, sz), 0x7a2a24);
-  room.plainBag.add(new THREE.TorusGeometry(0.03, 0.01, 6, 10, Math.PI).rotateZ(-Math.PI / 2).translate(sx + 0.12, sy + 0.04, sz), 0x7a2a24);
-  room.metalBag.box(0xc8a040, 0.2, 0.006, 0.006, sx, sy + 0.064, sz + 0.03);
-  room.plainBag.add(new THREE.SphereGeometry(0.03, 8, 6).scale(1.3, 0.5, 1).translate(sx - 0.07, sy + 0.05, sz), 0x4a2e18);
+  return { floor: ny - 0.17, front: zM };
+}
 
-  // Unbeantwortete Post, mit dem Taschenmesser in den Sims gestoßen
+// Der persische Pantoffel mit Tabak, liegend bei (x, y, z).
+function slipper(room, x, y, z) {
+  room.plainBag.box(0x4a1a14, 0.24, 0.015, 0.1, x, y + 0.0075, z);
+  room.plainBag.add(new THREE.SphereGeometry(0.06, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.9, 0.9, 0.85).translate(x + 0.01, y + 0.012, z), 0x7a2a24);
+  room.plainBag.add(new THREE.TorusGeometry(0.03, 0.01, 6, 10, Math.PI).rotateZ(-Math.PI / 2).translate(x + 0.12, y + 0.04, z), 0x7a2a24);
+  room.metalBag.box(0xc8a040, 0.2, 0.006, 0.006, x, y + 0.064, z + 0.03);
+  room.plainBag.add(new THREE.SphereGeometry(0.03, 8, 6).scale(1.3, 0.5, 1).translate(x - 0.07, y + 0.05, z), 0x4a2e18);
+}
+
+// Unbeantwortete Post, mit dem Taschenmesser an die Deckleiste der Vertäfelung geheftet.
+function pinnedLetters(room, x, rail) {
+  const z = -room.d / 2 + 0.083;
   for (let i = 0; i < 3; i++) {
     const l = box(0.11, 0.15, 0.003, 0, -0.075, 0);
     l.rotateZ((i - 1) * 0.18);
-    l.translate(fx + 0.05 + (i - 1) * 0.03, 1.535, -2.632 + i * 0.002);
+    l.translate(x + (i - 1) * 0.03, rail + 0.01, z + i * 0.002);
     room.plainBag.add(l, [0xe4dcc8, 0xd8ccb0, 0xece4d4][i]);
   }
   const handle = cyl(0.009, 0.011, 0.085, 0, 0, 0, 8);
   handle.rotateX(Math.PI / 2 + 0.2);
-  handle.translate(fx + 0.05, 1.53, -2.585);
+  handle.translate(x, rail, z + 0.045);
   room.plainBag.add(handle, 0x3a2a1a);
+  room.loc.anchor('briefe', x, rail - 0.06, z + 0.05);
 }
 
 function smokingTable(room, x, z) {

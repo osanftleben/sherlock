@@ -82,14 +82,34 @@ export class Audio {
       return p;
     });
 
-    // Grollen der Stadtbahn
+    // Stadtbahn auf dem Viadukt, aus der Richtung der Wagen (trainPan): tiefes Grollen des
+    // Mauerwerks und darüber das Rollen der Räder, das auch kleine Lautsprecher wiedergeben.
+    // Pegel setzt update aus der Nähe; Dampfstöße der Lok und Schienenstöße kommen dazu.
+    this.trainPan = ctx.createStereoPanner();
+    this.trainPan.connect(this.master);
     this.trainGain = ctx.createGain();
     this.trainGain.gain.value = 0;
+    this.trainGain.connect(this.trainPan);
     const trainFilter = ctx.createBiquadFilter();
     trainFilter.type = 'lowpass';
     trainFilter.frequency.value = 130;
     this.loop(trainFilter);
-    trainFilter.connect(this.trainGain).connect(this.master);
+    trainFilter.connect(this.trainGain);
+    const rollFilter = ctx.createBiquadFilter();
+    rollFilter.type = 'bandpass';
+    rollFilter.frequency.value = 420;
+    rollFilter.Q.value = 0.8;
+    const wheels = ctx.createGain();
+    wheels.gain.value = 0.5;
+    this.loop(rollFilter);
+    rollFilter.connect(wheels).connect(this.trainGain);
+    this.locoPan = ctx.createStereoPanner();
+    this.locoPan.connect(this.master);
+    this.locoOut = ctx.createGain();
+    this.locoOut.gain.value = 0;
+    this.locoOut.connect(this.locoPan);
+    this.nextChuff = 0;
+    this.whistled = false;
 
     // Wasser an der Quaimauer: gedämpftes Rauschen, dessen Pegel langsam schwillt, dazu einzelne
     // Schwapper (update). Alles läuft über waterOut, dessen Pegel die Nähe zum Quai setzt.
@@ -636,11 +656,11 @@ export class Audio {
     if (Math.random() < 0.35) this.burst({ freq: 110, q: 2, dur: 0.3, gain: 0.25, when: dur * 0.6, attack: 0.02, out: this.bargeOut });
   }
 
-  // trainDistance in Metern (Infinity, wenn kein Zug in der Nähe ist); river aus river.js
+  // train: Stadtbahn aus railway.js ({ roll, loco }, null, wenn kein Zug fährt); river aus river.js
   // (Abstand und Seite von Quaimauer und Kahn), fehlt in Innenräumen. sounds: Ereignisse des
   // Orts ({ type: 'hoof' | 'stamp' | 'snort', vol, pan }), werden hier abgespielt und geleert.
   // cab: Pegel und Seite der fahrenden Droschke (traffic.js).
-  update(dt, trainDistance, river, sounds, cab, gutter) {
+  update(dt, train, river, sounds, cab, gutter) {
     if (!this.ctx) {
       if (sounds) sounds.length = 0;
       return;
@@ -705,22 +725,71 @@ export class Audio {
       this.bell();
       this.nextBell = 90 + Math.random() * 60;
     }
-    // Stadtbahn: das Grollen bis 120 m, nah am Viadukt etwa so laut wie eine kräftige Böe,
-    // dazu die Schienenstöße, damit man es als Zug erkennt.
-    const near = this.env === 'street' ? Math.max(0, 1 - trainDistance / 120) : 0;
-    this.trainGain.gain.setTargetAtTime(near * near * 0.18, now, 0.3);
+    // Stadtbahn (railway.js): roll ist der nächste Wagen, loco die Lok, je { vol, pan }.
+    const roll = outdoors && train ? train.roll.vol : 0;
+    const loco = outdoors && train ? train.loco.vol : 0;
+    this.trainGain.gain.setTargetAtTime(roll * 0.18, now, 0.3);
+    this.locoOut.gain.setTargetAtTime(loco, now, 0.2);
+    if (train) {
+      this.trainPan.pan.setTargetAtTime(train.roll.pan * 0.6, now, 0.2);
+      this.locoPan.pan.setTargetAtTime(train.loco.pan * 0.8, now, 0.1);
+    }
     this.nextClack -= dt;
     if (this.nextClack < 0) {
-      if (near > 0.15) this.clack(near * near);
+      if (roll > 0.02) this.clack(roll);
       this.nextClack = 0.52 + Math.random() * 0.08;
+    }
+    this.nextChuff -= dt;
+    if (this.nextChuff < 0) {
+      if (loco > 0.01) this.chuff();
+      this.nextChuff = 0.21 + Math.random() * 0.02;
+    }
+    // Einmal je Durchfahrt pfeift die Lok, wenn sie herankommt, aber nicht immer.
+    if (!train) this.whistled = false;
+    else if (!this.whistled && loco > 0.4) {
+      this.whistled = true;
+      if (Math.random() < 0.6) this.whistle();
     }
   }
 
   // Ein Drehgestell rollt über einen Schienenstoß: „ta-dam“, hell vom Eisen, dumpf vom Viadukt.
   clack(vol) {
     for (const when of [0, 0.11 + Math.random() * 0.02]) {
-      this.burst({ freq: 700 + Math.random() * 150, q: 1.8, dur: 0.04, gain: 0.22 * vol, when });
-      this.burst({ freq: 110, q: 1.2, dur: 0.1, gain: 0.5 * vol, when });
+      this.burst({ freq: 700 + Math.random() * 150, q: 1.8, dur: 0.04, gain: 0.22 * vol, when, out: this.trainPan });
+      this.burst({ freq: 110, q: 1.2, dur: 0.1, gain: 0.5 * vol, when, out: this.trainPan });
+    }
+  }
+
+  // Dampfstoß aus dem Schornstein: ein kurzes, rauschendes „tschff“, jeder vierte etwas kräftiger.
+  chuff() {
+    this.chuffN = ((this.chuffN ?? 0) + 1) % 4;
+    const k = this.chuffN === 0 ? 1 : 0.65 + Math.random() * 0.15;
+    this.burst({ freq: 1300 + Math.random() * 300, q: 0.9, dur: 0.13, gain: 0.2 * k, attack: 0.012, out: this.locoOut });
+    this.burst({ freq: 260, q: 1, dur: 0.11, gain: 0.3 * k, attack: 0.01, out: this.locoOut });
+  }
+
+  // Dampfpfeife: ein heiserer Ton, kurz angestoßen, dann lang.
+  whistle() {
+    const ctx = this.ctx;
+    for (const [start, dur] of [[0, 0.35], [0.5, 1.4]]) {
+      const t = ctx.currentTime + start;
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(560, t);
+      osc.frequency.linearRampToValueAtTime(590, t + 0.08);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 1200;
+      f.Q.value = 1.2;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.06);
+      g.gain.setValueAtTime(0.12, t + dur - 0.15);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(f).connect(g).connect(this.locoOut);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+      this.burst({ freq: 3000, q: 0.7, dur, gain: 0.03, attack: 0.05, when: start, out: this.locoOut });
     }
   }
 }

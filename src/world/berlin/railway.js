@@ -3,6 +3,7 @@ import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
 import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture } from '../textures.js';
 import { addSign } from './facades.js';
 import { lightPool } from './lamps.js';
+import { hearing } from './traffic.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
 export function buildRailway(loc, r, brickMat) {
@@ -170,11 +171,12 @@ export function buildRailway(loc, r, brickMat) {
   }
   let smokeIdx = 0;
   let smokeTimer = 0;
-  loc.trainDistance = Infinity;
+  // Für den Klang (audio.js): roll vom nächsten Wagen, loco von der Lok.
+  loc.train = null;
   loc.onUpdate((dt, t, { camera }) => {
     if (trainWait > 0) {
       trainWait -= dt;
-      loc.trainDistance = Infinity;
+      loc.train = null;
     } else {
       trainX += 13 * dt;
       if (trainX > 340) {
@@ -184,7 +186,7 @@ export function buildRailway(loc, r, brickMat) {
       train.group.position.x = trainX;
       const carsLen = train.length;
       const nearest = Math.max(trainX - carsLen, Math.min(camera.position.x, trainX));
-      loc.trainDistance = Math.hypot(nearest - camera.position.x, 24 - camera.position.z);
+      loc.train = { roll: hearing(camera, nearest, 24, 120), loco: hearing(camera, trainX + 5, 24, 140) };
       smokeTimer -= dt;
       if (smokeTimer < 0) {
         smokeTimer = 0.32;

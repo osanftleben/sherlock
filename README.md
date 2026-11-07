@@ -42,7 +42,7 @@ Der Spielstand wird automatisch im Browser gespeichert, für jeden Fall getrennt
 ```
 src/
   main.js            Spielablauf: Orte, Dialoge, Notizbuch, Lösung
-  core/              Spielstand, Eingabe, synthetisierte Klänge
+  core/              Spielstand, Eingabe, synthetisierte Klänge, Fehlermeldungen
   engine/            Spielerfigur und Kollision, Ort (Location), Rendering
   world/
     berlin/          das Viertel um den Hackeschen Markt
@@ -86,10 +86,17 @@ werden alle Fälle nacheinander. Eine Tafel oben rechts und die Browser-Konsole 
 - *Fehler:* Anker, Dialogziele oder Bedingungen, die ins Leere zeigen. Fundstellen, die von keinem
   begehbaren Standpunkt aus in Reichweite liegen. Hinweise, Schlüsse oder Ziele, die sich beim
   simulierten Durchspielen nie gewinnen lassen, und eine Anklage, die nie angeboten wird.
+  Klänge, die Code oder Fall beim Namen aufrufen (`audio.door()`, `sound: 'repeater'`,
+  `loc.sounds` mit `type: 'whistle'` …), die es in `core/audio.js` aber nicht gibt.
 - *Warnungen:* Fundstellen, die überall hinter Geometrie liegen, stehende Figuren in Möbeln und
   Hinweise, die zu keinem Schluss gehören.
 
 Optik und Texte prüft das nicht. Bedingungen der Form `!id` wertet die Simulation eher zu großzügig.
+
+**Fehler im Spiel:** Wirft ein Teil des Bildes einen Fehler (Klang, Spielerfigur, eine Aktualisierung
+eines Ortes wie Zug oder Regen), fällt nur dieser Teil aus; das Spiel läuft weiter. Im
+Entwicklungsmodus erscheint dann oben in der Mitte eine rote Tafel mit Meldung, Stelle im Code und
+Anzahl (`core/errors.js`), in der Konsole steht jede Meldung einmal.
 
 **Darstellung messen:** Bei laufendem `npm run dev` die Adresse http://localhost:5173/?messen=1080
 öffnen (Browserfenster sichtbar lassen). Gemessen wird an festen Standpunkten in 1920 × 1080 bei

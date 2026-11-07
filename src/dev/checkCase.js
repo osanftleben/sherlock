@@ -298,12 +298,47 @@ function simulate(c, locations, usable, errors) {
   }
 }
 
+// Quelltext aller Module, damit die Klangprüfung sieht, welche Klänge aufgerufen werden.
+const SOURCES = import.meta.glob('../**/*.js', { query: '?raw', import: 'default', eager: true });
+
+// Jeder Klang, den Code oder Fälle beim Namen aufrufen, muss es in core/audio.js geben. Ein
+// fehlender wirft erst, wenn er erklingt, also oft nur an einer Stelle der Stadt und nur mit Ton;
+// Klangereignisse der Orte (loc.sounds) bleiben sogar stumm, ohne Fehler.
+export function checkSounds(audio, cases) {
+  const errors = [];
+  const need = new Map();
+  const add = (name, where) => {
+    if (!need.has(name)) need.set(name, new Set());
+    need.get(name).add(where);
+  };
+  for (const [path, text] of Object.entries(SOURCES)) {
+    const file = path.replace(/^\.\.\//, '');
+    if (file.startsWith('dev/')) continue;
+    const scan = (re) => {
+      for (const m of text.matchAll(re)) add(m[1], `${file}:${text.slice(0, m.index).split('\n').length}`);
+    };
+    if (file === 'core/audio.js') scan(/\bthis\.(\w+)\(/g);
+    else scan(/\baudio\.(\w+)\(/g);
+    scan(/sounds\b[^\n]*?\btype:\s*'(\w+)'/g);
+  }
+  for (const c of cases) {
+    for (const [id, d] of Object.entries(c.dialogues)) {
+      for (const [nodeId, node] of Object.entries(d.nodes)) if (node.sound) add(node.sound, `${c.id}: Dialog ${id}.${nodeId}`);
+    }
+    for (const spot of c.hotspots) if (spot.action?.play) add(spot.action.play, `${c.id}: Fundstelle ${spot.anchor}`);
+  }
+  for (const [name, where] of need) {
+    if (typeof audio[name] !== 'function') errors.push(`Klang „${name}“ fehlt in core/audio.js (aufgerufen in ${[...where].join(', ')}).`);
+  }
+  return errors;
+}
+
 // Prüft alle Fälle nacheinander, jeden in der Welt aufgebaut, und stellt danach den
 // vorher aufgebauten Fall wieder her. Ergebnis in der Konsole und als Tafel über dem Spiel.
 export function showCheck(game) {
   const t0 = performance.now();
   const before = game.case.id;
-  const errors = [];
+  const errors = checkSounds(game.audio, CASE_LIST);
   const warnings = [];
   let areas = {};
   for (const c of CASE_LIST) {

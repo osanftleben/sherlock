@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { reportError } from '../core/errors.js';
 
 // Ein Ort, den man betreten kann: die Straße genauso wie jede Stube.
 // Hinzu kommende Stadtviertel und Fälle docken über `anchors` und `hotspots` an.
@@ -55,8 +56,15 @@ export class Location {
     if (object) this.scene.remove(object);
   }
 
+  // Wirft ein Teil (Zug, Passanten, Regen …), laufen die übrigen trotzdem weiter.
   update(dt, time, ctx) {
-    for (const fn of this.updaters) fn(dt, time, ctx);
+    for (const fn of this.updaters) {
+      try {
+        fn(dt, time, ctx);
+      } catch (err) {
+        reportError(`Ort ${this.id}`, err);
+      }
+    }
   }
 
   heightAt(x, z) {

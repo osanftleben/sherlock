@@ -8,6 +8,7 @@ import { GameState } from './core/state.js';
 import { Input } from './core/input.js';
 import { Audio } from './core/audio.js';
 import { Ticking } from './core/ticking.js';
+import { reportError, watchErrors } from './core/errors.js';
 import { View } from './engine/view.js';
 import { Player } from './engine/player.js';
 import { UI } from './ui/ui.js';
@@ -24,6 +25,16 @@ const RETORTS = [
   'Diese beiden Dinge haben nichts miteinander zu schaffen.',
   'Man darf die Tatsachen nicht der Theorie anpassen.',
 ];
+
+// Ein Fehler in einem Teil des Bildes hält das Spiel nicht an: Der Teil fällt für dieses Bild
+// aus, Zielen, Speichern und Zeichnen laufen weiter. Gemeldet wird über core/errors.js.
+function safely(part, fn) {
+  try {
+    fn();
+  } catch (err) {
+    reportError(part, err);
+  }
+}
 
 function nextFrame() {
   return new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
@@ -540,12 +551,12 @@ class Game {
       this.player.yaw = Math.sin(this.titleYaw) * 0.5;
       this.player.apply();
     } else {
-      this.player.update(dt, this.input, this.location, this.audio, this.mode === 'play');
+      safely('Spielerfigur', () => this.player.update(dt, this.input, this.location, this.audio, this.mode === 'play'));
     }
 
     this.location.update(dt, this.time, { camera, player: this.player });
-    this.audio.update(dt, this.location.train ?? null, this.location.river, this.location.sounds, this.location.cab, this.location.gutter);
-    this.ticking.update(this.time, camera);
+    safely('Klang', () => this.audio.update(dt, this.location.train ?? null, this.location.river, this.location.sounds, this.location.cab, this.location.gutter));
+    safely('Ticken', () => this.ticking.update(this.time, camera));
 
     if (this.mode === 'play') {
       this.target = this.player.findTarget(this.location, this.state);
@@ -565,6 +576,7 @@ class Game {
   }
 }
 
+if (import.meta.env.DEV) watchErrors();
 const game = new Game();
 game.init().then(() => {
   // Entwicklerwerkzeug: http://localhost:5173/?pruefen prüft den Fall gegen die Orte.

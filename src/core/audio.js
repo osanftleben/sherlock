@@ -107,15 +107,15 @@ export class Audio {
     this.cabOut.connect(this.cabPan).connect(this.master);
     const rumble = ctx.createBiquadFilter();
     rumble.type = 'bandpass';
-    rumble.frequency.value = 240;
-    rumble.Q.value = 0.9;
+    rumble.frequency.value = 200;
+    rumble.Q.value = 0.6;
     const rattle = ctx.createGain();
-    rattle.gain.value = 0.12;
+    rattle.gain.value = 0.45;
     this.cobbles = ctx.createOscillator();
     this.cobbles.type = 'square';
     this.cobbles.frequency.value = 22;
     const cobbleDepth = ctx.createGain();
-    cobbleDepth.gain.value = 0.08;
+    cobbleDepth.gain.value = 0.3;
     this.cobbles.connect(cobbleDepth).connect(rattle.gain);
     this.cobbles.start();
     this.loop(rumble);
@@ -125,7 +125,7 @@ export class Audio {
     clatter.frequency.value = 1900;
     clatter.Q.value = 1.5;
     const clatterGain = ctx.createGain();
-    clatterGain.gain.value = 0.018;
+    clatterGain.gain.value = 0.06;
     this.loop(clatter);
     clatter.connect(clatterGain).connect(this.cabOut);
     this.nextCobble = 0;
@@ -215,26 +215,26 @@ export class Audio {
   hoof(vol, pan) {
     const out = this.panned(pan * 0.85);
     for (const [when, k] of [[0, 1], [0.016 + Math.random() * 0.02, 0.7]]) {
-      this.burst({ freq: 2200 + Math.random() * 600, q: 2.5, dur: 0.035, gain: 0.08 * vol * k, when, out });
-      this.burst({ freq: 620 + Math.random() * 160, q: 1.6, dur: 0.07, gain: 0.16 * vol * k, when, out });
-      this.burst({ freq: 190, q: 1, dur: 0.06, gain: 0.12 * vol * k, when, out });
+      this.burst({ freq: 2200 + Math.random() * 600, q: 2.5, dur: 0.035, gain: 0.35 * vol * k, when, out });
+      this.burst({ freq: 620 + Math.random() * 160, q: 1.6, dur: 0.07, gain: 0.9 * vol * k, when, out });
+      this.burst({ freq: 190, q: 1, dur: 0.06, gain: 0.7 * vol * k, when, out });
     }
   }
 
   // Ein stehendes Pferd setzt den Huf hart auf.
   stamp(vol, pan) {
     const out = this.panned(pan * 0.85);
-    this.burst({ freq: 1800, q: 2, dur: 0.04, gain: 0.08 * vol, out });
-    this.burst({ freq: 480, q: 1.4, dur: 0.09, gain: 0.2 * vol, out });
-    this.burst({ freq: 150, q: 1, dur: 0.12, gain: 0.18 * vol, out });
+    this.burst({ freq: 1800, q: 2, dur: 0.04, gain: 0.35 * vol, out });
+    this.burst({ freq: 480, q: 1.4, dur: 0.09, gain: 1.0 * vol, out });
+    this.burst({ freq: 150, q: 1, dur: 0.12, gain: 0.8 * vol, out });
   }
 
   // Schnauben: ein Atemstoß durch die Nüstern, die Lippen flattern dabei.
   snort(vol, pan) {
     const out = this.panned(pan * 0.85, 1.5);
-    this.burst({ freq: 520, q: 0.6, dur: 0.6, gain: 0.22 * vol, attack: 0.05, out });
-    this.burst({ freq: 1500, q: 0.8, dur: 0.45, gain: 0.05 * vol, attack: 0.04, out });
-    for (let i = 0; i < 9; i++) this.burst({ freq: 260 + Math.random() * 80, q: 1.2, dur: 0.035, gain: 0.1 * vol * (1 - i / 10), when: 0.08 + i * 0.032, out });
+    this.burst({ freq: 520, q: 0.6, dur: 0.6, gain: 0.7 * vol, attack: 0.05, out });
+    this.burst({ freq: 1500, q: 0.8, dur: 0.45, gain: 0.2 * vol, attack: 0.04, out });
+    for (let i = 0; i < 9; i++) this.burst({ freq: 260 + Math.random() * 80, q: 1.2, dur: 0.035, gain: 0.4 * vol * (1 - i / 10), when: 0.08 + i * 0.032, out });
   }
 
   hooves() {

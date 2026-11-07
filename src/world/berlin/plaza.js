@@ -3,6 +3,7 @@ import { Bag, addMesh, cyl, merge, std } from '../kit.js';
 import { clockFace, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
 import { idleFigure, makeFigure } from '../figures.js';
 import { makeDroschke } from './traffic.js';
+import { buildTrees } from './trees.js';
 
 // Brunnen in der Mitte des Platzes, in der Wendeschleife der Droschke (traffic.js):
 // Die Fahrspur bleibt rundum gut 6 m von seiner Mitte weg. Die beiden Laternen daneben
@@ -22,29 +23,11 @@ function octagonSide(R, a, h, thick, y, x, z) {
 
 export function buildPlaza(loc, r, ironMat) {
   const { scene } = loc;
-  // Bäume: kahle Linden im November, jeder Ast ein Zylinder.
-  const branches = [];
-  const addBranch = (start, dir, len, rad, depth) => {
-    const end = start.clone().addScaledVector(dir, len);
-    const g = new THREE.CylinderGeometry(rad * 0.7, rad, len, 5);
-    g.translate(0, len / 2, 0);
-    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    g.applyQuaternion(q);
-    g.translate(start.x, start.y, start.z);
-    branches.push(g);
-    if (depth <= 0) return;
-    const n = depth > 2 ? 3 : 2;
-    for (let i = 0; i < n; i++) {
-      const nd = dir.clone().add(new THREE.Vector3(r() - 0.5, (r() - 0.25) * 0.7, r() - 0.5).multiplyScalar(1.3)).normalize();
-      addBranch(end, nd, len * (0.62 + r() * 0.2), rad * 0.62, depth - 1);
-    }
-  };
-  const trees = [[-22, -14], [-22, 6], [22, -14], [22, 6], [-11, 8], [11, 8]];
-  for (const [x, z] of trees) {
-    addBranch(new THREE.Vector3(x, 0, z), new THREE.Vector3(0, 1, 0), 3.2, 0.2, 5);
-    loc.collide(x - 0.22, x + 0.22, z - 0.22, z + 0.22);
-  }
-  addMesh(scene, merge(branches), std({ color: 0x14100d, roughness: 1 }));
+  // Bäume: kahle Linden mit Baumrost und Schutzgitter (trees.js), aus eigenem Zufall.
+  // Die früheren Bäume zogen 4824 Zahlen aus r; die werden weiter verbraucht, damit sich
+  // Verkehr, Wetter und Baustellen dahinter nicht verschieben.
+  for (let i = 0; i < 4824; i++) r();
+  buildTrees(loc, [[-22, -14], [-22, 6], [22, -14], [22, 6], [-11, 8], [11, 8]], ironMat);
 
   // Litfaßsäule
   const lx = -16;

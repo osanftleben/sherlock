@@ -2675,3 +2675,71 @@ export function shopSigns() {
     return { boards, emblems };
   });
 }
+
+// Lindenrinde: graubraun mit Längsrissen und hellen Graten, waagerecht nahtlos.
+export function bark() {
+  const W = 128;
+  const H = 256;
+  const c = canvas(W, H);
+  const ctx = c.getContext('2d');
+  const r = rng(83);
+  ctx.fillStyle = '#56534d';
+  ctx.fillRect(0, 0, W, H);
+  const crack = (style, width, n) => {
+    for (let i = 0; i < n; i++) {
+      const pts = [];
+      let x = r() * W;
+      let y = -20 - r() * 40;
+      while (y < H + 20) {
+        pts.push([x, y]);
+        y += 10 + r() * 16;
+        x += (r() - 0.5) * 7;
+      }
+      ctx.strokeStyle = style();
+      ctx.lineWidth = width();
+      for (const off of [-W, 0, W]) {
+        ctx.beginPath();
+        pts.forEach(([px, py], k) => (k ? ctx.lineTo(px + off, py) : ctx.moveTo(px + off, py)));
+        ctx.stroke();
+      }
+    }
+  };
+  crack(() => `rgba(${120 + r() * 30},${110 + r() * 25},${96 + r() * 20},0.35)`, () => 2 + r() * 5, 16);
+  crack(() => `rgba(24,19,15,${0.55 + r() * 0.4})`, () => 1 + r() * 2.5, 30);
+  // Flechten, wie sie an alten Stadtbäumen sitzen.
+  for (let i = 0; i < 40; i++) {
+    ctx.fillStyle = `rgba(${100 + r() * 30},${112 + r() * 30},${90 + r() * 20},${0.12 + r() * 0.15})`;
+    const x = r() * W;
+    const y = r() * H;
+    const s = 2 + r() * 6;
+    for (const off of [-W, 0, W]) ctx.fillRect(x + off, y, s, s * 1.6);
+  }
+  return tex(c);
+}
+
+// Reisig für die Kronenspitzen: feine, im Zickzack verzweigte Lindentriebe, weiß auf
+// durchsichtig. Die Farbe kommt aus dem Material.
+export function twigs() {
+  const S = 256;
+  const c = canvas(S);
+  const ctx = c.getContext('2d');
+  const r = rng(97);
+  ctx.strokeStyle = '#fff';
+  ctx.lineCap = 'round';
+  const grow = (x, y, a, len, w, d) => {
+    const x2 = x + Math.sin(a) * len;
+    const y2 = y - Math.cos(a) * len;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.quadraticCurveTo((x + x2) / 2 + (r() - 0.5) * len * 0.25, (y + y2) / 2, x2, y2);
+    ctx.stroke();
+    if (d === 0) return;
+    const n = r() < 0.55 ? 3 : 2;
+    for (let i = 0; i < n; i++) grow(x2, y2, a + (r() - 0.5) * 1.3, len * (0.6 + r() * 0.2), Math.max(1, w * 0.7), d - 1);
+  };
+  for (let i = 0; i < 3; i++) grow(S / 2 + (r() - 0.5) * 24, S, (r() - 0.5) * 0.5, 62, 4, 5);
+  const t = tex(c);
+  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+  return t;
+}

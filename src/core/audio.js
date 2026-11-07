@@ -819,6 +819,193 @@ export class Audio {
     }
   }
 
+  // Hall der Bahnhofshalle: ein Faltungshall aus abklingendem Rauschen, einmal je Audiokontext.
+  // Rufe und Pfiffe vom Bahnsteig gehen zum Teil hindurch; pan setzt die Richtung der Halle.
+  hallVerb(pan) {
+    const ctx = this.ctx;
+    if (this.hallCtx !== ctx) {
+      const len = Math.floor(ctx.sampleRate * 2);
+      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let c = 0; c < 2; c++) {
+        const d = ir.getChannelData(c);
+        let lp = 0;
+        for (let i = 0; i < len; i++) {
+          const t = i / ctx.sampleRate;
+          // Späte Anteile dunkler: das Rauschen wird mit der Zeit stärker geglättet.
+          const k = 0.5 + 0.45 * Math.min(1, t / 1.2);
+          lp = lp * k + (Math.random() * 2 - 1) * (1 - k);
+          d[i] = lp * Math.exp(-t / 0.42) * (t < 0.012 ? t / 0.012 : 1) * 2.2;
+        }
+      }
+      this.hall = ctx.createConvolver();
+      this.hall.buffer = ir;
+      this.hallPan = ctx.createStereoPanner();
+      this.hall.connect(this.hallPan).connect(this.master);
+      this.hallCtx = ctx;
+    }
+    this.hallPan.pan.setTargetAtTime(pan * 0.5, ctx.currentTime, 0.05);
+    return this.hall;
+  }
+
+  // Ziel für Laute vom Bahnsteig: etwas trocken aus der Richtung, viel Hall, dumpfer mit Abstand.
+  platformOut(vol, pan, life) {
+    const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = vol;
+    const dry = ctx.createBiquadFilter();
+    dry.type = 'lowpass';
+    dry.frequency.value = 1800 + 2400 * vol;
+    const dryGain = ctx.createGain();
+    dryGain.gain.value = 0.45;
+    out.connect(dry).connect(dryGain).connect(this.panned(pan * 0.7, life));
+    const wet = ctx.createGain();
+    wet.gain.value = 0.55;
+    out.connect(wet).connect(this.hallVerb(pan));
+    setTimeout(() => {
+      out.disconnect();
+      wet.disconnect();
+    }, life * 1000);
+    return out;
+  }
+
+  // Ruf der Bahnsteigaufsicht, aus festen Lautfolgen zusammengesetzt. Eine gerufene Stimme:
+  // höher und heller als im Gespräch, die betonte Silbe gedehnt. Je Laut: Art ('v' Vokal,
+  // 'n' Nasal, 'f' Reibelaut, 's' Verschluss mit Knall), Dauer, dann für Vokale die Formanten,
+  // Stärke und Tonhöhe, für Reibelaute Mittenfrequenz, Güte und Stärke, für Verschlüsse die
+  // Frequenz des Knalls. Berlinisch heißt es „Fertich!“.
+  call(vol, pan, { text = 'einsteigen' } = {}) {
+    const ctx = this.ctx;
+    const CALLS = {
+      einsteigen: [
+        ['v', 0.15, [720, 1150, 2500], 0.8, 195],
+        ['v', 0.08, [390, 1950, 2600], 0.7, 200],
+        ['n', 0.05],
+        ['f', 0.11, 2600, 1.6, 0.45],
+        ['s', 0.05, 3800],
+        ['v', 0.3, [790, 1220, 2500], 1, 238],
+        ['v', 0.12, [400, 2050, 2700], 0.85, 228],
+        ['s', 0.045, 1700],
+        ['v', 0.07, [500, 1500, 2500], 0.45, 175],
+        ['n', 0.13],
+      ],
+      fertig: [
+        ['f', 0.08, 5000, 0.7, 0.3],
+        ['v', 0.24, [620, 1750, 2550], 1, 232],
+        ['v', 0.07, [600, 1300, 2400], 0.75, 218],
+        ['s', 0.05, 3600],
+        ['v', 0.22, [380, 2050, 2700], 0.85, 200],
+        ['f', 0.17, 3400, 2.2, 0.5],
+      ],
+    };
+    const phones = CALLS[text];
+    if (!phones) return;
+    if (this.shoutCtx !== ctx) {
+      // Gerufene Stimme: Obertöne fallen langsamer ab als beim Sprechen, das macht sie hell.
+      const N = 40;
+      const imag = new Float32Array(N);
+      for (let k = 1; k < N; k++) imag[k] = 1 / k ** 1.15;
+      this.shout = ctx.createPeriodicWave(new Float32Array(N), imag);
+      this.shoutCtx = ctx;
+    }
+    const total = phones.reduce((sum, ph) => sum + ph[1], 0);
+    const out = this.platformOut(vol, pan, total + 3);
+    const t0 = ctx.currentTime + 0.03;
+    const osc = ctx.createOscillator();
+    osc.setPeriodicWave(this.shout);
+    const breath = ctx.createBufferSource();
+    breath.buffer = this.noise;
+    const breathGain = ctx.createGain();
+    breathGain.gain.value = 0.08;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t0);
+    osc.connect(env);
+    breath.connect(breathGain).connect(env);
+    const formants = [[600, 5, 1], [1500, 8, 0.55], [2500, 10, 0.3]].map(([freq, q, g]) => {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = freq;
+      bp.Q.value = q;
+      const gg = ctx.createGain();
+      gg.gain.value = g * q * 0.4;
+      env.connect(bp).connect(gg).connect(out);
+      return bp.frequency;
+    });
+    const body = ctx.createBiquadFilter();
+    body.type = 'lowpass';
+    body.frequency.value = 400;
+    const bodyGain = ctx.createGain();
+    bodyGain.gain.value = 0.2;
+    env.connect(body).connect(bodyGain).connect(out);
+    // Unruhe der Tonhöhe, wie bei jeder echten Stimme.
+    const jitter = ctx.createOscillator();
+    jitter.frequency.value = 5.3;
+    const jitterDepth = ctx.createGain();
+    jitterDepth.gain.value = 3;
+    jitter.connect(jitterDepth).connect(osc.frequency);
+    const level = 0.24;
+    let t = t0;
+    osc.frequency.setValueAtTime(190, t0);
+    for (const [kind, dur, a, b, c] of phones) {
+      const g = env.gain;
+      if (kind === 'v') {
+        osc.frequency.setTargetAtTime(c, t, 0.04);
+        a.forEach((f, i) => formants[i].setTargetAtTime(f, t, i === 0 ? 0.025 : 0.035));
+        g.setTargetAtTime(level * b, t, 0.02);
+      } else if (kind === 'n') {
+        formants[0].setTargetAtTime(260, t, 0.015);
+        formants[1].setTargetAtTime(1600, t, 0.02);
+        g.setTargetAtTime(level * 0.28, t, 0.015);
+        g.setTargetAtTime(0, t + dur * 0.7, 0.03);
+      } else if (kind === 'f') {
+        g.setTargetAtTime(0, t, 0.015);
+        this.burst({ freq: a, q: b, dur, gain: c * 2, attack: 0.02, when: t - ctx.currentTime, out });
+      } else {
+        g.setTargetAtTime(0, t, 0.006);
+        this.burst({ freq: a, q: 1.2, dur: 0.025, gain: 0.7, when: t + dur * 0.8 - ctx.currentTime, out });
+      }
+      t += dur;
+    }
+    env.gain.setTargetAtTime(0, t, 0.04);
+    for (const o of [osc, breath, jitter]) {
+      o.start(t0);
+      o.stop(t + 0.3);
+    }
+  }
+
+  // Trillerpfeife der Aufsicht: ein heller Ton, den die Kugel in der Pfeife schnell flattern lässt.
+  guardWhistle(vol, pan) {
+    const ctx = this.ctx;
+    const out = this.platformOut(vol, pan, 4);
+    const t = ctx.currentTime + 0.02;
+    for (const [start, dur] of [[0, 0.22], [0.32, 1.0]]) {
+      const a = t + start;
+      const osc = ctx.createOscillator();
+      osc.frequency.value = 2950 + Math.random() * 100;
+      const trill = ctx.createOscillator();
+      trill.frequency.value = 26 + Math.random() * 6;
+      const fm = ctx.createGain();
+      fm.gain.value = 140;
+      trill.connect(fm).connect(osc.frequency);
+      const am = ctx.createGain();
+      am.gain.value = 0.35;
+      trill.connect(am);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, a);
+      g.gain.exponentialRampToValueAtTime(0.1, a + 0.03);
+      g.gain.setValueAtTime(0.1, a + dur - 0.06);
+      g.gain.exponentialRampToValueAtTime(0.0001, a + dur);
+      const flutter = ctx.createGain();
+      flutter.gain.value = 0.65;
+      am.connect(flutter.gain);
+      osc.connect(flutter).connect(g).connect(out);
+      for (const o of [osc, trill]) {
+        o.start(a);
+        o.stop(a + dur + 0.05);
+      }
+      this.burst({ freq: 3000, q: 1, dur, gain: 0.012, attack: 0.02, when: start, out });
+    }
+  }
+
   // Luftpumpe: „tock – pschh“.
   pump() {
     this.burst({ freq: 240, q: 1.5, dur: 0.09, gain: 0.25, out: this.locoOut });

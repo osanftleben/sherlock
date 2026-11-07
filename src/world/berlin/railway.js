@@ -203,7 +203,13 @@ export function buildRailway(loc, r, brickMat) {
       } else if (phase === 'stop') {
         const before = dwell;
         dwell -= dt;
-        if (before > 2.5 && dwell <= 2.5) (loc.sounds ??= []).push({ type: 'whistle', ...loco() });
+        // Abfahrt: Die Aufsicht ruft „Einsteigen!“, dann „Fertich!“ und pfeift, die Lok antwortet.
+        const platform = () => hearing(camera, 0, 24, 110);
+        const at = (sec) => before > sec && dwell <= sec;
+        if (at(9)) (loc.sounds ??= []).push({ type: 'call', text: 'einsteigen', ...platform() });
+        if (at(4.6)) (loc.sounds ??= []).push({ type: 'call', text: 'fertig', ...platform() });
+        if (at(3.6)) (loc.sounds ??= []).push({ type: 'guardWhistle', ...platform() });
+        if (at(2.2)) (loc.sounds ??= []).push({ type: 'whistle', ...loco() });
         if (dwell <= 0) phase = 'out';
       } else {
         speed = Math.min(V, speed + PULL * dt);

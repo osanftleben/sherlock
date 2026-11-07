@@ -20,8 +20,9 @@ export function buildBerlin() {
   const { scene } = loc;
   const r = rng(1892);
 
-  const FOG = 0x151c28;
-  scene.fog = new THREE.FogExp2(FOG, 0.0125);
+  // Dunst aus Regen und Kohlenrauch, vom Gaslicht warm grau aufgehellt.
+  const FOG = 0x1e1c20;
+  scene.fog = new THREE.FogExp2(FOG, 0.016);
   scene.background = new THREE.Color(FOG);
   loc.exposure = 1;
 
@@ -31,33 +32,59 @@ export function buildBerlin() {
   moon.position.set(-60, 120, -40);
   scene.add(moon);
 
-  // Himmel
+  // Himmel: eine geschlossene Wolkendecke, Regenwetter. Der Mond steht nach dem letzten Viertel
+  // um zwanzig vor zehn noch unter dem Horizont. Die Wolken fängt das Gaslicht der Stadt von
+  // unten auf, zum Horizont hin am stärksten (Lichtglocke); senkrecht darüber sind sie fast schwarz.
+  // Am Horizont geht der Himmel in die Nebelfarbe über.
   const sky = new THREE.Mesh(
     new THREE.SphereGeometry(600, 24, 12),
     new THREE.ShaderMaterial({
       side: THREE.BackSide,
       fog: false,
       depthWrite: false,
-      // glow: Lichtglocke der Gaslaternen knapp über dem Horizont, warm und schwach. Genau am
-      // Horizont ist sie null, damit der Himmel dort weiter in den Nebel der Straßen übergeht.
-      uniforms: { low: { value: new THREE.Color(FOG) }, high: { value: new THREE.Color(0x070a12) }, glow: { value: new THREE.Color(0.012, 0.009, 0.007) } },
+      uniforms: {
+        low: { value: new THREE.Color(FOG) },
+        high: { value: new THREE.Color(0.004, 0.004, 0.006) },
+        glow: { value: new THREE.Color(0.035, 0.024, 0.015) },
+        cloud: { value: new THREE.Color(0.1, 0.07, 0.05) },
+        time: { value: 0 },
+      },
       vertexShader: `varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
       fragmentShader: `
-        uniform vec3 low; uniform vec3 high; uniform vec3 glow; varying vec3 vP;
+        uniform vec3 low; uniform vec3 high; uniform vec3 glow; uniform vec3 cloud; uniform float time; varying vec3 vP;
+        float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float noise(vec2 p){
+          vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }
+        float fbm(vec2 p){
+          float v = 0.0; float a = 0.5;
+          for (int i = 0; i < 5; i++) { v += a * noise(p); p = p * 2.03 + vec2(1.7, 9.2); a *= 0.5; }
+          return v;
+        }
         void main(){
-          float t = smoothstep(0.0, 0.5, vP.y);
-          vec3 c = mix(low, high, t);
-          c += glow * smoothstep(0.0, 0.06, vP.y) * (1.0 - smoothstep(0.06, 0.32, vP.y));
-          vec3 m = normalize(vec3(-0.45, 0.62, -0.64));
-          float d = max(dot(normalize(vP), m), 0.0);
-          c += vec3(0.42,0.5,0.62) * pow(d, 900.0) * 1.6 + vec3(0.1,0.13,0.2) * pow(d, 40.0);
+          vec3 d = normalize(vP);
+          float h = max(d.y, 0.0);
+          vec3 c = mix(low, high, smoothstep(0.0, 0.5, h));
+          // Lichtglocke knapp über dem Horizont, genau am Horizont null wie der Nebel.
+          float bell = smoothstep(0.0, 0.05, h) * (1.0 - smoothstep(0.05, 0.4, h));
+          c += glow * bell;
+          // Wolkendecke als Ebene über der Stadt, langsam mit dem Wind nach Osten.
+          vec2 uv = d.xz / (h + 0.12) * 0.9 + vec2(time * 0.006, time * 0.002);
+          float n = fbm(uv);
+          float lit = mix(1.0, 0.18, smoothstep(0.04, 0.55, h)) * smoothstep(0.015, 0.12, h);
+          c += cloud * smoothstep(0.32, 0.78, n) * lit;
+          c *= mix(1.0, 0.8 + 0.4 * n, smoothstep(0.015, 0.12, h));
           gl_FragColor = vec4(c, 1.0);
         }`,
     }),
   );
   sky.renderOrder = -10;
   scene.add(sky);
-  loc.onUpdate((dt, t, { camera }) => sky.position.copy(camera.position));
+  loc.onUpdate((dt, t, { camera }) => {
+    sky.position.copy(camera.position);
+    sky.material.uniforms.time.value = t;
+  });
 
   // Materialien
   const plasterTex = plaster();

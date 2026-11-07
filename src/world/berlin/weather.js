@@ -8,7 +8,7 @@ export function buildWeather(loc, r) {
   // treibt oder sie auf die andere Seite springt, und in dunklen Durchfahrten sähe das aus wie
   // Licht, das über die Wände wandert. Unter Dach (loc.dry) gibt es keinen Bodennebel.
   const FOG_OPACITY = 0.11;
-  const fogMat = new THREE.SpriteMaterial({ map: fogPuff(), color: 0x6c7a90, transparent: true, opacity: FOG_OPACITY, depthWrite: false, fog: false });
+  const fogMat = new THREE.SpriteMaterial({ map: fogPuff(), color: 0x75716e, transparent: true, opacity: FOG_OPACITY, depthWrite: false, fog: false });
   const puffs = [];
   for (let i = 0; i < 26; i++) {
     const s = new THREE.Sprite(fogMat.clone());

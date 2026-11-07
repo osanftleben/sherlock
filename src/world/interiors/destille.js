@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addMesh, box, cyl, merge, std } from '../kit.js';
-import { chalkboard, chalkLabel, fogPuff, rng, signTexture, wallpaper, wood } from '../textures.js';
+import { chalkboard, chalkLabel, fogPuff, landscape, portrait, rng, signTexture, wallpaper, wood } from '../textures.js';
 import { Room, rod } from './room.js';
 import { wainscot } from './fittings.js';
 
@@ -166,6 +166,8 @@ export function buildDestille() {
   room.metalBag.add(cyl(0.1, 0.12, 0.12, -0.7, 0.06, -1.62, 14), 0xa58a4a);
   room.metalBag.add(new THREE.TorusGeometry(0.1, 0.012, 6, 16).rotateX(Math.PI / 2).translate(-0.7, 0.12, -1.62), 0xa58a4a);
 
+  furnish(room);
+
   // Fenster, warmes Lampenlicht, Qualm unter der Decke
   // Ausschnitt mit erleuchtetem Fenster und Laterne gegenüber.
   room.window('east', 0.2, 1.8, 1.5, 1.5, 0.4);
@@ -188,6 +190,202 @@ export function buildDestille() {
 }
 
 // --- Ausstattung der Destille ----------------------------------------------------
+
+// Was eine Kneipe bewohnt aussehen lässt: Hakenleiste mit Mänteln, Hüten und Zeitung neben der
+// Tür, ein Mantel am Ständer, Geweih und Bilder an den Wänden, Bierkästen, Besen und ein Stehfass.
+function furnish(room) {
+  const r = rng(911);
+  const brass = 0xa58a4a;
+  const S = room.d / 2 - 0.03;
+
+  // Hakenleiste mit Hutablage an der Südwand, westlich der Tür.
+  const x0 = -3.9;
+  const x1 = -1.3;
+  room.woodBag.box(0x3a2414, x1 - x0, 0.1, 0.03, (x0 + x1) / 2, 1.8, S - 0.015);
+  room.woodBag.box(0x3a2414, x1 - x0, 0.025, 0.26, (x0 + x1) / 2, 2.08, S - 0.13);
+  for (const x of [x0 + 0.15, (x0 + x1) / 2, x1 - 0.15]) room.woodBag.add(rod([[x, 1.9, S], [x, 2.0, S - 0.02], [x, 2.06, S - 0.2]], 0.014), 0x2a180c);
+  const hooks = [-3.65, -3.15, -2.6, -2.1, -1.55];
+  for (const x of hooks) {
+    room.metalBag.add(rod([[x, 1.8, S - 0.03], [x, 1.8, S - 0.08], [x, 1.86, S - 0.1]], 0.007), brass);
+    room.metalBag.add(new THREE.SphereGeometry(0.01, 6, 4).translate(x, 1.86, S - 0.1), brass);
+  }
+  hangingCoat(room.plainBag, hooks[0], 1.8, S - 0.03, Math.PI, 0x2a2826, r);
+  hangingCoat(room.plainBag, hooks[1], 1.8, S - 0.03, Math.PI, 0x3a2e22, r);
+  hangingCoat(room.plainBag, hooks[3], 1.8, S - 0.03, Math.PI, 0x1c1e22, r, 0.85);
+  // Schirm unter dem letzten Haken an die Wand gelehnt.
+  umbrella(room, hooks[4], S - 0.1, 0.92, 0.1);
+  // Hüte auf der Ablage: Melone, Schiebermütze, Zylinder.
+  bowler(room.plainBag, -3.5, 2.093, S - 0.14, 0x141414);
+  cap(room.plainBag, -2.85, 2.093, S - 0.15, 0x2a2622, 0.4);
+  room.plainBag.add(cyl(0.075, 0.08, 0.15, -1.75, 2.093 + 0.085, S - 0.14, 16), 0x101012);
+  room.plainBag.add(cyl(0.13, 0.13, 0.008, -1.75, 2.097, S - 0.14, 18), 0x101012);
+  room.plainBag.add(cyl(0.081, 0.081, 0.025, -1.75, 2.12, S - 0.14, 16), 0x2a2224);
+  // Zeitungshalter am Haken neben der Tür: Holzstab, darüber gehängt die Zeitung.
+  newspaper(room, -1.05, 1.62, S - 0.03);
+
+  // Mantel und Schirm am Garderobenständer.
+  hangingCoat(room.plainBag, 1.5, 1.72, 3.53, Math.PI, 0x3a3226, r, 0.9);
+  umbrella(room, 1.72, 3.75, 1.0, -0.18);
+
+  // Hirschgeweih auf einem Brett über dem Schnapsgestell.
+  antlers(room, -room.w / 2 + 0.03, 2.25, -0.7);
+
+  // Bilder an der Ostwand, beidseits des Fensters.
+  framed(room, room.w / 2 - 0.02, 1.85, -2.35, -Math.PI / 2, 0.7, 0.5, landscape(17));
+  framed(room, room.w / 2 - 0.02, 1.8, 2.55, -Math.PI / 2, 0.42, 0.56, portrait());
+
+  // Bierkästen mit leeren Flaschen in der Ecke, daneben ein Besen.
+  const crates = [[4.85, 0, 3.5, 0.05], [4.85, 0.32, 3.5, -0.04], [4.75, 0, 2.9, 0.2]];
+  for (const [x, y, z, rot] of crates) crate(room, x, y, z, rot, r);
+  room.solid(4.82, 3.2, 0.7, 1.1);
+  const broom = rod([[5.42, 0.04, 2.3], [5.44, 1.3, 2.2]], 0.014);
+  room.woodBag.add(broom, 0x6a4a2a);
+  const bristle = cyl(0.05, 0.11, 0.28, 0, 0, 0, 10);
+  bristle.scale(1, 1, 0.45);
+  bristle.translate(5.42, 0.14, 2.31);
+  room.plainBag.add(bristle, 0x8a7448);
+
+  // Stehfass mit Gläsern in der Südwestecke.
+  addCask(room.woodBag, -4.4, 0.47, 2.9, 0.3, 0.94, 'y', 0x4e321a);
+  for (const [dx, dz] of [[-0.08, 0.05], [0.1, -0.06]]) molle(room, -4.4 + dx, 0.94, 2.9 + dz, -1);
+  schnapsGlass(room, -4.32, 0.94, 3.04);
+  room.solid(-4.4, 2.9, 0.62, 0.62);
+}
+
+// Hängender Mantel: Kragen am Haken, breite Schultern, Ärmel an den Seiten, unten weit und in
+// Falten. Mit dem Rücken zur Wand (facing: Richtung in den Raum).
+function hangingCoat(bag, x, y, z, facing, color, r, len = 1) {
+  const L = 1.05 * len;
+  const prof = [[0.03, 0], [0.07, -0.04], [0.17, -0.11], [0.2, -0.19], [0.185, -0.4], [0.2, -0.6 * len], [0.225, -0.85 * len], [0.24, -L], [0, -L - 0.005]];
+  // Profil von unten nach oben, sonst zeigen die Flächen nach innen.
+  const g = new THREE.LatheGeometry(prof.reverse().map(([pr, py]) => new THREE.Vector2(pr, py)), 28, Math.PI, Math.PI * 2);
+  const pos = g.attributes.position;
+  const seed = r() * 6;
+  for (let i = 0; i < pos.count; i++) {
+    const px = pos.getX(i);
+    const pz = pos.getZ(i);
+    const t = Math.max(0, -pos.getY(i) - 0.25) / L;
+    const f = 1 + 0.07 * t * Math.sin(7 * Math.atan2(px, pz) + seed);
+    pos.setX(i, px * f);
+    pos.setZ(i, pz * f * 0.38);
+  }
+  g.computeVertexNormals();
+  const parts = [[g, color]];
+  for (const s of [-1, 1]) parts.push([rod([[s * 0.15, -0.14, 0.03], [s * 0.165, -0.38, 0.05], [s * 0.15, -0.62, 0.055]], 0.036), shade(color, 0.9)]);
+  parts.push([new THREE.TorusGeometry(0.055, 0.022, 6, 14, Math.PI).rotateX(Math.PI / 2).rotateY(Math.PI).translate(0, -0.03, 0.01), shade(color, 0.8)]);
+  const tilt = (r() - 0.5) * 0.12;
+  for (const [p, c] of parts) {
+    p.rotateZ(tilt);
+    p.rotateY(facing);
+    p.translate(x + Math.sin(facing) * 0.09, y, z + Math.cos(facing) * 0.09);
+    bag.add(p, c);
+  }
+}
+
+const shade = (c, k) => new THREE.Color(c).multiplyScalar(k);
+
+function bowler(bag, x, y, z, color) {
+  bag.add(new THREE.SphereGeometry(0.085, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.9, 1.12).translate(x, y + 0.02, z), color);
+  bag.add(cyl(0.085, 0.085, 0.02, x, y + 0.01, z, 16), color);
+  bag.add(new THREE.TorusGeometry(0.105, 0.012, 5, 20).rotateX(Math.PI / 2).scale(1, 1, 1.12).translate(x, y + 0.008, z), color);
+}
+
+function cap(bag, x, y, z, color, rot) {
+  const top = new THREE.SphereGeometry(0.1, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.05, 0.38, 1.1);
+  const peak = box(0.15, 0.008, 0.07, 0, 0, 0.12);
+  for (const [g, c] of [[top, color], [peak, shade(color, 0.7)]]) {
+    g.rotateY(rot);
+    g.translate(x, y + 0.004, z);
+    bag.add(g, c);
+  }
+}
+
+// Zugeklappter Schirm, schräg angelehnt: Griff oben bei (x, top, z), Spitze am Boden.
+function umbrella(room, x, z, top, lean) {
+  const dir = new THREE.Vector3(Math.sin(lean) * 0.3, -top, -0.06);
+  const foot = new THREE.Vector3(x, top, z).add(dir);
+  room.woodBag.add(rod([[x, top, z], [foot.x, 0.01, foot.z]], 0.008), 0x1a1410);
+  const canopy = new THREE.ConeGeometry(0.045, top * 0.62, 10, 1, true);
+  canopy.rotateX(Math.PI);
+  const mid = new THREE.Vector3(x, top, z).lerp(foot, 0.55);
+  canopy.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().negate().normalize()));
+  canopy.translate(mid.x, mid.y, mid.z);
+  room.plainBag.add(canopy, 0x18161a);
+  room.woodBag.add(rod([[x, top, z], [x, top + 0.06, z + 0.03], [x, top + 0.04, z + 0.08]], 0.011), 0x3a2414);
+}
+
+function newspaper(room, x, y, z) {
+  room.metalBag.add(rod([[x, y + 0.08, z], [x, y + 0.08, z - 0.05]], 0.006), 0xa58a4a);
+  room.woodBag.add(rod([[x - 0.24, y + 0.04, z - 0.05], [x + 0.24, y + 0.04, z - 0.05]], 0.012), 0x5a3a20);
+  // Die Zeitung hängt über dem Stab, vorn etwas länger, und bauscht sich.
+  const sheet = new THREE.PlaneGeometry(0.42, 0.56, 6, 8);
+  const pos = sheet.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const t = 0.5 - (pos.getY(i) / 0.56);
+    pos.setZ(i, 0.004 * Math.sin(pos.getX(i) * 15) * t);
+  }
+  sheet.translate(0, -0.24, 0).rotateY(Math.PI).translate(x, y + 0.04, z - 0.062);
+  sheet.computeVertexNormals();
+  room.plainBag.add(sheet, 0xcfc6ac);
+  // Kopf und Spalten
+  room.plainBag.add(box(0.3, 0.035, 0.002, x, y - 0.03, z - 0.066), 0x2a2622);
+  for (let c = 0; c < 3; c++) for (let l = 0; l < 7; l++) room.plainBag.add(box(0.11, 0.006, 0.002, x - 0.13 + c * 0.13, y - 0.09 - l * 0.045, z - 0.066), 0x6a645a);
+}
+
+function antlers(room, x, y, z) {
+  // Brett, Schädel, zwei geschwungene Stangen mit Enden.
+  const shield = cyl(0.17, 0.17, 0.03, 0, 0, 0, 20).scale(1, 1, 1.35).rotateZ(Math.PI / 2);
+  room.woodBag.add(shield.translate(x + 0.015, y, z), 0x3a2010);
+  room.plainBag.add(new THREE.SphereGeometry(0.07, 12, 8).scale(1, 0.9, 0.75).translate(x + 0.07, y + 0.02, z), 0xd8ceb4);
+  const bone = 0xcab894;
+  for (const s of [-1, 1]) {
+    const pts = [[x + 0.08, y + 0.07, z + s * 0.04], [x + 0.14, y + 0.2, z + s * 0.14], [x + 0.18, y + 0.38, z + s * 0.24], [x + 0.17, y + 0.56, z + s * 0.27], [x + 0.13, y + 0.7, z + s * 0.22]];
+    room.plainBag.add(rod(pts, 0.016), bone);
+    for (const [k, len, up] of [[1, 0.13, 0.05], [2, 0.12, 0.1], [3, 0.1, 0.12]]) {
+      const [px, py, pz] = pts[k];
+      room.plainBag.add(rod([[px, py, pz], [px + len * 0.8, py + up, pz - s * len * 0.25]], 0.009), bone);
+    }
+  }
+}
+
+function framed(room, x, y, z, facing, w, h, map) {
+  const g = new THREE.Group();
+  const frame = merge([
+    box(w + 0.1, 0.05, 0.035, 0, h / 2 + 0.025, 0),
+    box(w + 0.1, 0.05, 0.035, 0, -h / 2 - 0.025, 0),
+    box(0.05, h, 0.035, -w / 2 - 0.025, 0, 0),
+    box(0.05, h, 0.035, w / 2 + 0.025, 0, 0),
+  ]);
+  g.add(new THREE.Mesh(frame, std({ color: 0x6a4a1e, roughness: 0.45, metalness: 0.4 })));
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map, roughness: 0.75 }));
+  pic.position.z = 0.006;
+  g.add(pic);
+  g.position.set(x, y, z);
+  g.rotation.y = facing;
+  room.scene.add(g);
+}
+
+// Bierkasten aus Holz mit Griffloch, oben die Hälse leerer Flaschen.
+function crate(room, x, y, z, rot, r) {
+  const parts = [];
+  parts.push([box(0.6, 0.3, 0.4, 0, 0.15, 0), 0x5a3e22]);
+  parts.push([box(0.62, 0.03, 0.42, 0, 0.29, 0), 0x4a3018]);
+  for (const s of [-1, 1]) parts.push([box(0.012, 0.04, 0.12, s * 0.305, 0.22, 0), 0x1a120a]);
+  for (let i = 0; i < 4; i++) {
+    for (let j = 0; j < 3; j++) {
+      if (r() < 0.15) continue;
+      const bx = -0.21 + i * 0.14;
+      const bz = -0.12 + j * 0.12;
+      parts.push([cyl(0.014, 0.024, 0.07, bx, 0.33, bz, 8), 0x2a4030]);
+      parts.push([cyl(0.016, 0.016, 0.012, bx, 0.37, bz, 8), 0x8a8478]);
+    }
+  }
+  for (const [g, c] of parts) {
+    g.rotateY(rot);
+    g.translate(x, y, z);
+    (c === 0x2a4030 ? room.glassBag : c === 0x8a8478 ? room.metalBag : room.woodBag).add(g, c);
+  }
+}
 
 // Bauchiges Fass mit Eisenreifen; axis gibt die Fassachse an.
 function addCask(bag, x, y, z, r, len, axis, wood = 0x5a3a1e) {

@@ -341,6 +341,20 @@ export class View {
     this.exposure = 1.15 * location.exposure;
   }
 
+  // Übersetzt die Shader der Szenen vorab, im Hintergrund und parallel, soweit der Browser das kann
+  // (KHR_parallel_shader_compile). Ziel muss der Fließkomma-Puffer sein, in den render() zeichnet:
+  // Dafür baut three.js eine eigene Variante mit linearer statt sRGB-Ausgabe. Ohne das Ziel
+  // entstanden nur Programme, die nie benutzt wurden, und die richtigen übersetzte erst das erste
+  // Bild eines Ortes, eines nach dem anderen.
+  compile(scenes) {
+    const r = this.renderer;
+    const before = r.getRenderTarget();
+    r.setRenderTarget(this.target);
+    const done = scenes.map((scene) => r.compileAsync(scene, this.camera));
+    r.setRenderTarget(before);
+    return Promise.all(done);
+  }
+
   // Regelt die innere Auflösung nach der gemessenen GPU-Zeit: über dem Budget sofort herunter,
   // mit viel Luft langsam wieder hinauf. Ohne Zeitabfragen zählt der Browser verspätete Bilder.
   // Reicht die kleinste Auflösung nicht, fällt das Leuchten weg.

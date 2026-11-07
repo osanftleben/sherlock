@@ -65,6 +65,14 @@ class Game {
   }
 
   async init() {
+    // Ladezeit je Abschnitt in ms, ab Aufruf der Seite gezählt (im Entwicklungsmodus auch in der Konsole).
+    this.loadTimes = { 'bis Start': Math.round(performance.now()) };
+    let last = performance.now();
+    const lap = (name) => {
+      const now = performance.now();
+      this.loadTimes[name] = Math.round(now - last);
+      last = now;
+    };
     this.ui.loading('Die Stadt erwacht …');
     await Promise.all([
       document.fonts.load('40px "UnifrakturMaguntia"'),
@@ -72,13 +80,17 @@ class Game {
       document.fonts.load('italic 20px "EB Garamond"'),
     ]);
     await nextFrame();
+    lap('Schriften');
 
     const berlin = buildBerlin();
     this.locations[berlin.id] = berlin;
+    lap('Stadt');
     for (const room of buildInteriors()) this.locations[room.id] = room;
+    lap('Innenräume');
     this.applyEnvironments();
     // Hinter dem Titel steht schon die Welt des zuletzt gespielten Falls.
     this.applyCase(CASES[this.state.summary().current] || CASES[FIRST_CASE]);
+    lap('Fall');
 
     this.input.onKey = (code) => this.onKey(code);
     this.input.onClick = () => this.interact();
@@ -86,14 +98,35 @@ class Game {
     this.state.onAdd((id) => this.onLearned(id));
 
     await nextFrame();
+    lap('Pause');
     const { renderer } = this.view;
-    for (const loc of Object.values(this.locations)) renderer.compile(loc.scene, this.view.camera);
+    // Vor dem Titel nur die Stadt, die hinter ihm steht. Die Räume folgen nach dem ersten Bild.
+    await this.view.compile([berlin.scene]);
+    lap('Shader');
 
     this.enter('berlin', { pos: [0, 0, 10], yaw: 0 });
     this.showTitle();
     this.view.fadeTarget = 0;
     this.lastFrame = performance.now();
+    lap('Betreten');
     renderer.setAnimationLoop(() => this.frame());
+    // Läuft nach dem ersten Bild der Schleife: Darin legt der Grafikprozess Texturen, Puffer und
+    // Shader der Stadt erst endgültig an.
+    requestAnimationFrame(() => {
+      lap('Erstes Bild');
+      this.loadTimes.gesamt = Math.round(performance.now());
+      if (import.meta.env.DEV) console.info('Ladezeit (ms)', this.loadTimes);
+      // Shader der Räume im Hintergrund, solange der Titel steht: ein Raum nach dem anderen, damit
+      // der Schwenk hinter dem Titel nicht stockt. Steht man früher in einem Raum (Fortsetzen nach
+      // einer Shaderänderung), wartet das erste Bild darin noch, aber im Schwarz der Überblendung.
+      let rooms = Promise.resolve();
+      for (const loc of Object.values(this.locations)) {
+        if (loc !== berlin) rooms = rooms.then(() => this.view.compile([loc.scene]));
+      }
+      rooms.then(() => {
+        this.loadTimes['Räume übersetzt'] = Math.round(performance.now());
+      });
+    });
   }
 
   // Sanfte Spiegelung auf nassem Stein und Metall, gebaut aus einer Mini-Szene.

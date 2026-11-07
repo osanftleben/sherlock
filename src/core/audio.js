@@ -728,21 +728,24 @@ export class Audio {
     // Stadtbahn (railway.js): roll ist der nächste Wagen, loco die Lok, je { vol, pan }.
     const roll = outdoors && train ? train.roll.vol : 0;
     const loco = outdoors && train ? train.loco.vol : 0;
-    this.trainGain.gain.setTargetAtTime(roll * 0.18, now, 0.3);
-    this.locoOut.gain.setTargetAtTime(loco, now, 0.2);
+    this.trainGain.gain.setTargetAtTime(roll * 0.32, now, 0.3);
+    this.locoOut.gain.setTargetAtTime(loco * 1.5, now, 0.2);
     if (train) {
       this.trainPan.pan.setTargetAtTime(train.roll.pan * 0.6, now, 0.2);
       this.locoPan.pan.setTargetAtTime(train.loco.pan * 0.8, now, 0.1);
     }
     this.nextClack -= dt;
     if (this.nextClack < 0) {
-      if (roll > 0.02) this.clack(roll);
+      if (roll > 0.02) this.clack(roll * 1.6);
       this.nextClack = 0.52 + Math.random() * 0.08;
     }
+    // Vier Dampfstöße je Radumdrehung, nicht ganz gleichmäßig: der Dampf strömt mal etwas
+    // länger, mal kürzer aus den Zylindern.
     this.nextChuff -= dt;
     if (this.nextChuff < 0) {
-      if (loco > 0.01) this.chuff();
-      this.nextChuff = 0.21 + Math.random() * 0.02;
+      this.chuffN = ((this.chuffN ?? 0) + 1) % 4;
+      if (loco > 0.01) this.chuff([1, 0.55, 0.8, 0.6][this.chuffN]);
+      this.nextChuff = [0.27, 0.22, 0.26, 0.23][this.chuffN] * (0.97 + Math.random() * 0.06);
     }
     // Einmal je Durchfahrt pfeift die Lok, wenn sie herankommt, aber nicht immer.
     if (!train) this.whistled = false;
@@ -760,36 +763,55 @@ export class Audio {
     }
   }
 
-  // Dampfstoß aus dem Schornstein: ein kurzes, rauschendes „tschff“, jeder vierte etwas kräftiger.
-  chuff() {
-    this.chuffN = ((this.chuffN ?? 0) + 1) % 4;
-    const k = this.chuffN === 0 ? 1 : 0.65 + Math.random() * 0.15;
-    this.burst({ freq: 1300 + Math.random() * 300, q: 0.9, dur: 0.13, gain: 0.2 * k, attack: 0.012, out: this.locoOut });
-    this.burst({ freq: 260, q: 1, dur: 0.11, gain: 0.3 * k, attack: 0.01, out: this.locoOut });
+  // Dampfstoß aus dem Schornstein: ein breites, weiches „tschuff“, das hart einsetzt und
+  // langsam verweht, darunter ein dumpfer Stoß, darüber das Zischen des Dampfes.
+  chuff(k) {
+    const out = this.locoOut;
+    this.burst({ freq: 620 + Math.random() * 120, q: 0.5, dur: 0.3, gain: 0.32 * k, attack: 0.006, out });
+    this.burst({ freq: 2200 + Math.random() * 400, q: 0.7, dur: 0.2, gain: 0.09 * k, attack: 0.004, out });
+    this.burst({ freq: 140, q: 0.8, dur: 0.12, gain: 0.35 * k, attack: 0.005, out });
   }
 
-  // Dampfpfeife: ein heiserer Ton, kurz angestoßen, dann lang.
+  // Dampfpfeife: kein reiner Ton, sondern Luft, die in einer Glocke schwingt. Ein schmales
+  // Rauschband auf dem Grundton, dazu der Ton selbst mit leisen Obertönen. Der Ton zieht beim
+  // Öffnen des Ventils von unten an und sinkt beim Schließen etwas ab. Einmal kurz, einmal lang.
   whistle() {
     const ctx = this.ctx;
-    for (const [start, dur] of [[0, 0.35], [0.5, 1.4]]) {
+    const f0 = 740 + Math.random() * 60;
+    for (const [start, dur] of [[0, 0.45], [0.65, 1.6]]) {
       const t = ctx.currentTime + start;
-      const osc = ctx.createOscillator();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(560, t);
-      osc.frequency.linearRampToValueAtTime(590, t + 0.08);
-      const f = ctx.createBiquadFilter();
-      f.type = 'bandpass';
-      f.frequency.value = 1200;
-      f.Q.value = 1.2;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.12, t + 0.06);
-      g.gain.setValueAtTime(0.12, t + dur - 0.15);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      osc.connect(f).connect(g).connect(this.locoOut);
-      osc.start(t);
-      osc.stop(t + dur + 0.05);
-      this.burst({ freq: 3000, q: 0.7, dur, gain: 0.03, attack: 0.05, when: start, out: this.locoOut });
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t);
+      env.gain.setTargetAtTime(1, t, 0.04);
+      env.gain.setTargetAtTime(0.0001, t + dur - 0.2, 0.07);
+      env.connect(this.locoOut);
+      setTimeout(() => env.disconnect(), (start + dur + 0.5) * 1000);
+      const glide = (param, base) => {
+        param.setValueAtTime(base * 0.9, t);
+        param.exponentialRampToValueAtTime(base, t + 0.12);
+        param.setValueAtTime(base, t + dur - 0.2);
+        param.exponentialRampToValueAtTime(base * 0.96, t + dur);
+      };
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.Q.value = 18;
+      glide(band.frequency, f0);
+      const breath = ctx.createGain();
+      breath.gain.value = 1.6;
+      src.connect(band).connect(breath).connect(env);
+      src.start(t, Math.random() * 2, dur + 0.05);
+      for (const [h, gain] of [[1, 0.03], [2, 0.009], [3, 0.004]]) {
+        const osc = ctx.createOscillator();
+        glide(osc.frequency, f0 * h);
+        const g = ctx.createGain();
+        g.gain.value = gain;
+        osc.connect(g).connect(env);
+        osc.start(t);
+        osc.stop(t + dur + 0.05);
+      }
+      this.burst({ freq: 3200, q: 0.6, dur, gain: 0.015, attack: 0.05, when: start, out: this.locoOut });
     }
   }
 }

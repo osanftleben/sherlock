@@ -99,36 +99,20 @@ export class Audio {
     this.nextSlap = 0;
     this.nextCreak = 4;
 
-    // Fahrende Droschke: Eisenreifen rattern über das Kopfsteinpflaster, im unruhigen Takt der
-    // Steine; dazu ein helles Klappern der Beschläge. Pegel und Seite setzt update.
+    // Fahrende Droschke: leises, dumpfes Rollen der Eisenreifen, darüber einzelne unregelmäßige
+    // Stöße, wenn ein Rad über eine Steinkante holpert (update). Die Hufe sollen führen.
     this.cabPan = ctx.createStereoPanner();
     this.cabOut = ctx.createGain();
     this.cabOut.gain.value = 0;
     this.cabOut.connect(this.cabPan).connect(this.master);
-    const rumble = ctx.createBiquadFilter();
-    rumble.type = 'bandpass';
-    rumble.frequency.value = 200;
-    rumble.Q.value = 0.6;
-    const rattle = ctx.createGain();
-    rattle.gain.value = 0.45;
-    this.cobbles = ctx.createOscillator();
-    this.cobbles.type = 'square';
-    this.cobbles.frequency.value = 22;
-    const cobbleDepth = ctx.createGain();
-    cobbleDepth.gain.value = 0.3;
-    this.cobbles.connect(cobbleDepth).connect(rattle.gain);
-    this.cobbles.start();
-    this.loop(rumble);
-    rumble.connect(rattle).connect(this.cabOut);
-    const clatter = ctx.createBiquadFilter();
-    clatter.type = 'bandpass';
-    clatter.frequency.value = 1900;
-    clatter.Q.value = 1.5;
-    const clatterGain = ctx.createGain();
-    clatterGain.gain.value = 0.06;
-    this.loop(clatter);
-    clatter.connect(clatterGain).connect(this.cabOut);
-    this.nextCobble = 0;
+    const roll = ctx.createBiquadFilter();
+    roll.type = 'lowpass';
+    roll.frequency.value = 170;
+    const rollGain = ctx.createGain();
+    rollGain.gain.value = 0.12;
+    this.loop(roll);
+    roll.connect(rollGain).connect(this.cabOut);
+    this.nextBump = 0;
 
     this.setEnvironment(this.env);
   }
@@ -211,13 +195,15 @@ export class Audio {
     return out;
   }
 
-  // Ein Hufpaar im Trab: Eisen auf Stein, die beiden diagonalen Hufe fast gleichzeitig.
+  // Ein Hufpaar im Trab: Hufeisen auf Pflasterstein, ein heller Klick, ein hohles „Klopp“ und ein
+  // kurzer Stoß darunter; die beiden diagonalen Hufe fast gleichzeitig, der zweite etwas leiser.
   hoof(vol, pan) {
     const out = this.panned(pan * 0.85);
-    for (const [when, k] of [[0, 1], [0.016 + Math.random() * 0.02, 0.7]]) {
-      this.burst({ freq: 2200 + Math.random() * 600, q: 2.5, dur: 0.035, gain: 0.35 * vol * k, when, out });
-      this.burst({ freq: 620 + Math.random() * 160, q: 1.6, dur: 0.07, gain: 0.9 * vol * k, when, out });
-      this.burst({ freq: 190, q: 1, dur: 0.06, gain: 0.7 * vol * k, when, out });
+    for (const [when, k] of [[0, 1], [0.018 + Math.random() * 0.02, 0.75]]) {
+      const v = vol * k * (0.85 + Math.random() * 0.3);
+      this.burst({ freq: 3200 + Math.random() * 800, q: 3, dur: 0.022, gain: 0.7 * v, when, out });
+      this.burst({ freq: 1000 + Math.random() * 250, q: 2.5, dur: 0.06, gain: 1.6 * v, when, out });
+      this.burst({ freq: 380 + Math.random() * 60, q: 1.5, dur: 0.08, gain: 1.0 * v, when, out });
     }
   }
 
@@ -392,10 +378,10 @@ export class Audio {
     }
     this.cabOut.gain.setTargetAtTime(outdoors && cab?.moving ? cab.vol : 0, now, 0.25);
     if (cab) this.cabPan.pan.setTargetAtTime(cab.pan * 0.8, now, 0.1);
-    this.nextCobble -= dt;
-    if (this.nextCobble < 0) {
-      this.cobbles.frequency.setTargetAtTime(16 + Math.random() * 14, now, 0.05);
-      this.nextCobble = 0.12 + Math.random() * 0.2;
+    this.nextBump -= dt;
+    if (this.nextBump < 0) {
+      if (outdoors && cab?.moving && cab.vol > 0.02) this.burst({ freq: 120 + Math.random() * 110, q: 1.3, dur: 0.05 + Math.random() * 0.04, gain: 0.25 + Math.random() * 0.25, out: this.cabOut });
+      this.nextBump = 0.06 + Math.random() * 0.16;
     }
     const nearWater = outdoors && river ? Math.max(0, 1 - river.distance / 18) ** 2 : 0;
     const nearBarge = outdoors && river ? Math.max(0, 1 - river.barge / 30) ** 2 : 0;

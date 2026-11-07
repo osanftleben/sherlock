@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
 import { Bag, addMesh, box, cyl, merge, std } from '../kit.js';
-import { clockFace, softDisc, wood } from '../textures.js';
+import { WINDOW_VIEW, clockFace, rainOnGlass, softDisc, windowView, wood } from '../textures.js';
+
+// Abstand der Häuser gegenüber hinter den Fenstern, in Metern (Straßenbreite).
+const VIEW_DEPTH = 12;
 
 // Stuben entstehen nach demselben Muster: Raum um den Ursprung, Tür in der Südwand (+Z).
 export class Room {
@@ -115,11 +118,70 @@ export class Room {
     return l;
   }
 
+  // Blick hinaus auf die Häuser gegenüber (windowView), mit Regen auf der Scheibe. Die Wand hat
+  // kein Loch: Der Shader verlängert jeden Sehstrahl von der Scheibe bis zur gemalten Häuserzeile
+  // VIEW_DEPTH Meter dahinter. So verschiebt sich der Ausblick, wenn man sich bewegt, und
+  // mehrere Fenster derselben Wand zeigen dieselbe Straße.
+  viewMaterial(wall) {
+    this.viewMats ??= {};
+    if (this.viewMats[wall]) return this.viewMats[wall];
+    // Nach außen und längs der Wand, je Wand des Raums (Tür im Süden, +z).
+    const dirs = { east: [[1, 0, 0], [0, 0, -1]], west: [[-1, 0, 0], [0, 0, 1]], south: [[0, 0, 1], [1, 0, 0]], north: [[0, 0, -1], [-1, 0, 0]] };
+    const [out, side] = dirs[wall].map((v) => new THREE.Vector3(...v));
+    // Jeder Raum und jede Wand blickt auf ein anderes Stück der Straße.
+    let shift = { east: 0.13, west: 0.61, south: 0.37, north: 0.84 }[wall];
+    for (const ch of this.loc.id) shift += ch.charCodeAt(0) * 0.0173;
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uView: { value: windowView() },
+        uDrops: { value: rainOnGlass() },
+        uTime: { value: 0 },
+        uOut: { value: out },
+        uSide: { value: side },
+        uShift: { value: shift % 1 },
+      },
+      vertexShader: `
+        varying vec3 vWorld;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorld = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }`,
+      fragmentShader: `
+        uniform sampler2D uView;
+        uniform sampler2D uDrops;
+        uniform float uTime;
+        uniform vec3 uOut;
+        uniform vec3 uSide;
+        uniform float uShift;
+        varying vec3 vWorld;
+        void main() {
+          vec3 d = normalize(vWorld - cameraPosition);
+          vec3 q = vWorld + d * (${VIEW_DEPTH.toFixed(1)} / max(dot(d, uOut), 0.08));
+          vec2 uv = vec2(dot(q, uSide) / ${WINDOW_VIEW.w.toFixed(1)} + uShift, (q.y - (${WINDOW_VIEW.y0.toFixed(1)})) / ${WINDOW_VIEW.h.toFixed(1)});
+          vec2 g = vec2(dot(vWorld, uSide), vWorld.y) / 0.45;
+          float bead = texture2D(uDrops, g).r;
+          float run = texture2D(uDrops, vec2(g.x * 0.5 + 0.37, g.y * 0.3 + uTime * 0.04)).g;
+          float drop = max(bead, run * 0.6);
+          vec3 col = texture2D(uView, uv + vec2(0.0, drop * 0.006)).rgb * 0.9;
+          col = mix(col, col * 1.7 + vec3(0.010, 0.012, 0.016), drop);
+          col += vec3(0.003, 0.004, 0.006);
+          gl_FragColor = vec4(col, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    this.loc.onUpdate((dt, t) => {
+      mat.uniforms.uTime.value = t;
+    });
+    this.viewMats[wall] = mat;
+    return mat;
+  }
+
   window(wall, along, y, w, h) {
-    // Fenster bei Nacht: dunkles Glas mit einem Hauch von Laternenlicht.
-    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.018, 0.028, 0.05) });
     const off = wall === 'east' ? this.w / 2 - 0.05 : -this.w / 2 + 0.05;
-    addMesh(this.scene, box(0.02, h, w, off, y, along), mat);
+    const pane = new THREE.PlaneGeometry(w, h).rotateY(wall === 'east' ? -Math.PI / 2 : Math.PI / 2).translate(off, y, along);
+    addMesh(this.scene, pane, this.viewMaterial(wall));
     const bx = wall === 'east' ? off - 0.03 : off + 0.03;
     this.woodBag.box(0x2a1a10, 0.05, h + 0.14, 0.09, bx, y, along - w / 2);
     this.woodBag.box(0x2a1a10, 0.05, h + 0.14, 0.09, bx, y, along + w / 2);

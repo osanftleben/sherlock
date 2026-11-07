@@ -2497,6 +2497,207 @@ export function nightReflection() {
   });
 }
 
+// Blick aus den Fenstern der Innenräume: die Häuserzeile auf der anderen Straßenseite bei Nacht
+// und Regen, gemalt in Metern. Das Bild deckt WINDOW_VIEW.w Meter Breite und WINDOW_VIEW.h Meter
+// Höhe ab, unten beginnend bei WINDOW_VIEW.y0 (unter dem Pflaster, für den Blick schräg nach
+// unten). Läden im Erdgeschoss, drei Stockwerke Fenster, einzelne erleuchtet, Gaslaternen vor
+// den Häusern mit Widerschein auf dem nassen Pflaster, darüber Dächer und Himmel im Dunst.
+export const WINDOW_VIEW = { w: 40, h: 20, y0: -2 };
+export function windowView() {
+  return cached('window-view', () => {
+    const PX = 51.2;
+    const { w: VW, h: VH, y0 } = WINDOW_VIEW;
+    const c = canvas(VW * PX, VH * PX);
+    const ctx = c.getContext('2d');
+    const r = rng(1892);
+    const X = (x) => x * PX;
+    const Y = (y) => (VH + y0 - y) * PX;
+    const rect = (x0, y0r, x1, y1, style) => {
+      ctx.fillStyle = style;
+      ctx.fillRect(X(x0), Y(y1), (x1 - x0) * PX, (y1 - y0r) * PX);
+    };
+    // Himmel mit dem Widerschein der Stadt in den Wolken.
+    const sky = ctx.createLinearGradient(0, 0, 0, Y(12));
+    sky.addColorStop(0, '#04060a');
+    sky.addColorStop(1, '#1e1c22');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, c.width, Y(12));
+    // Häuser
+    const lamps = [];
+    for (let x = -1; x < VW; ) {
+      const bw = 10 + r() * 6;
+      const top = 13 + r() * 1.6;
+      const tone = 34 + r() * 12;
+      rect(x, 0, x + bw, top, `rgb(${tone + 6},${tone},${tone - 6})`);
+      // Dach und Gesims
+      ctx.fillStyle = '#121418';
+      ctx.beginPath();
+      ctx.moveTo(X(x), Y(top));
+      ctx.lineTo(X(x + 0.8), Y(top + 2.2));
+      ctx.lineTo(X(x + bw - 0.8), Y(top + 2.2));
+      ctx.lineTo(X(x + bw), Y(top));
+      ctx.fill();
+      rect(x, top - 0.35, x + bw, top, `rgb(${tone - 8},${tone - 12},${tone - 16})`);
+      for (const fy of [3.9, 7.3, 10.7]) rect(x, fy, x + bw, fy + 0.18, `rgb(${tone - 10},${tone - 13},${tone - 16})`);
+      // Flecken und Regenspuren im Putz
+      for (let k = 0; k < 30; k++) {
+        ctx.fillStyle = `rgba(0,0,0,${0.05 + r() * 0.08})`;
+        const sx = x + r() * bw;
+        ctx.fillRect(X(sx), Y(top - r() * 3), (0.2 + r() * 0.6) * PX, (1 + r() * 5) * PX);
+      }
+      for (let bx = x + 0.9; bx < x + bw - 1.6; bx += 3.4) {
+        // Laden oder Haustür im Erdgeschoss
+        if (r() < 0.55) {
+          const lit = r() < 0.6;
+          rect(bx - 0.1, 0.3, bx + 2.5, 3.1, '#141210');
+          if (lit) {
+            const g = ctx.createLinearGradient(0, Y(3.0), 0, Y(0.4));
+            g.addColorStop(0, '#9a6430');
+            g.addColorStop(1, '#e8b06a');
+            rect(bx, 0.4, bx + 2.4, 3.0, g);
+            ctx.fillStyle = 'rgba(40,24,10,0.55)';
+            for (const sy of [1.1, 1.8]) ctx.fillRect(X(bx + 0.1), Y(sy), 2.2 * PX, 0.06 * PX);
+            for (let k = 0; k < 9; k++) ctx.fillRect(X(bx + 0.2 + k * 0.24), Y(1.8 + 0.3), 0.12 * PX, 0.3 * PX);
+            rect(bx + 1.15, 0.4, bx + 1.25, 3.0, '#141210');
+          } else {
+            rect(bx, 0.4, bx + 2.4, 3.0, '#0c0d10');
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            for (let sy = 0.5; sy < 3.0; sy += 0.12) ctx.fillRect(X(bx), Y(sy), 2.4 * PX, 2);
+          }
+        } else {
+          rect(bx + 0.6, 0, bx + 1.8, 2.8, '#16120e');
+        }
+        // Fenster der Stockwerke
+        for (const fy of [4.5, 7.9, 11.3]) {
+          const wx = bx + 0.6;
+          rect(wx - 0.12, fy - 0.12, wx + 1.32, fy + 2.02, `rgb(${tone - 6},${tone - 10},${tone - 14})`);
+          const lit = r() < 0.27;
+          if (lit) {
+            const g = ctx.createLinearGradient(0, Y(fy + 1.9), 0, Y(fy));
+            g.addColorStop(0, r() < 0.5 ? '#c07a36' : '#a8602a');
+            g.addColorStop(1, '#f0b870');
+            rect(wx, fy, wx + 1.2, fy + 1.9, g);
+            if (r() < 0.6) {
+              // Gardine: helles Netz, an den Seiten gerafft
+              ctx.fillStyle = 'rgba(255,236,200,0.35)';
+              ctx.fillRect(X(wx), Y(fy + 1.9), 0.3 * PX, 1.9 * PX);
+              ctx.fillRect(X(wx + 0.9), Y(fy + 1.9), 0.3 * PX, 1.9 * PX);
+            }
+            if (r() < 0.25) {
+              // Jemand am Fenster
+              ctx.fillStyle = 'rgba(30,16,6,0.7)';
+              ctx.beginPath();
+              ctx.ellipse(X(wx + 0.6), Y(fy + 1.25), 0.13 * PX, 0.16 * PX, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillRect(X(wx + 0.38), Y(fy + 1.05), 0.44 * PX, 1.05 * PX);
+            }
+          } else {
+            const g = ctx.createLinearGradient(0, Y(fy + 1.9), 0, Y(fy));
+            g.addColorStop(0, '#1a1c24');
+            g.addColorStop(1, '#0a0b0e');
+            rect(wx, fy, wx + 1.2, fy + 1.9, g);
+          }
+          ctx.fillStyle = '#100e0c';
+          ctx.fillRect(X(wx + 0.57), Y(fy + 1.9), 0.06 * PX, 1.9 * PX);
+          ctx.fillRect(X(wx), Y(fy + 1.25), 1.2 * PX, 0.06 * PX);
+          rect(wx - 0.15, fy - 0.2, wx + 1.35, fy - 0.08, `rgb(${tone - 12},${tone - 15},${tone - 18})`);
+        }
+      }
+      x += bw;
+    }
+    // Gehweg und nasses Pflaster
+    rect(0, 0, VW, 0.15, '#1a1816');
+    const street = ctx.createLinearGradient(0, Y(0), 0, Y(y0));
+    street.addColorStop(0, '#16140f');
+    street.addColorStop(1, '#0a0a0b');
+    rect(0, y0, VW, 0, street);
+    // Gaslaternen vor den Häusern
+    for (let lx = 3 + r() * 4; lx < VW; lx += 9 + r() * 5) lamps.push(lx);
+    for (const lx of lamps) {
+      rect(lx - 0.05, 0, lx + 0.05, 3.6, '#0a0a0a');
+      rect(lx - 0.18, 3.55, lx + 0.18, 3.6, '#0a0a0a');
+      const glow = ctx.createRadialGradient(X(lx), Y(3.85), 2, X(lx), Y(3.85), 1.6 * PX);
+      glow.addColorStop(0, 'rgba(255,232,170,1)');
+      glow.addColorStop(0.12, 'rgba(255,196,110,0.75)');
+      glow.addColorStop(0.45, 'rgba(255,160,70,0.18)');
+      glow.addColorStop(1, 'rgba(255,150,60,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(X(lx - 1.6), Y(5.45), 3.2 * PX, 3.2 * PX);
+      rect(lx - 0.13, 3.65, lx + 0.13, 4.05, '#ffd890');
+      const pool = ctx.createRadialGradient(X(lx), Y(0.05), 2, X(lx), Y(0.05), 2.2 * PX);
+      pool.addColorStop(0, 'rgba(255,180,90,0.35)');
+      pool.addColorStop(1, 'rgba(255,180,90,0)');
+      ctx.fillStyle = pool;
+      ctx.fillRect(X(lx - 2.2), Y(0.6), 4.4 * PX, 0.8 * PX);
+      // Widerschein auf dem nassen Pflaster: ein langer, zitternder Streifen
+      for (let k = 0; k < 14; k++) {
+        const sy = -0.1 - k * 0.13;
+        ctx.fillStyle = `rgba(255,176,90,${0.45 * (1 - k / 14)})`;
+        ctx.fillRect(X(lx - 0.12 + (r() - 0.5) * 0.12), Y(sy), (0.24 - k * 0.008) * PX, 0.08 * PX);
+      }
+    }
+    // Dunst und Regen
+    ctx.fillStyle = 'rgba(40,38,44,0.18)';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.strokeStyle = 'rgba(190,200,215,0.07)';
+    ctx.lineWidth = 1;
+    for (let k = 0; k < 2600; k++) {
+      const sx = r() * c.width;
+      const sy = r() * c.height;
+      const len = 10 + r() * 22;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx - len * 0.12, sy + len);
+      ctx.stroke();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = THREE.RepeatWrapping;
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 8;
+    return t;
+  });
+}
+
+// Regen auf einer Fensterscheibe, kachelbar: im Rotkanal stehende Tropfen, im Grünkanal
+// Rinnsale, die die Scheibe hinablaufen (der Shader schiebt sie langsam nach unten).
+export function rainOnGlass() {
+  return cached('rain-on-glass', () => {
+    const S = 256;
+    const c = canvas(S, S);
+    const ctx = c.getContext('2d');
+    const r = rng(77);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, S, S);
+    const dot = (x, y, rad, color) => {
+      for (const ox of [-S, 0, S]) {
+        for (const oy of [-S, 0, S]) {
+          const g = ctx.createRadialGradient(x + ox - rad * 0.3, y + oy - rad * 0.3, 0, x + ox, y + oy, rad);
+          g.addColorStop(0, color(1));
+          g.addColorStop(0.7, color(0.6));
+          g.addColorStop(1, color(0));
+          ctx.fillStyle = g;
+          ctx.beginPath();
+          ctx.arc(x + ox, y + oy, rad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    };
+    ctx.globalCompositeOperation = 'lighter';
+    for (let k = 0; k < 220; k++) dot(r() * S, r() * S, 0.8 + r() ** 3 * 4.5, (a) => `rgba(255,0,0,${a})`);
+    for (let k = 0; k < 7; k++) {
+      const x = r() * S;
+      let y = r() * S;
+      const len = 60 + r() * 120;
+      for (let s = 0; s < len; s += 2) {
+        const wob = Math.sin((y + s) * 0.08 + k) * 1.5;
+        dot(x + wob, y + s, 1.2 + (s / len) * 1.3, (a) => `rgba(0,255,0,${a * 0.8})`);
+      }
+      dot(x, y + len, 3.4, (a) => `rgba(0,255,0,${a})`);
+    }
+    return tex(c, { srgb: false });
+  });
+}
+
 // Ladenschilder der gewöhnlichen Läden. boards: Schriftbretter über dem Schaufenster, je
 // Ladensorte SIGN_NAMES Inhaber (Zelle = Sorte * SIGN_NAMES + Inhaber), Inhabername in
 // Fraktur, darunter die Sorte. emblems: ausgestanzte Zunftzeichen für die Ausleger, eine

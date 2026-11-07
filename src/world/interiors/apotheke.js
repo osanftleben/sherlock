@@ -354,8 +354,7 @@ function shopWindow(room, x, color, light) {
   const w = 1.5;
   const h = 1.8;
   const y = 1.98;
-  const night = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.018, 0.028, 0.05) });
-  addMesh(room.scene, box(w, h, 0.02, x, y, zw - 0.01), night);
+  addMesh(room.scene, new THREE.PlaneGeometry(w, h).rotateY(Math.PI).translate(x, y, zw - 0.02), room.viewMaterial('south'));
   const fr = 0x2a1a10;
   room.woodBag.box(fr, w + 0.14, 0.08, 0.09, x, y + h / 2, zw - 0.04);
   room.woodBag.box(fr, w + 0.14, 0.06, 0.26, x, y - h / 2 - 0.02, zw - 0.12);

@@ -249,7 +249,7 @@ class FacadeBatcher {
       const lists = [[t.dark, name === 'shop' ? shutter : darkGlass], [t.lit, litGlass]];
       for (const [kind, list] of Object.entries(t.kinds)) lists.push([list, new THREE.MeshBasicMaterial({ map: shopDisplay(kind), color: displayTint })]);
       for (const [list, mat] of lists) add(list, () => t.parts.glass, mat, (mesh, m, i) => mesh.setMatrixAt(i, m));
-      for (const [list, mat] of [[t.rooms, roomMaterial(litGlass)], [t.shades, shadeMaterial()]]) {
+      for (const [list, mat] of [[t.rooms, roomMaterial(litGlass)], [t.shades, shadeMaterial(litGlass)]]) {
         // Eigene Kopie der Scheibe je Zelle, weil nur diese Instanzen eine Atlaszelle tragen.
         const geo = (part) => t.parts.glass.clone().setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(part.map((w) => w.cell)), 1));
         add(list, geo, mat, (mesh, w, i) => {
@@ -262,7 +262,8 @@ class FacadeBatcher {
 }
 
 // Lässt jede Instanz über das Attribut aCell ihre Zelle aus dem windowAtlas lesen.
-function readAtlasCell(material, key) {
+// life(shader) baut danach das Leben hinter der Scheibe ein (WINDOW_LIFE).
+function readAtlasCell(material, key, life = null) {
   const { cols, rows } = WINDOW_ATLAS;
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
@@ -273,30 +274,119 @@ function readAtlasCell(material, key) {
         vec2 cellXY = vec2(mod(aCell, ${cols}.0), ${rows - 1}.0 - floor(aCell / ${cols}.0));
         vMapUv = (cellXY + 0.01 + 0.98 * vMapUv) / vec2(${cols}.0, ${rows}.0);`,
       );
+    life?.(shader);
   };
   material.customProgramCacheKey = () => key;
   return material;
 }
 
+// Leben in den Fenstern, ganz im Shader der Scheiben. Jedes Fenster bekommt aus seiner Lage
+// eine Zahl (vSeed), daraus folgen alle Zeiten, so braucht es weder Attribute noch Zeichenaufrufe.
+// - Hinter manchen Gardinen geht ab und zu jemand vorbei, bleibt stehen, geht weiter. Wer nah
+//   am Fenster steht, wirft einen schärferen, größeren Schatten: jemand schaut hinaus.
+// - Gaslicht flackert kaum merklich.
+// - In den oberen Stockwerken geht selten ein Licht aus oder an (nicht im Erdgeschoss, dessen
+//   Schein auf dem Gehweg liegt). Die Zeiten sind Epochen von 2 bis 5 Minuten, mit kurzem Übergang.
+const windowTime = { value: 0 };
+const WINDOW_LIFE = {
+  common: `
+    uniform float windowTime;
+    varying vec2 vPane;
+    varying float vSeed;
+    varying float vUpper;
+    float wHash(float n) { return fract(sin(n * 12.9898 + 4.1414) * 43758.5453); }
+    // 1, solange das Licht des Fensters gerade anders ist als gewöhnlich (aus bzw. an).
+    float lightSwitch(float seed, float p) {
+      float len = 120.0 + 180.0 * fract(seed * 7.13);
+      float u = windowTime / len + seed * 13.0;
+      float n = floor(u);
+      float now = step(wHash(n + seed * 91.0), p);
+      float before = step(wHash(n - 1.0 + seed * 91.0), p);
+      return mix(before, now, smoothstep(0.0, 1.2, fract(u) * len));
+    }
+    float boxSdf(vec2 p, vec2 b, float r) {
+      vec2 q = abs(p) - b + r;
+      return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+    }
+    // Schatten eines Menschen auf der Gardine, 0..1.
+    float figureShadow(vec2 p, float seed) {
+      if (seed > 0.5) return 0.0;
+      float len = 14.0 + 22.0 * fract(seed * 5.31);
+      float u = windowTime / len + seed * 7.0;
+      float n = floor(u);
+      float f = fract(u) * len;
+      if (wHash(n * 1.7 + seed * 53.0) > 0.4) return 0.0;
+      float r2 = wHash(n * 2.3 + seed * 17.0);
+      float r3 = wHash(n * 3.1 + seed * 29.0);
+      float dir = r2 < 0.5 ? -1.0 : 1.0;
+      float near = step(0.72, r3);
+      float stand = 1.5 + 5.0 * r3 + 3.0 * near;
+      float stopX = (fract(r2 * 7.0) - 0.5) * 0.7;
+      float x;
+      float walk = 1.0;
+      if (f < 2.2) x = mix(-dir * 1.5, stopX, smoothstep(0.0, 2.2, f));
+      else if (f < 2.2 + stand) { x = stopX; walk = 0.0; }
+      else {
+        float g = (f - 2.2 - stand) / 2.2;
+        if (g > 1.0) return 0.0;
+        x = mix(stopX, dir * 1.5, smoothstep(0.0, 1.0, g));
+      }
+      float headY = vUpper > 0.5 ? 1.68 : 2.25;
+      float scale = mix(1.0, 1.18, near);
+      vec2 q = (p - vec2(${BAY_W / 2} + x, headY + walk * 0.012 * sin(f * 11.0))) / scale;
+      float head = length(q * vec2(1.0, 0.84)) - 0.098;
+      float body = boxSdf(q - vec2(0.0, -0.74), vec2(0.235, 0.55), 0.13);
+      float neck = boxSdf(q - vec2(0.0, -0.14), vec2(0.065, 0.08), 0.03);
+      float d = min(min(head, body), neck);
+      float blur = mix(0.06, 0.02, near);
+      return 1.0 - smoothstep(-blur, blur, d);
+    }`,
+  vertex: `
+    vPane = position.xy;
+    vec3 wo = instanceMatrix[3].xyz;
+    vSeed = fract(sin(dot(wo, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    vUpper = step(4.0, wo.y);`,
+  inject(shader, fragment) {
+    shader.uniforms.windowTime = windowTime;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${this.common}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\n${this.vertex}`);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', `#include <common>\n${this.common}`);
+    fragment(shader);
+  },
+};
+
 // Ein Material für alle erleuchteten Wohnungsfenster. Die Grundfarbe gleicht den Atlas so
 // aus, dass er im Mittel so hell ist wie die bisherige einfarbige Scheibe: Aus der Ferne
 // (kleinste Mipmap) sieht das Fenster aus wie vorher, aus der Nähe zeigt es Gardine oder Zimmer.
+const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 let roomMat = null;
 function roomMaterial(litGlass) {
   if (roomMat) return roomMat;
   const { map, avg } = windowAtlas();
-  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-  roomMat = readAtlasCell(new THREE.MeshBasicMaterial({ map, color: new THREE.Color().setScalar(lum(litGlass.color) / lum(avg)) }), 'windowAtlas');
+  roomMat = readAtlasCell(new THREE.MeshBasicMaterial({ map, color: new THREE.Color().setScalar(lum(litGlass.color) / lum(avg)) }), 'windowAtlas', (shader) => {
+    WINDOW_LIFE.inject(shader, () => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <color_fragment>',
+        `#include <color_fragment>
+        float flicker = 1.0 + 0.03 * sin(windowTime * 1.7 + vSeed * 40.0) * sin(windowTime * 3.1 + vSeed * 11.0);
+        float off = lightSwitch(vSeed, 0.08) * vUpper;
+        diffuseColor.rgb *= flicker * mix(1.0, 0.04, off) * (1.0 - 0.85 * figureShadow(vPane, vSeed));`,
+      );
+    });
+  });
   return roomMat;
 }
 
 // Dunkle Wohnungsfenster: Glas, das die Nachtstraße spiegelt (nightReflection), am stärksten
 // im flachen Blick die Straße entlang. Dahinter ahnt man die Gardine desselben Stockwerks,
-// nur so hell, wie Laternen und Himmel sie treffen.
+// nur so hell, wie Laternen und Himmel sie treffen. Geht oben selten ein Licht an, leuchtet
+// die Gardine so hell wie in einem erleuchteten Fenster.
 let shadeMat = null;
-function shadeMaterial() {
+function shadeMaterial(litGlass) {
   if (shadeMat) return shadeMat;
-  const { map } = windowAtlas();
+  const { map, avg } = windowAtlas();
+  const on = (lum(litGlass.color) / lum(avg) / SHADE_ALBEDO).toFixed(4);
   shadeMat = readAtlasCell(std({
     map,
     color: new THREE.Color().setScalar(SHADE_ALBEDO),
@@ -304,7 +394,15 @@ function shadeMaterial() {
     metalness: 0,
     envMap: nightReflection(),
     envMapIntensity: SHADE_REFLECT,
-  }), 'windowAtlasDark');
+  }), 'windowAtlasDark', (shader) => {
+    WINDOW_LIFE.inject(shader, () => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        totalEmissiveRadiance += diffuseColor.rgb * ${on} * lightSwitch(fract(vSeed + 0.37), 0.05) * vUpper;`,
+      );
+    });
+  });
   return shadeMat;
 }
 
@@ -887,6 +985,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
   const finish = () => {
     batcher.build(scene, wallMat, darkGlass, litGlass);
+    loc.onUpdate((dt, t) => {
+      windowTime.value = t % 100000;
+    });
     buildSpills(scene, spills);
     buildDownpipes(loc, pipes);
     trimMasses(masses, slabs);

@@ -159,39 +159,77 @@ export function buildRailway(loc, r, brickMat) {
   const train = buildTrain();
   scene.add(train.group);
   train.group.position.set(-400, VH + 0.65, 24);
+  // Fahrplan: Der Zug kommt mit voller Fahrt (V), bremst vor dem Bahnhof gleichmäßig ab, hält
+  // so, dass die Wagen in der Halle stehen, pfeift und fährt schwer wieder an. Danach wartet er
+  // hinter dem Horizont auf die nächste Runde.
+  const V = 13;
+  const BRAKE = 0.6;
+  const PULL = 0.45;
+  const STOP = 37;
   let trainX = -420;
   let trainWait = 12;
+  let speed = V;
+  let phase = 'in';
+  let dwell = 0;
   const smoke = [];
   const smokeMat = new THREE.SpriteMaterial({ map: fogPuff(), color: 0x70757d, transparent: true, opacity: 0.5, depthWrite: false });
   for (let i = 0; i < 16; i++) {
     const s = new THREE.Sprite(smokeMat.clone());
     s.visible = false;
     scene.add(s);
-    smoke.push({ s, life: 0 });
+    smoke.push({ s, life: 0, size: 1 });
   }
   let smokeIdx = 0;
   let smokeTimer = 0;
-  // Für den Klang (audio.js): roll vom nächsten Wagen, loco von der Lok.
+  // Für den Klang (audio.js): roll vom nächsten Wagen, loco von der Lok, speed 0..1 der vollen
+  // Fahrt, drive bei offenem Regler (Dampfstöße), phase 'in' | 'stop' | 'out'.
   loc.train = null;
   loc.onUpdate((dt, t, { camera }) => {
     if (trainWait > 0) {
       trainWait -= dt;
       loc.train = null;
     } else {
-      trainX += 13 * dt;
+      const loco = () => hearing(camera, trainX + 5, 24, 200);
+      if (phase === 'in') {
+        speed = Math.min(V, Math.sqrt(2 * BRAKE * Math.max(0, STOP - trainX)));
+        if (STOP - trainX < 0.02) {
+          trainX = STOP;
+          speed = 0;
+          phase = 'stop';
+          dwell = 22 + r() * 12;
+          // Die Bremsen lassen los: ein langes Zischen.
+          (loc.sounds ??= []).push({ type: 'brakeRelease', ...hearing(camera, trainX - 40, 24, 120) });
+        }
+      } else if (phase === 'stop') {
+        const before = dwell;
+        dwell -= dt;
+        if (before > 2.5 && dwell <= 2.5) (loc.sounds ??= []).push({ type: 'whistle', ...loco() });
+        if (dwell <= 0) phase = 'out';
+      } else {
+        speed = Math.min(V, speed + PULL * dt);
+      }
+      trainX += speed * dt;
       if (trainX > 340) {
         trainX = -420;
         trainWait = 50 + r() * 40;
+        speed = V;
+        phase = 'in';
       }
       train.group.position.x = trainX;
       const carsLen = train.length;
       const nearest = Math.max(trainX - carsLen, Math.min(camera.position.x, trainX));
-      loc.train = { roll: hearing(camera, nearest, 24, 120), loco: hearing(camera, trainX + 5, 24, 140) };
+      const s = speed / V;
+      // Vor dem Bahnhof rollt er mit geschlossenem Regler aus; beim Anfahren arbeitet die Lok.
+      const drive = phase === 'out' || (phase === 'in' && STOP - trainX > V * V / (2 * BRAKE) + 20);
+      loc.train = { roll: hearing(camera, nearest, 24, 120), loco: loco(), speed: s, drive, phase };
+      // Rauch: beim Anfahren dicke Stöße im Takt, sonst ein dünner Faden.
       smokeTimer -= dt;
       if (smokeTimer < 0) {
-        smokeTimer = 0.32;
+        const heavy = drive && phase === 'out' && s < 0.6;
+        smokeTimer = drive ? Math.min(0.9, 0.3 / Math.max(s, 0.25)) : 0.8;
         const puff = smoke[smokeIdx++ % smoke.length];
         puff.life = 1;
+        puff.size = heavy ? 1.3 : drive ? 1 : 0.55;
         puff.s.visible = true;
         puff.s.position.set(trainX + 7.2, VH + 5.5, 24);
       }
@@ -202,7 +240,7 @@ export function buildRailway(loc, r, brickMat) {
       if (p.life <= 0) p.s.visible = false;
       p.s.position.y += dt * 1.7;
       p.s.position.x -= dt * 1.5;
-      const size = 3 + (1 - p.life) * 9;
+      const size = (3 + (1 - p.life) * 9) * p.size;
       p.s.scale.set(size, size, 1);
       p.s.material.opacity = p.life * 0.5;
     }

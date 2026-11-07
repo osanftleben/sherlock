@@ -108,6 +108,7 @@ export class Audio {
     boom.gain.value = 1.4;
     const arches = ctx.createOscillator();
     arches.frequency.value = 0.9;
+    this.arches = arches;
     const archDepth = ctx.createGain();
     archDepth.gain.value = 0.5;
     arches.connect(archDepth).connect(boom.gain);
@@ -129,6 +130,35 @@ export class Audio {
     this.locoOut.connect(this.locoPan);
     this.nextChuff = 0;
     this.whistled = false;
+    // Stehende Lok: leises Zischen aus Ventilen und Zylindern, dazu ab und zu die Luftpumpe.
+    const steamFilter = ctx.createBiquadFilter();
+    steamFilter.type = 'bandpass';
+    steamFilter.frequency.value = 4200;
+    steamFilter.Q.value = 0.6;
+    this.steamGain = ctx.createGain();
+    this.steamGain.gain.value = 0;
+    this.loop(steamFilter);
+    steamFilter.connect(this.steamGain).connect(this.locoOut);
+    this.nextPump = 0;
+    // Bremsen: ein hohes Kreischen der Klötze auf den Rädern in den letzten Metern.
+    this.squealGain = ctx.createGain();
+    this.squealGain.gain.value = 0;
+    this.squealGain.connect(this.trainPan);
+    const wobble = ctx.createOscillator();
+    wobble.frequency.value = 6.5;
+    const wobbleDepth = ctx.createGain();
+    wobbleDepth.gain.value = 35;
+    wobble.connect(wobbleDepth);
+    for (const [freq, gain] of [[3150, 1], [4720, 0.35]]) {
+      const osc = ctx.createOscillator();
+      osc.frequency.value = freq;
+      wobbleDepth.connect(osc.frequency);
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      osc.connect(g).connect(this.squealGain);
+      osc.start();
+    }
+    wobble.start();
 
     // Wasser an der Quaimauer: gedämpftes Rauschen, dessen Pegel langsam schwillt, dazu einzelne
     // Schwapper (update). Alles läuft über waterOut, dessen Pegel die Nähe zum Quai setzt.
@@ -744,34 +774,62 @@ export class Audio {
       this.bell();
       this.nextBell = 90 + Math.random() * 60;
     }
-    // Stadtbahn (railway.js): roll ist der nächste Wagen, loco die Lok, je { vol, pan }.
+    // Stadtbahn (railway.js): roll ist der nächste Wagen, loco die Lok, je { vol, pan }; speed
+    // 0..1, drive bei offenem Regler, phase 'in' | 'stop' | 'out'.
     const roll = outdoors && train ? train.roll.vol : 0;
     const loco = outdoors && train ? train.loco.vol : 0;
-    this.trainGain.gain.setTargetAtTime(roll * 0.32, now, 0.3);
+    const speed = train ? train.speed : 0;
+    this.trainGain.gain.setTargetAtTime(roll * 0.32 * Math.min(1, speed * 1.3), now, 0.3);
     this.locoOut.gain.setTargetAtTime(loco * 1.5, now, 0.2);
+    this.arches.frequency.setTargetAtTime(0.1 + 0.8 * speed, now, 0.5);
+    const standing = train && train.phase === 'stop';
+    this.steamGain.gain.setTargetAtTime(standing ? 0.025 : train && !train.drive ? 0.01 : 0, now, 0.8);
+    const braking = train && train.phase === 'in' && speed > 0 && speed < 0.4;
+    this.squealGain.gain.setTargetAtTime(braking ? roll * 0.012 * (1 - speed / 0.4) : 0, now, 0.15);
     if (train) {
       this.trainPan.pan.setTargetAtTime(train.roll.pan * 0.6, now, 0.2);
       this.locoPan.pan.setTargetAtTime(train.loco.pan * 0.8, now, 0.1);
     }
+    // Schienenstöße im Takt der Fahrt: je langsamer, desto seltener.
     this.nextClack -= dt;
     if (this.nextClack < 0) {
-      if (roll > 0.02) this.clack(roll * 1.6);
-      this.nextClack = 0.52 + Math.random() * 0.08;
+      if (roll > 0.02 && speed > 0.08) this.clack(roll * 1.6 * Math.min(1, speed * 1.5));
+      this.nextClack = (0.52 + Math.random() * 0.08) / Math.max(speed, 0.08);
     }
     // Vier Dampfstöße je Radumdrehung, nicht ganz gleichmäßig: der Dampf strömt mal etwas
-    // länger, mal kürzer aus den Zylindern.
+    // länger, mal kürzer aus den Zylindern. Beim Anfahren langsam und schwer.
     this.nextChuff -= dt;
     if (this.nextChuff < 0) {
       this.chuffN = ((this.chuffN ?? 0) + 1) % 4;
-      if (loco > 0.01) this.chuff([1, 0.55, 0.8, 0.6][this.chuffN]);
-      this.nextChuff = [0.27, 0.22, 0.26, 0.23][this.chuffN] * (0.97 + Math.random() * 0.06);
+      const heavy = 1 + 0.7 * (1 - speed);
+      if (loco > 0.01 && train.drive) this.chuff([1, 0.55, 0.8, 0.6][this.chuffN] * heavy);
+      this.nextChuff = ([0.27, 0.22, 0.26, 0.23][this.chuffN] * (0.97 + Math.random() * 0.06)) / Math.max(speed, 0.12);
     }
-    // Einmal je Durchfahrt pfeift die Lok, wenn sie herankommt, aber nicht immer.
+    // Luftpumpe der stehenden Lok: ein dumpfes Klopfen mit Zischen, etwa jede Sekunde.
+    this.nextPump -= dt;
+    if (this.nextPump < 0) {
+      if (standing && loco > 0.01) this.pump();
+      this.nextPump = 0.9 + Math.random() * 0.3;
+    }
+    // Einmal je Ankunft pfeift die Lok, wenn sie herankommt, aber nicht immer.
     if (!train) this.whistled = false;
-    else if (!this.whistled && loco > 0.4) {
+    else if (!this.whistled && train.phase === 'in' && loco > 0.3) {
       this.whistled = true;
-      if (Math.random() < 0.6) this.whistle();
+      if (Math.random() < 0.6) this.whistle(train.loco.vol, train.loco.pan);
     }
+  }
+
+  // Luftpumpe: „tock – pschh“.
+  pump() {
+    this.burst({ freq: 240, q: 1.5, dur: 0.09, gain: 0.25, out: this.locoOut });
+    this.burst({ freq: 2600, q: 0.8, dur: 0.3, gain: 0.04, attack: 0.04, when: 0.08, out: this.locoOut });
+  }
+
+  // Die Bremsen lassen los: ein langes, abschwellendes Zischen.
+  brakeRelease(vol, pan) {
+    const out = this.panned(pan * 0.7, 3);
+    this.burst({ freq: 3400, q: 0.5, dur: 1.8, gain: 0.12 * vol, attack: 0.04, out });
+    this.burst({ freq: 900, q: 0.7, dur: 1.2, gain: 0.06 * vol, attack: 0.03, out });
   }
 
   // Ein Drehgestell rollt über einen Schienenstoß: „ta-dam“, hell vom Eisen, dumpf vom Viadukt.
@@ -794,8 +852,12 @@ export class Audio {
   // Dampfpfeife: kein reiner Ton, sondern Luft, die in einer Glocke schwingt. Ein schmales
   // Rauschband auf dem Grundton, dazu der Ton selbst mit leisen Obertönen. Der Ton zieht beim
   // Öffnen des Ventils von unten an und sinkt beim Schließen etwas ab. Einmal kurz, einmal lang.
-  whistle() {
+  whistle(vol, pan) {
     const ctx = this.ctx;
+    const out = ctx.createGain();
+    out.gain.value = vol * 1.5;
+    out.connect(this.panned(pan * 0.8, 4));
+    setTimeout(() => out.disconnect(), 4000);
     const f0 = 740 + Math.random() * 60;
     for (const [start, dur] of [[0, 0.45], [0.65, 1.6]]) {
       const t = ctx.currentTime + start;
@@ -803,7 +865,7 @@ export class Audio {
       env.gain.setValueAtTime(0.0001, t);
       env.gain.setTargetAtTime(1, t, 0.04);
       env.gain.setTargetAtTime(0.0001, t + dur - 0.2, 0.07);
-      env.connect(this.locoOut);
+      env.connect(out);
       setTimeout(() => env.disconnect(), (start + dur + 0.5) * 1000);
       const glide = (param, base) => {
         param.setValueAtTime(base * 0.9, t);
@@ -830,7 +892,7 @@ export class Audio {
         osc.start(t);
         osc.stop(t + dur + 0.05);
       }
-      this.burst({ freq: 3200, q: 0.6, dur, gain: 0.015, attack: 0.05, when: start, out: this.locoOut });
+      this.burst({ freq: 3200, q: 0.6, dur, gain: 0.015, attack: 0.05, when: start, out });
     }
   }
 }

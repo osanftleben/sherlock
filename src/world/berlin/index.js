@@ -9,7 +9,7 @@ import { buildRiver } from './river.js';
 import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { grimy } from './grime.js';
-import { LANTERN_GLASS, buildLamps, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, buildLamps, lampWash, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -326,13 +326,14 @@ export function buildBerlin() {
   // Dieselbe Wandlaterne wie an den Viaduktbögen (wallLantern), die Mitte des Glases in 2,75 m.
   const doorIron = new Bag();
   const doorGlass = [];
+  const doorWash = [];
   const doorGlow = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
   const lanternOver = (bld, bay) => {
     const side = bay + 1.15 / BAY_W;
     const wall = bld.at(side, 3.07, 0);
     const out = bld.at(side, 3.07, 1).sub(wall);
     const glow = new THREE.Sprite(doorGlow);
-    glow.position.copy(wallLantern(doorIron, doorGlass, wall, out, 0.45));
+    glow.position.copy(wallLantern(doorIron, doorGlass, wall, out, 0.45, doorWash));
     glow.scale.setScalar(1.5);
     scene.add(glow);
   };
@@ -354,6 +355,7 @@ export function buildBerlin() {
   lanternOver(pension, 2);
   addMesh(scene, doorIron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(doorGlass), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
+  addMesh(scene, merge(doorWash), lampWash());
   buildShopWindows(loc, { kessler, apotheke, destille, bank, pension });
 
   // Rückwege aus den Häusern: ein Schritt vor der Tür, mit Blick auf die Straße.

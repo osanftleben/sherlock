@@ -136,10 +136,12 @@ function buildBrokenLamp(scene, x, y, z) {
 // und spitzem Dach. base ist der Punkt an der Wand in Höhe des Arms, out die waagrechte
 // Richtung von der Wand weg, reach der Abstand der Laterne von der Wand. Das Eisen kommt in die
 // Bag iron, das Glas als Geometrie in die Liste glass (Material setzt der Aufrufer, siehe
-// LANTERN_GLASS). Zurück kommt die Mitte des Glases, etwa für Lichthof und Lichtfleck.
+// LANTERN_GLASS). Wer eine Liste wash mitgibt, bekommt dort den Lichtschein auf der Wand hinter
+// der Laterne (Material: lampWash). Zurück kommt die Mitte des Glases, etwa für Lichthof und
+// Lichtfleck.
 export const LANTERN_GLASS = new THREE.Color(1.5, 0.85, 0.35);
 export const LANTERN_IRON = 0x161616;
-export function wallLantern(iron, glass, base, out, reach = 0.52) {
+export function wallLantern(iron, glass, base, out, reach = 0.52, wash = null) {
   const m = new THREE.Matrix4().makeRotationY(Math.atan2(out.x, out.z)).setPosition(base);
   const put = (geo) => geo.applyMatrix4(m);
   const part = (w, h, d, x, y, z) => iron.add(put(new THREE.BoxGeometry(w, h, d).translate(x, y, z)), LANTERN_IRON);
@@ -156,5 +158,16 @@ export function wallLantern(iron, glass, base, out, reach = 0.52) {
   iron.add(put(new THREE.CylinderGeometry(0.02, 0.17, 0.12, 4).rotateY(Math.PI / 4).translate(0, -0.11, reach)), LANTERN_IRON);
   iron.add(put(new THREE.SphereGeometry(0.025, 6, 4).translate(0, -0.03, reach)), LANTERN_IRON);
   glass.push(put(new THREE.BoxGeometry(0.17, 0.28, 0.17).translate(0, -0.32, reach)));
+  if (wash) wash.push(put(new THREE.PlaneGeometry(3.4, 3.4).translate(0, -0.36, 0.03)));
   return new THREE.Vector3(0, -0.32, reach).applyMatrix4(m);
+}
+
+// Lichtschein einer Wandlaterne auf der Mauer dahinter: wie lightPool, nur schwächer, weil die
+// Wand schräg vom Licht getroffen wird und Putz und Ziegel ohnehin etwas Himmelslicht abbekommen.
+export function lampWash() {
+  // Steiler als der Fleck am Boden: hell gleich hinter der Laterne, nach außen rasch schwächer,
+  // damit kein gleichmäßiger Kreis auf der Mauer steht.
+  const mat = lightPool(0xd09050, 0.3);
+  mat.map = softDisc('lampWash', 'rgba(255,255,255,1)', 'rgba(255,255,255,0.12)');
+  return mat;
 }

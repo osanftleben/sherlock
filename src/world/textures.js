@@ -425,33 +425,65 @@ export function wood(tone = [92, 58, 34], seed = 61) {
   });
 }
 
-// Tapete mit Rankenmuster, typisch für die Berliner Stube.
+// Tapete mit Rankenmuster, typisch für die Berliner Stube. Eine Kachel deckt 2 m Wand (die
+// Wände tragen Welt-UVs mit 0,5 je Meter), also 512 px je Meter. Geklebt in Bahnen von 50 cm,
+// jede ein wenig anders im Ton und um ein paar Millimeter versetzt, mit sichtbarer Naht. Das
+// Muster ist klein und dicht wie bei Papiertapeten der Zeit: Rapport 25 cm, Motiv gut 14 cm.
 export function wallpaper(base = '#4b2f2c', motif = 'rgba(190,150,90,0.2)', seed = 71) {
   return cached(`paper${base}${motif}`, () => {
-    const size = 512;
+    const size = 1024;
+    const strip = size / 4;
+    const step = size / 8;
     const color = canvas(size);
     const c = color.getContext('2d');
+    const r = rng(seed + 7);
     c.fillStyle = base;
     c.fillRect(0, 0, size, size);
-    c.strokeStyle = motif;
-    c.fillStyle = motif;
-    c.lineWidth = 2.5;
-    for (let row = 0; row < 4; row++) {
-      for (let col = 0; col < 4; col++) {
-        const x = col * 128 + (row % 2) * 64;
-        const y = row * 128 + 64;
-        c.beginPath();
-        c.moveTo(x, y - 46);
-        c.bezierCurveTo(x + 40, y - 30, x + 32, y + 18, x, y + 46);
-        c.bezierCurveTo(x - 32, y + 18, x - 40, y - 30, x, y - 46);
-        c.stroke();
-        c.beginPath();
-        c.arc(x, y, 8, 0, 7);
-        c.fill();
+    for (let s = 0; s < 4; s++) {
+      c.save();
+      c.beginPath();
+      c.rect(s * strip, 0, strip, size);
+      c.clip();
+      // Ton der Bahn
+      c.fillStyle = r() < 0.5 ? `rgba(0,0,0,${0.02 + r() * 0.04})` : `rgba(255,240,220,${0.01 + r() * 0.025})`;
+      c.fillRect(s * strip, 0, strip, size);
+      const dy = (r() - 0.5) * 6;
+      c.strokeStyle = motif;
+      c.fillStyle = motif;
+      for (let row = -1; row <= 8; row++) {
+        for (let col = 0; col <= 8; col++) {
+          const x = col * step + (row % 2 ? step / 2 : 0);
+          const y = row * step + step / 2 + dy;
+          if (x < s * strip - step || x > (s + 1) * strip + step) continue;
+          // Spitzbogiges Blatt mit kleiner Blüte darin
+          c.lineWidth = 2.5;
+          c.beginPath();
+          c.moveTo(x, y - 36);
+          c.bezierCurveTo(x + 30, y - 22, x + 24, y + 14, x, y + 36);
+          c.bezierCurveTo(x - 24, y + 14, x - 30, y - 22, x, y - 36);
+          c.stroke();
+          for (let k = 0; k < 4; k++) {
+            const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+            c.beginPath();
+            c.ellipse(x + Math.cos(a) * 7, y + Math.sin(a) * 7, 5, 3, a, 0, Math.PI * 2);
+            c.fill();
+          }
+          // Streupunkte dazwischen
+          c.beginPath();
+          c.arc(x + step / 2, y, 2.5, 0, 7);
+          c.arc(x, y + step / 2, 2, 0, 7);
+          c.fill();
+        }
       }
+      c.restore();
+      // Naht: ein feiner dunkler Spalt und daneben die etwas aufstehende Kante
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      c.fillRect(s * strip, 0, 2, size);
+      c.fillStyle = 'rgba(255,240,210,0.06)';
+      c.fillRect(s * strip + 2, 0, 3, size);
     }
     grain(c, size, 12, seed);
-    blotches(c, size, 8, 40, 120, 'rgba(0,0,0,0.16)', seed + 1);
+    blotches(c, size, 10, 80, 260, 'rgba(0,0,0,0.12)', seed + 1);
     return { map: tex(color) };
   });
 }

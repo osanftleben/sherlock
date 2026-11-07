@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, box, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 import { BAY_W } from './facades.js';
-import { LANTERN_GLASS, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, lampWash, wallLantern } from './lamps.js';
 
 // Hinterhof hinter der Tordurchfahrt neben Kesslers Werkstatt (Rosenthaler Straße, Ostseite).
 // Der Hof reicht von der Rückseite der Straßenhäuser (x = 23) bis zum Quergebäude und von
@@ -70,9 +70,11 @@ export function buildCourt(loc, facades, { brickMat, ironMat }) {
   const wall = at(1.5 * BAY_W + 1.2, 3.07, 0);
   const lanternIron = new Bag();
   const glass = [];
-  const door = wallLantern(lanternIron, glass, wall, at(1.5 * BAY_W + 1.2, 3.07, 1).sub(wall), 0.4);
+  const wash = [];
+  const door = wallLantern(lanternIron, glass, wall, at(1.5 * BAY_W + 1.2, 3.07, 1).sub(wall), 0.4, wash);
   addMesh(scene, lanternIron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(glass), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
+  addMesh(scene, merge(wash), lampWash());
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.position.copy(door);
   glow.scale.setScalar(1.5);

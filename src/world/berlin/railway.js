@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
 import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
 import { addSign } from './facades.js';
-import { LANTERN_GLASS, lightPool, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
 import { hearing } from './traffic.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
@@ -36,6 +36,7 @@ export function buildRailway(loc, r, brickMat) {
   const lanterns = new Bag();
   const flames = [];
   const glows = [];
+  const washes = [];
   const pools = [];
   const rf = rng(1892);
   const stationArches = new Set([-3, -2, 2, 3]);
@@ -85,7 +86,7 @@ export function buildRailway(loc, r, brickMat) {
       if (lit && Math.abs(x) < 70) {
         const lx = x + (entrance ? -1.5 : cell === 0 ? 0.9 : 3.2);
         const lz = VZ0 + 1.14;
-        glows.push(wallLantern(lanterns, flames, new THREE.Vector3(lx, 3.2, lz), new THREE.Vector3(0, 0, -1)));
+        glows.push(wallLantern(lanterns, flames, new THREE.Vector3(lx, 3.2, lz), new THREE.Vector3(0, 0, -1), 0.52, washes));
         pools.push(new THREE.PlaneGeometry(5.5, 4.5).rotateX(-Math.PI / 2).translate(x, 0.03, VZ0 - 0.4));
       }
       if (entrance) {
@@ -111,6 +112,7 @@ export function buildRailway(loc, r, brickMat) {
   addMesh(scene, merge(fronts), std({ map: af.map, emissive: 0xffffff, emissiveMap: af.emissiveMap, emissiveIntensity: 0.9, roughness: 0.8 }));
   addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
+  addMesh(scene, merge(washes), lampWash());
   const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
   for (const p of glows) {
     const s = new THREE.Sprite(glowMat);

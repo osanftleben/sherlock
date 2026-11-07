@@ -559,6 +559,41 @@ export function softDisc(key = 'disc', inner = 'rgba(255,255,255,1)', mid = 'rgb
   });
 }
 
+// Lichtstern für Hinweise: heller Kern mit vier schmalen Strahlen, wie ein Funke auf Metall
+// oder Glas. Bewusst kein runder Fleck, damit er sich vom schwebenden Staub abhebt.
+export function sparkle() {
+  return cached('sparkle', () => {
+    const size = 128;
+    const c = canvas(size);
+    const ctx = c.getContext('2d');
+    const core = ctx.createRadialGradient(64, 64, 0, 64, 64, 22);
+    core.addColorStop(0, 'rgba(255,255,255,1)');
+    core.addColorStop(0.4, 'rgba(255,255,255,0.45)');
+    core.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = core;
+    ctx.fillRect(0, 0, size, size);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [w, h] of [[64, 3], [3, 64], [38, 2], [2, 38]]) {
+      const angle = w === 38 || h === 38 ? Math.PI / 4 : 0;
+      ctx.save();
+      ctx.translate(64, 64);
+      ctx.rotate(angle);
+      const long = Math.max(w, h);
+      const ray = w > h ? ctx.createLinearGradient(-long, 0, long, 0) : ctx.createLinearGradient(0, -long, 0, long);
+      const a = angle ? 0.35 : 0.9;
+      ray.addColorStop(0, 'rgba(255,255,255,0)');
+      ray.addColorStop(0.5, `rgba(255,255,255,${a})`);
+      ray.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = ray;
+      ctx.fillRect(-w, -h, w * 2, h * 2);
+      ctx.restore();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+}
+
 export function fogPuff() {
   return cached('fog', () => {
     const size = 256;

@@ -16,7 +16,7 @@ import { buildBerlin } from './world/berlin/index.js';
 import { buildInteriors } from './world/interiors/index.js';
 import { idleFigure, makeFigure, talkFigure } from './world/figures.js';
 import { ShadowSelf } from './world/holmes.js';
-import { softDisc } from './world/textures.js';
+import { sparkle } from './world/textures.js';
 import { CASES, CASE_LIST, FIRST_CASE } from './cases/index.js';
 
 const RETORTS = [
@@ -190,13 +190,14 @@ class Game {
     for (const loc of Object.values(this.locations)) this.view.renderer.compile(loc.scene, this.view.camera);
   }
 
-  // Kleines Funkeln, damit winzige Spuren im Halbdunkel auffindbar bleiben.
+  // Kleines Funkeln, damit winzige Spuren im Halbdunkel auffindbar bleiben. Ein Lichtstern, der
+  // sich langsam dreht und alle paar Sekunden aufblitzt, damit man ihn nicht für Staub hält.
   addGlint(loc, spot) {
     const inspect = spot.action.inspect;
     const doneKey = inspect && (inspect.seen || (inspect.give && inspect.give[0]));
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: softDisc('glint'),
-      color: 0xfff0c0,
+      map: sparkle(),
+      color: 0xfff6e0,
       transparent: true,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
@@ -205,8 +206,14 @@ class Game {
     loc.scene.add(sprite);
     const updater = loc.onUpdate((dt, t, { camera }) => {
       const near = camera.position.distanceTo(spot.pos) < 6.5;
-      sprite.visible = near && !(doneKey && this.state.has(doneKey));
-      if (sprite.visible) sprite.scale.setScalar(0.075 + 0.03 * Math.sin(t * 3 + spot.pos.x * 5));
+      sprite.visible = near && this.state.check(spot.when) && !(doneKey && this.state.has(doneKey));
+      if (sprite.visible) {
+        const phase = spot.pos.x * 5 + spot.pos.z * 3;
+        const flash = Math.max(0, Math.sin(t * 2.4 + phase)) ** 8;
+        sprite.scale.setScalar(0.12 + 0.1 * flash);
+        sprite.material.opacity = 0.75 + 0.25 * flash;
+        sprite.material.rotation = t * 0.4 + phase;
+      }
     });
     return { object: sprite, updater };
   }

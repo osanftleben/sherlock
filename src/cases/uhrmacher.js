@@ -24,7 +24,7 @@ export const uhrmacher = {
     c_fenster: { title: 'Die verklebten Fenster', text: 'Alle Fensterfugen sind mit Papierstreifen gegen den Winter verklebt und unversehrt. Die Tür schließt dicht. In diesem Raum zieht es nicht.' },
     c_tassen: { title: 'Zwei Tassen', text: 'Neben dem Sessel eine Tasse mit bitterem Bodensatz. Auf dem Bord eine zweite, frisch gespült und als einzige ohne Staub. Eine Probe des Satzes habe ich eingesteckt.' },
     c_asche: { title: 'Zigarrenasche', text: 'Neben dem Besucherstuhl liegt weiße, feste, lange Asche: eine teure Havanna. Kein Stumpen, kein Pfeifentabak.' },
-    c_buch: { title: 'Das Reparaturbuch', text: 'Eine Seite ist herausgerissen. Mit Bleistift schraffiert zeigt die Seite darunter den Abdruck: „Nr. 17. Goldene Repetieruhr. Hr. W., Bankhaus L.“' },
+    c_buch: { title: 'Das Reparaturbuch', text: 'Eine Seite ist herausgerissen. Mit Bleistift schraffiert zeigt die Seite darunter den Abdruck: „Nr. 17. Goldene Repetieruhr. Hr. W…“ Den Rest der Zeile hat der Stift kaum noch eingedrückt.' },
     c_haken: { title: 'Das Hakenbrett', text: 'Jede Uhr in Reparatur hängt an ihrem nummerierten Haken. Haken 17 ist leer. Die Uhr ist nicht in der Werkstatt.' },
     c_uhren: { title: 'Frisch aufgezogen', text: 'Alle Uhren laufen, alle wurden zur selben Zeit aufgezogen. Kessler lebte also am Freitag um acht Uhr abends noch.' },
     c_loesch: { title: 'Das Löschblatt', text: 'Im Spiegel lesbar: „… muss Sie dringend sprechen wegen des Zettels in Ihrer Uhr. Freitag, 9 Uhr abends. Sonst gehe ich zur Polizei. E. K.“' },
@@ -71,7 +71,7 @@ export const uhrmacher = {
     { pairs: [['c_glocke', 'c_billet'], ['c_glocke', 'c_portier'], ['c_portier', 'c_billet']], text: 'Dasselbe feine Pling, von zwei Zeugen gehört. Das ist kein Zufall. Aber ein Ton überführt niemanden: Ich muss wissen, welche Uhr so schlägt, und sie in der Hand halten.' },
     { pairs: [['c_kette', 'c_glocke']], text: 'An Wendts Kette hängt etwas, das er nicht zeigen will, und Krauses Fremder trug eine Uhr, die im Dunkeln schlägt. Ob es dieselbe ist, sagt mir nur die Uhr selbst.' },
     { pairs: [['c_ritz', 'c_buch'], ['c_ritz', 'c_haken']], text: 'Nr. 17, und Kessler ritzte jede Nummer ins Gehäuse. Wo immer die Uhr jetzt ist, sie trägt seine Unterschrift. Ich muss sie nur finden.' },
-    { pairs: [['c_buch', 'c_haken']], text: 'Nr. 17 im Buch, Haken 17 leer. Die Uhr ist fort, und das Buch nennt den Besitzer: Hr. W., Bankhaus L. Was sagt Herr W. selbst dazu?' },
+    { pairs: [['c_buch', 'c_haken']], text: 'Nr. 17 im Buch, Haken 17 leer. Die Uhr ist fort, und vom Besitzer kenne ich nur den Anfangsbuchstaben. Welcher von Kesslers Kunden heißt mit W, und was sagt er selbst dazu?' },
     { pairs: [['c_buch', 'c_loesch']], text: 'Ein Zettel in einer Uhr, und aus dem Buch fehlt die Seite der Uhr Nr. 17. Wer die Seite herausriss, wusste, worum es in dem Brief ging.' },
     { pairs: [['c_rathen', 'c_asche']], text: 'Rathen raucht billige Stumpen, in der Werkstatt lag Havanna-Asche. Das spricht für ihn, aber Asche kann jeder mitbringen. Wie ging der Fremde, den der Nachtwächter sah?' },
     { pairs: [['c_fahrplan', 'c_billet']], text: 'Wendt erwischte den letzten Zug um 10.17 gerade noch. Das allein ist kein Verbrechen. Entscheidend ist, woher er kam, und was er selbst über seinen Abend behauptet.' },
@@ -137,13 +137,23 @@ export const uhrmacher = {
       title: 'Die Fenster', give: ['c_fenster'],
       text: 'Kessler hat die Fugen sorgfältig mit Papierstreifen beklebt. Winterarbeit, wie in jedem Berliner Haushalt. Kein Riss, keine Lücke. Nicht einmal eine Kerze würde hier flackern. So viel zum Luftzug des Herrn Kommissar.',
     } } },
-    { location: 'werkstatt', anchor: 'cup', label: 'Tasse neben dem Sessel', glint: true, radius: 0.22, action: { inspect: {
-      title: 'Die Tasse', give: ['c_tassen'], seen: 'f_tasse',
+    // Tasse und Bord je in zwei Fassungen: Wer nur eines gesehen hat, liest nichts über das andere.
+    // „Zwei Tassen“ gibt es erst, wenn man beide kennt; die Probe für Dr. Voss schon mit der Tasse.
+    { location: 'werkstatt', anchor: 'cup', label: 'Tasse neben dem Sessel', glint: true, radius: 0.22, when: ['!f_bord'], action: { inspect: {
+      title: 'Die Tasse', seen: 'f_tasse',
       text: 'Kalter Tee mit einem körnigen Satz, stechend und süßlich zugleich. Schlafende Männer trinken ihren Tee nicht zu Ende. Ich fülle etwas davon in ein Röhrchen. Für Dr. Voss.',
     } } },
-    { location: 'werkstatt', anchor: 'shelf', label: 'Geschirrbord', glint: true, radius: 0.4, action: { inspect: {
+    { location: 'werkstatt', anchor: 'cup', label: 'Tasse neben dem Sessel', glint: true, radius: 0.22, when: ['f_bord'], action: { inspect: {
+      title: 'Die Tasse', give: ['c_tassen'], seen: 'f_tasse',
+      text: 'Kalter Tee mit einem körnigen Satz, stechend und süßlich zugleich. Schlafende Männer trinken ihren Tee nicht zu Ende. Ich fülle etwas davon in ein Röhrchen. Für Dr. Voss. Und auf dem Bord steht ihre frisch gespülte Schwester: Kessler hat nicht allein getrunken.',
+    } } },
+    { location: 'werkstatt', anchor: 'shelf', label: 'Geschirrbord', glint: true, radius: 0.4, when: ['!f_tasse'], action: { inspect: {
+      title: 'Das Geschirrbord', seen: 'f_bord',
+      text: 'Drei Tassen unter einer Staubschicht. Eine vierte blitzt sauber, der Boden noch mit Wasserrändern. Hier hat jemand gespült, und zwar genau eine Tasse. Bleibt die Frage, wo die steht, aus der Kessler selbst getrunken hat.',
+    } } },
+    { location: 'werkstatt', anchor: 'shelf', label: 'Geschirrbord', glint: true, radius: 0.4, when: ['f_tasse'], action: { inspect: {
       title: 'Das Geschirrbord', give: ['c_tassen'], seen: 'f_bord',
-      text: 'Drei Tassen unter einer Staubschicht. Eine vierte blitzt sauber, der Boden noch mit Wasserrändern. Hier hat jemand gespült, und zwar genau eine Tasse. Ich nehme von der Tasse am Sessel eine Probe mit.',
+      text: 'Drei Tassen unter einer Staubschicht. Eine vierte blitzt sauber, der Boden noch mit Wasserrändern. Hier hat jemand gespült, und zwar genau eine Tasse. Zwei Tassen also: die am Sessel, aus der Kessler trank, und diese, die hinterher jemand sauber gemacht hat.',
     } } },
     { location: 'werkstatt', anchor: 'ash', label: 'Asche am Boden', glint: true, radius: 0.3, range: 3, action: { inspect: {
       title: 'Asche', give: ['c_asche'],
@@ -151,7 +161,7 @@ export const uhrmacher = {
     } } },
     { location: 'werkstatt', anchor: 'ledger', label: 'Reparaturbuch', glint: true, radius: 0.25, action: { inspect: {
       title: 'Das Reparaturbuch', give: ['c_buch'],
-      text: 'Die letzte Seite ist herausgerissen, die Fasern sind noch frisch. Aber Kessler schrieb mit hartem Stift. Ein wenig Graphit über die Folgeseite, und der Abdruck tritt hervor: „Nr. 17. Goldene Repetieruhr. Hr. W., Bankhaus L.“',
+      text: 'Die letzte Seite ist herausgerissen, die Fasern sind noch frisch. Aber Kessler schrieb mit hartem Stift. Ein wenig Graphit über die Folgeseite, und der Abdruck tritt hervor: „Nr. 17. Goldene Repetieruhr. Hr. W…“ Danach wird die Spur zu schwach. Eine goldene Repetieruhr trägt kein Arbeiter. Ein wohlhabender Kunde, dessen Name mit W beginnt.',
     } } },
     { location: 'werkstatt', anchor: 'hooks', label: 'Hakenbrett', glint: true, radius: 0.7, action: { inspect: {
       title: 'Das Hakenbrett', give: ['c_haken'],
@@ -168,6 +178,15 @@ export const uhrmacher = {
       mirrorLabel: 'Vor den Rasierspiegel halten',
       after: 'Ein Zettel in einer Uhr, und ein Mann, der damit droht, zur Polizei zu gehen. Einen Empfänger nennt das Blatt nicht. Kessler war zu höflich, um auf dem Löschblatt Namen zu hinterlassen.',
     } } },
+
+    // Werkstatt ohne Hinweis: Stimmung und ein Bild von Kessler, nichts, was den Fall verrät.
+    { location: 'werkstatt', anchor: 'chair', label: 'Ohrensessel', radius: 0.45, action: { say: 'Kesslers Sessel. Das Polster hat die Form eines schweren Schlafs behalten. Die Brille hat er abgelegt und neben die Tasse gelegt, die Zeitung ist ihm vom Schoß gerutscht. Wer Gas riecht, legt nicht erst in Ruhe seine Brille ab.' } },
+    { location: 'werkstatt', anchor: 'lantern', label: 'Blendlaterne', radius: 0.2, action: { say: 'Die Blendlaterne der Polizei, noch immer auf den Sessel gerichtet, als könnte der Tote etwas gestehen. Piefke hat sie stehen lassen. Petroleum für vielleicht noch eine Stunde.' } },
+    { location: 'werkstatt', anchor: 'lathe', label: 'Drehstuhl', radius: 0.22, action: { say: 'Ein Uhrmacherdrehstuhl für Wellen und Zapfen, kaum länger als ein Federhalter. Der Antriebsriemen ist abgenommen und aufgerollt, das Werkzeug liegt an seinem Platz. Kessler hat am Freitag Feierabend gemacht, bevor sein Besuch kam.' } },
+    { location: 'werkstatt', anchor: 'domes', label: 'Glasglocke', radius: 0.15, action: { say: 'Offene Uhrwerke unter Glasglocken, gegen den Staub. Ein Mann, der Tabakasche fürchtete wie andere die Cholera, hätte in seiner Werkstatt niemanden rauchen lassen. Es sei denn, er wollte einen Gast nicht verärgern.' } },
+    { location: 'werkstatt', anchor: 'watchbox', label: 'Kasten mit Taschenuhren', radius: 0.18, action: { say: 'Sechs Taschenuhren auf rotem Samt, fertig gerichtet, sie warten auf ihre Besitzer. Ich drücke bei jeder auf den Bügel. Keine schlägt.' } },
+    { location: 'werkstatt', anchor: 'kettle', label: 'Ofen mit Teekessel', radius: 0.3, action: { say: 'Der Ofen ist kalt, im Kessel steht ein Rest Wasser. Am Freitagabend hat hier jemand Tee aufgebrüht. Für wen, verrät mir der Kessel nicht.' } },
+    { location: 'werkstatt', anchor: 'vitrine', label: 'Vitrine im Ladentresen', radius: 0.6, action: { say: 'Taschenuhren auf grünem Samt, unberührt, die Vitrine nicht einmal verschlossen. Ein Dieb hätte hier zuerst zugegriffen. Wer am Freitag hier war, wollte keine Uhr. Er wollte eine bestimmte.' } },
 
     // Stadt
     { location: 'berlin', anchor: 'litfass', replaces: 'litfass', label: 'Litfaßsäule', glint: true, radius: 0.9, range: 3.2, action: { inspect: {
@@ -244,7 +263,7 @@ export const uhrmacher = {
         polizei: { text: 'Kommissar Lehmann vom Präsidium war zehn Minuten da. Die Flamme sei vom Luftzug ausgeblasen worden, das Gas strömte weiter, ein Unglück. Die Akte ist schon zu. Einen Schutzmann hat er vor die Tür gestellt, damit nichts wegkommt.', opts: [{ t: 'Weiter.', go: 'hub' }] },
         zweifel: { text: 'Dreißig Jahre hat er mit Gas gearbeitet und nie den kleinsten Fehler gemacht. Und am Donnerstag war er kreideweiß, als ich ihm das Essen brachte. Er sagte: „Martha, man kennt die Leute nicht, bis man ihre Uhr aufgemacht hat.“ Mehr wollte er nicht sagen.', opts: [{ t: 'Das ist ein interessanter Satz.', go: 'hub' }] },
         gewohnheit: { give: ['c_gewohnheiten'], text: 'Er rauchte nie, Tabakstaub sei Gift fürs Räderwerk. Geschirr ließ er stehen, bis ich am Sonnabend zum Spülen kam. Und freitags um acht zog er alle Uhren auf, jede einzelne, darauf konnte man seine eigene stellen.', opts: [{ t: 'Sehr aufschlussreich.', go: 'hub' }] },
-        feinde: { give: ['f_feinde'], text: 'Otto Brandt, seinen Gesellen, hat er vor einer Woche entlassen, weil er trank. Leutnant von Rathen schuldet ihm Geld und hat ihn angebrüllt. Beide finden Sie in der Goldenen Schrippe, Sophienstraße. Sonst nur gute Kundschaft: Apotheker Seidel, Herr Wendt vom Bankhaus Lindner, bei dem Onkel auch sein Erspartes hatte.', opts: [{ t: 'Danke.', go: 'hub' }] },
+        feinde: { give: ['f_feinde'], text: 'Otto Brandt, seinen Gesellen, hat er vor einer Woche entlassen, weil er trank. Leutnant von Rathen schuldet ihm Geld und hat ihn angebrüllt. Beide finden Sie in der Goldenen Schrippe, Sophienstraße. Sonst nur gute Kundschaft: Apotheker Seidel, Mutter Kluge, und die feinen Herren vom Bankhaus Lindner am Markt, wo Onkel auch sein Erspartes hatte.', opts: [{ t: 'Danke.', go: 'hub' }] },
         schluessel: { give: ['f_schluessel'], text: 'Hier. Die Tür hat ein Schnappschloss, sie fällt von allein zu. Bitte, finden Sie heraus, was geschehen ist. Ich habe nicht viel, aber was ich habe, zahle ich Ihnen.', opts: [{ t: 'Behalten Sie Ihr Geld. Das Rätsel ist Lohn genug.', go: 'hub' }] },
       },
     },
@@ -261,9 +280,11 @@ export const uhrmacher = {
         hub: {
           text: 'Was kann ich für Sie tun?',
           opts: [
-            { t: 'Prüfen Sie bitte diesen Bodensatz aus Kesslers Tasse.', go: 'probe', req: ['c_tassen', '!c_chloral'] },
+            { t: 'Prüfen Sie bitte diesen Bodensatz aus Kesslers Tasse.', go: 'probe', req: ['f_tasse', '!c_chloral'] },
             { t: 'Wo stehen wir, Ihrer Meinung nach?', hint: true },
-            { t: 'Ich weiß, wer Emil Kessler getötet hat.', accuse: true, req: ['d_mord'] },
+            // Erst anklagen, wenn der Täter wirklich eingekreist ist, sonst ließe sich die Lösung erraten.
+            { t: 'Ich weiß, wer Emil Kessler getötet hat.', accuse: true, req: ['d_repetier', 'd_luege', '!c_uhr17'] },
+            { t: 'Ich weiß, wer Emil Kessler getötet hat.', accuse: true, req: ['c_uhr17'] },
             { t: 'Nichts weiter. Ich gehe wieder hinaus.', end: true },
           ],
         },
@@ -490,7 +511,7 @@ export const uhrmacher = {
         hub: {
           text: 'Selbstverständlich. Was möchten Sie wissen?',
           opts: [
-            { t: 'Kessler hatte eine Uhr von Ihnen in Reparatur, Nummer 17.', go: 'uhr', req: ['c_buch', '!c_aussage'] },
+            { t: 'Kessler hatte eine goldene Repetieruhr in Reparatur, Nummer 17, für einen Herrn W.', go: 'uhr', req: ['c_buch', '!c_aussage'] },
             { t: 'Waren Sie Freitagabend in der Werkstatt?', go: 'freitag', once: true, req: ['c_aussage'] },
             { t: 'Wie spät haben wir eigentlich?', go: 'zeit', req: ['!c_kette'] },
             { t: 'Darf ich Ihre Zigarren bewundern?', go: 'zigarre', req: ['!c_havanna'] },
@@ -502,7 +523,7 @@ export const uhrmacher = {
             { t: 'Danke für Ihre Zeit.', end: true },
           ],
         },
-        uhr: { give: ['c_aussage'], text: 'Meine Repetieruhr, richtig. Ein Erbstück, das Schlagwerk hakte. Ich habe sie am Mittwoch hingebracht und seither nicht wiedergesehen. Sie muss noch dort liegen, ich lasse sie bei Gelegenheit abholen. Am Freitagabend? Hier in der Bank, bis spät. Dort war ich nie, wenn Sie darauf hinauswollen.', opts: [{ t: 'Ganz und gar nicht.', go: 'hub' }] },
+        uhr: { give: ['c_aussage'], obs: 'Bei „Herrn W.“ hebt er den Kopf, ehe ich den Satz beendet habe. Ich habe nur einen Buchstaben genannt.', text: 'Meine Repetieruhr, richtig. Ein Erbstück, das Schlagwerk hakte. Ich habe sie am Mittwoch hingebracht und seither nicht wiedergesehen. Sie muss noch dort liegen, ich lasse sie bei Gelegenheit abholen. Am Freitagabend? Hier in der Bank, bis spät. Dort war ich nie, wenn Sie darauf hinauswollen.', opts: [{ t: 'Ganz und gar nicht.', go: 'hub' }] },
         freitag: { text: 'Das sagte ich bereits. Ich hatte hier zu tun und bin dann mit der Stadtbahn nach Charlottenburg gefahren. Sie dürfen den Portier fragen. Er geht um acht nach Hause, aber er wird Ihnen sagen, dass ich noch da war.', opts: [{ t: 'Um acht. Natürlich.', go: 'hub' }] },
         zeit: { give: ['c_kette'], text: 'Einen Augenblick. Es ist … zwanzig vor zehn.', obs: 'Seine Hand zuckt zur Westentasche, hält auf halbem Weg inne und greift nach dem Federhalter. Er hebt die Augen zur Wanduhr. Die Kette bleibt straff. Etwas hängt an ihr, und er will es mir nicht zeigen.', opts: [{ t: 'Verbindlichen Dank.', go: 'hub' }] },
         zigarre: { give: ['c_havanna'], text: 'H. Upmann, bedienen Sie sich. Mein einziges Laster, wie meine Frau sagt.', obs: 'Im Aschenbecher liegt ein Stück Asche, lang, weiß und fest.', opts: [{ t: 'Sehr freundlich, später vielleicht.', go: 'hub' }] },

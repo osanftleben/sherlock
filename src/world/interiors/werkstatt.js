@@ -184,6 +184,14 @@ export function buildWerkstatt() {
   workbenchTools(room, W, r);
 
   loc.anchor('window', W - 0.15, 2.1, 1.5);
+  // Gegenstände ohne Hinweis, zu denen Holmes trotzdem etwas sagt.
+  loc.anchor('chair', -0.6, 0.95, -1.3);
+  loc.anchor('lantern', W - 0.75, 1.1, 2.05);
+  loc.anchor('lathe', W - 0.45, 1.07, 1.05);
+  loc.anchor('domes', W - 0.7, 1.08, -0.55);
+  loc.anchor('watchbox', W - 0.75, 1.0, -2.0);
+  loc.anchor('kettle', -3.62, 1.55, 2.66);
+  loc.anchor('vitrine', -2.3, 1.06, 1.3);
   return room.finish();
 }
 

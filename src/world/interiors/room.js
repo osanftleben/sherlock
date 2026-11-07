@@ -289,13 +289,17 @@ export class Room {
     bob.position.y = -0.56;
     pivot.add(bob);
     g.add(pivot);
+    // Kreisfrequenz eines 56 cm langen Pendels: Wurzel aus g/L, also gut 4,2 je Sekunde, ein
+    // Schlag alle drei Viertelsekunden. Jede Uhr geht ein klein wenig anders, wie echte Uhren auch,
+    // sonst ticken mehrere Regulatoren in einem starren, maschinenhaften Muster.
+    const speed = Math.sqrt(9.81 / 0.56) * (1 + 0.012 * Math.sin(seed * 2.9 + 1.3));
     // Das Ticken (core/ticking.js) folgt derselben Pendelfrequenz.
-    if (audible) g.userData.ticks = { kind: 'pendulum', seed };
+    if (audible) g.userData.ticks = { kind: 'pendulum', seed, speed };
     g.position.set(x, y, z);
     g.rotation.y = facing;
     this.scene.add(g);
     this.loc.onUpdate((dt, t) => {
-      pivot.rotation.z = Math.sin(t * 3.14 + seed) * 0.14;
+      pivot.rotation.z = Math.sin(t * speed + seed) * 0.14;
     });
   }
 

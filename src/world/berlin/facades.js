@@ -5,7 +5,7 @@ import { lightPool } from './lamps.js';
 import { buildDownpipes } from './gutters.js';
 import { hearing } from './traffic.js';
 import {
-  SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
+  SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rainOnGlass, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
 
 // Häuser: Fensterachsen als Instanzen, Hauskörper, Gesimse, Dächer, Gehwege.
@@ -222,7 +222,6 @@ class FacadeBatcher {
     const color = new THREE.Color();
     // Geschlossene Läden haben Klappläden, erleuchtete zeigen ihre Auslage.
     const shutter = std({ map: shopShutter(), roughness: 0.85 });
-    const displayTint = new THREE.Color(0.95, 0.85, 0.7);
     const chunks = (list) => {
       const cells = new Map();
       for (const e of list) {
@@ -248,7 +247,7 @@ class FacadeBatcher {
         mesh.setColorAt(i, color.set(w.color));
       }, true);
       const lists = [[t.dark, name === 'shop' ? shutter : darkGlass], [t.lit, litGlass]];
-      for (const [kind, list] of Object.entries(t.kinds)) lists.push([list, new THREE.MeshBasicMaterial({ map: shopDisplay(kind), color: displayTint })]);
+      for (const [kind, list] of Object.entries(t.kinds)) lists.push([list, displayMaterial(kind)]);
       for (const [list, mat] of lists) add(list, () => t.parts.glass, mat, (mesh, m, i) => mesh.setMatrixAt(i, m));
       for (const [list, mat] of [[t.rooms, roomMaterial(litGlass)], [t.shades, shadeMaterial(litGlass)]]) {
         // Eigene Kopie der Scheibe je Zelle, weil nur diese Instanzen eine Atlaszelle tragen.
@@ -260,6 +259,70 @@ class FacadeBatcher {
       }
     }
   }
+}
+
+// Erleuchteter Laden: Die Scheibe zeigt einen Schaukasten mit Tiefe, ohne ihn zu bauen. Hinter
+// dem Glas liegt ein gedachter Kasten von SHOP_DEPTH Metern. Der Blickstrahl trifft dessen
+// Rückwand (die gemalte Auslage), die Seiten (ein Randstreifen des Bildes, der um die Ecke nach
+// vorn läuft, so stehen auch dort Regale mit Ware), den Boden oder die Decke. Zur Scheibe hin ist es heller, dort hängt
+// die Lampe. Auf dem Glas Regentropfen und bei flachem Blick ein Abglanz der nächtlichen Straße.
+// Maße wie die Scheibe in bayParts: 2,64 m breit, 0,72 bis 3,42 m hoch, Vorderseite bei z = -0,28.
+const SHOP_DEPTH = 1.4;
+function displayMaterial(kind) {
+  const x0 = BAY_W / 2 - 1.32;
+  const x1 = BAY_W / 2 + 1.32;
+  return new THREE.ShaderMaterial({
+    uniforms: { uMap: { value: shopDisplay(kind) }, uDrops: { value: rainOnGlass() } },
+    vertexShader: `
+      varying vec3 vLocal;
+      varying vec3 vEye;
+      void main() {
+        mat4 m = modelMatrix * instanceMatrix;
+        vLocal = position;
+        vEye = (inverse(m) * vec4(cameraPosition, 1.0)).xyz;
+        gl_Position = projectionMatrix * viewMatrix * m * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform sampler2D uMap;
+      uniform sampler2D uDrops;
+      varying vec3 vLocal;
+      varying vec3 vEye;
+      const vec3 LO = vec3(${x0.toFixed(3)}, 0.72, ${(-0.28 - SHOP_DEPTH).toFixed(3)});
+      const vec3 HI = vec3(${x1.toFixed(3)}, 3.42, -0.28);
+      const vec3 TINT = vec3(0.95, 0.85, 0.7);
+      void main() {
+        vec3 o = vec3(vLocal.xy, HI.z);
+        vec3 d = normalize(vLocal - vEye);
+        d.z = min(d.z, -0.02);
+        d += vec3(1e-5);
+        vec3 tFar = max((LO - o) / d, (HI - o) / d);
+        float t = min(min(tFar.x, tFar.y), tFar.z);
+        vec3 p = o + d * t;
+        vec3 f = (p - LO) / (HI - LO);
+        float depth = 1.0 - f.z;
+        vec3 col;
+        if (t == tFar.z) {
+          col = texture2D(uMap, f.xy).rgb;
+        } else if (t == tFar.x) {
+          float u = 0.005 + 0.22 * (1.0 - depth);
+          col = texture2D(uMap, vec2(f.x < 0.5 ? u : 1.0 - u, f.y)).rgb * (1.05 - 0.25 * depth);
+        } else if (d.y < 0.0) {
+          col = texture2D(uMap, vec2(f.x, 0.015)).rgb * (1.05 - 0.35 * depth);
+        } else {
+          col = vec3(0.05, 0.035, 0.022) * (1.2 - depth);
+        }
+        // Lampe vorn unter der Decke: oben und nah an der Scheibe heller.
+        col *= TINT * (0.95 + 0.25 * (1.0 - depth) * smoothstep(0.2, 1.0, f.y));
+        vec2 g = vLocal.xy / 0.45;
+        float drop = max(texture2D(uDrops, g).r, texture2D(uDrops, vec2(g.x * 0.5 + 0.37, g.y * 0.3)).g * 0.6);
+        col = mix(col, col * 1.5 + vec3(0.01, 0.012, 0.016), drop * 0.7);
+        float fres = pow(1.0 - abs(normalize(vLocal - vEye).z), 3.0);
+        col = mix(col, vec3(0.07, 0.06, 0.05), fres * 0.35);
+        gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
+  });
 }
 
 // Lässt jede Instanz über das Attribut aCell ihre Zelle aus dem windowAtlas lesen.

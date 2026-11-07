@@ -6,19 +6,22 @@ import { hearing } from './traffic.js';
 
 // Leute, die miteinander reden: abwechselnd ein paar gemurmelte Sätze, dazwischen Pausen und ab
 // und zu ein längeres Schweigen. Hört man nur aus der Nähe. speakers: [{ pos, voice }];
-// cough: mittlere Sekunden zwischen zwei Hustern (0 = nie).
-export function chatter(loc, speakers, { range = 12, cough = 0 } = {}) {
+// cough: mittlere Sekunden zwischen zwei Hustern (0 = nie); talk: false für jemanden, der nur hustet.
+export function chatter(loc, speakers, { range = 12, cough = 0, talk = true } = {}) {
   let turn = 0;
   let next = 1 + Math.random() * 3;
   let nextCough = cough * (0.5 + Math.random());
   loc.onUpdate((dt, t, { camera }) => {
     next -= dt;
-    if (next < 0 && speakers.length) {
+    if (talk && next < 0) {
       const sp = speakers[turn];
       const ear = hearing(camera, sp.pos.x, sp.pos.z, range);
-      if (ear.vol > 0.01) (loc.sounds ??= []).push({ type: 'murmur', vol: ear.vol, pan: ear.pan, voice: sp.voice });
-      if (speakers.length > 1 && Math.random() < 0.7) turn = (turn + 1) % speakers.length;
-      next = Math.random() < 0.2 ? 5 + Math.random() * 8 : 1.8 + Math.random() * 1.6;
+      const words = 1 + Math.floor(Math.random() * 5);
+      if (ear.vol > 0.01) (loc.sounds ??= []).push({ type: 'murmur', vol: ear.vol, pan: ear.pan, voice: sp.voice, words });
+      // Wer weiterredet, setzt nach kurzem Atemholen neu an; die Antwort lässt etwas länger auf sich warten.
+      const other = speakers.length > 1 && Math.random() < 0.7;
+      if (other) turn = (turn + 1) % speakers.length;
+      next = words * 0.55 + (Math.random() < 0.15 ? 4 + Math.random() * 8 : other ? 0.4 + Math.random() * 0.9 : 0.25 + Math.random() * 0.3);
     }
     if (!cough) return;
     nextCough -= dt;
@@ -61,7 +64,7 @@ export function buildLife(loc) {
   });
   // Das Paar unterhält sich leise; der Alte auf der Bank hustet von Zeit zu Zeit.
   chatter(loc, [{ pos: he.position, voice: 'm' }, { pos: she.position, voice: 'f' }], { range: 11 });
-  chatter(loc, [{ pos: old.position, voice: 'm' }], { range: 14, cough: 40 });
+  chatter(loc, [{ pos: old.position, voice: 'm' }], { range: 14, cough: 40, talk: false });
 
   // Pferdeäpfel: je ein Häufchen aus ein paar plattgedrückten Ballen, nass glänzend.
   const lumps = [];

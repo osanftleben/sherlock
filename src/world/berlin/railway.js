@@ -5,6 +5,7 @@ import { grimy } from './grime.js';
 import { addSign } from './facades.js';
 import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
 import { hearing } from './traffic.js';
+import { buildDrips } from './drips.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
 export function buildRailway(loc, r) {
@@ -166,6 +167,8 @@ export function buildRailway(loc, r) {
     const p = wallLantern(lanterns, flames, new THREE.Vector3(-SEG / 2 + 1.1, 3.5, (VZ0 + VZ1) / 2), new THREE.Vector3(1, 0, 0), 0.52, washes);
     glows.push(p);
     (loc.extraLamps ??= []).push({ x: p.x + 0.1, y: p.y, z: p.z, intensity: 16, weight: 0.3 });
+    // Tropfwasser aus dem Gewölbe, mit Pfützen darunter.
+    buildDrips(loc, { cx: 0, spring: 4.1, radius: RING_IN, z0: VZ0, z1: VZ1, lamp: p });
   }
   addMesh(scene, merge(viaductParts), sooty(grimy(matte(viaductBrick()), 'brick'), 'viaduct'));
   addMesh(scene, merge(passageParts), sooty(grimy(std({ ...viaductBrick(), roughness: 0.9 }), 'brick'), 'passage', true));

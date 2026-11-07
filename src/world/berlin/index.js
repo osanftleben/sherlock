@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
 import { Bag, addMesh, box, matte, merge, std } from '../kit.js';
-import { brick, cobble, plaster, signTexture, slate, softDisc, rng, streetWet } from '../textures.js';
+import { cobble, plaster, signTexture, slate, softDisc, rng, streetWet, viaductBrick } from '../textures.js';
 import { BAY_W, addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
 import { buildHorizon } from './horizon.js';
@@ -14,7 +14,8 @@ import { LANTERN_GLASS, buildLamps, lampWash, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
-import { buildWeather } from './weather.js';
+import { DRY, buildWeather, dryRects } from './weather.js';
+import { DRIP_GLSL, dripUniforms } from './drips.js';
 import { buildSmoke } from './smoke.js';
 import { MIRROR_LAYER, RIPPLES, RIPPLE_GLINT, rainTime } from './ripples.js';
 
@@ -99,7 +100,7 @@ export function buildBerlin() {
   const darkGlass = std({ color: 0x0b0f16, roughness: 0.18, metalness: 0.5 });
   const litGlass = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.31, 0.09) });
   const roofMat = matte(slate());
-  const brickMat = grimy(matte(brick()), 'brick');
+  const brickMat = grimy(matte(viaductBrick()), 'brick');
   const ironMat = std({ color: 0x0f1211, roughness: 0.55, metalness: 0.5 });
   // Ladensorten je Straße, damit man die Straßen an ihren Läden unterscheidet:
   // Rosenthaler Straße Alltagsbedarf, Sophienstraße Handwerk und Bücher,
@@ -178,7 +179,7 @@ export function buildBerlin() {
   const streetDepth = STREET_Z1 - STREET_Z0;
   const street = new THREE.Mesh(
     new THREE.PlaneGeometry(720, streetDepth),
-    wetStreet(std({ ...cob, roughness: 1, metalness: 0.05, normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 1.6 })),
+    wetStreet(std({ ...cob, roughness: 1, metalness: 0.05, normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 1.6 }), loc),
   );
   // Pflastergröße wie bisher: 8 m pro Kachel.
   for (const t of Object.values(cob)) t.repeat.set(90, streetDepth / 8);
@@ -421,21 +422,33 @@ export function buildBerlin() {
 // Legt streetWet() in Weltkoordinaten über das Pflaster: Pfützen sind dunkel, glatt und ohne
 // Steinrelief, dazu großflächig hellere und dunklere Stellen, damit sich die 8-m-Kachel
 // nicht wiederholt. In den Pfützen schlagen Tropfen ein: kleine Ringe, die sich ausbreiten und
-// das Spiegelbild der Laternen kräuseln (ripples.js).
-function wetStreet(material) {
+// das Spiegelbild der Laternen kräuseln (ripples.js). Unter Dach (loc.dry) regnet es nicht in die
+// Pfützen; im Viaduktdurchgang tropft es dafür aus dem Gewölbe in eigene Pfützen (drips.js).
+function wetStreet(material, loc) {
   const wet = streetWet();
   material.onBeforeCompile = (shader) => {
     shader.uniforms.wetMap = { value: wet };
     shader.uniforms.rainTime = rainTime;
+    shader.uniforms.roofs = { value: dryRects(loc) };
+    Object.assign(shader.uniforms, dripUniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}`)
+      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}\n${DRIP_GLSL}
+        uniform vec4 roofs[${DRY}];
+        float underRoof(vec2 xz) {
+          for (int i = 0; i < ${DRY}; i++) {
+            vec4 q = roofs[i];
+            if (xz.x > q.x && xz.x < q.y && xz.y > q.z && xz.y < q.w) return 1.0;
+          }
+          return 0.0;
+        }`)
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
         vec4 wet = texture2D(wetMap, vGroundXZ / 37.0);
+        if (nearDrips(vGroundXZ)) wet.r += 0.9 * dripWet(vGroundXZ);
         // Das Wasser füllt zuerst die Fugen; am Rand ragen die Steine heraus.
         float puddle = smoothstep(0.35, 0.6, wet.r + 0.1 - 3.0 * sampledDiffuseColor.g);
         diffuseColor.rgb *= (0.7 + 0.6 * wet.g) * mix(1.0, 0.35, puddle);`,
@@ -462,8 +475,12 @@ function wetStreet(material) {
         float rippleNear = 1.0 - smoothstep(0.025, 0.07, length(fwidth(vGroundXZ)));
         rippleGlint = 0.0;
         if (puddle * rippleNear > 0.01) {
-          vec2 rip = ripple(vGroundXZ, 0.45, 0.0) + ripple(vGroundXZ, 0.37, 17.3);
-          rippleGlint = length(rip) * puddle * rippleNear;
+          vec2 rip = (ripple(vGroundXZ, 0.45, 0.0) + ripple(vGroundXZ, 0.37, 17.3)) * (1.0 - underRoof(vGroundXZ));
+          // Die Ringe der Tropfen sind größer als die des Regens: Sie glänzen nur schwach von selbst
+          // und zeigen sich vor allem, wo sie das Spiegelbild der Laterne kräuseln.
+          vec2 drip = nearDrips(vGroundXZ) ? dripRings(vGroundXZ) : vec2(0.0);
+          rippleGlint = (length(rip) + 0.3 * length(drip)) * puddle * rippleNear;
+          rip += drip;
           normal = normalize(normal + mat3(viewMatrix) * vec3(rip.x, 0.0, rip.y) * (0.45 * puddle * rippleNear));
         }`,
       );

@@ -288,42 +288,7 @@ export function plaster() {
   });
 }
 
-export function brick() {
-  return cached('brick', () => {
-    const size = 512;
-    const color = canvas(size);
-    const height = canvas(size);
-    const c = color.getContext('2d');
-    const h = height.getContext('2d');
-    const r = rng(41);
-    c.fillStyle = '#2c2522';
-    c.fillRect(0, 0, size, size);
-    h.fillStyle = '#000';
-    h.fillRect(0, 0, size, size);
-    const bh = 16;
-    const bw = 64;
-    // Einzelne Steine sind dunkler gebrannt (Klinker) oder verrußt; eigener Zufall, damit die
-    // übrigen Steine ihre Farbe behalten.
-    const burnt = rng(44);
-    for (let row = 0; row * bh < size; row++) {
-      const off = row % 2 ? bw / 2 : 0;
-      for (let i = -1; i * bw < size; i++) {
-        const v = r();
-        const k = burnt() < 0.09 ? 0.55 + burnt() * 0.2 : 1;
-        c.fillStyle = `rgb(${(96 + v * 50) * k},${(46 + v * 22) * k},${(34 + v * 16) * k})`;
-        c.fillRect(i * bw + off + 1, row * bh + 1, bw - 2, bh - 2);
-        h.fillStyle = `rgb(${160 + r() * 90},0,0)`;
-        h.fillRect(i * bw + off + 1, row * bh + 1, bw - 2, bh - 2);
-      }
-    }
-    grain(c, size, 20, 42);
-    // Nur kleine Rußspuren: Große Flecken wiederholen sich mit der Kachel alle drei Meter.
-    blotches(c, size, 10, 8, 26, 'rgba(10,8,8,0.22)', 43);
-    return { map: tex(color), normalMap: tex(normalFromHeight(height, 1.8), { srgb: false }) };
-  });
-}
-
-// Ziegel des Stadtbahnviadukts im Kreuzverband: Läufer- und Binderschichten im Wechsel, jede
+// Ziegel des Stadtbahnviadukts und der Brandmauer im Hinterhof im Kreuzverband: Läufer- und Binderschichten im Wechsel, jede
 // zweite Läuferschicht um einen halben Stein versetzt. Gedämpftes Braunrot statt grellem Rot,
 // einzelne dunkel gebrannte Klinker und hellere, gelbliche Steine, dazu helle Kalkfugen, damit
 // man nachts den Verband und nicht eine rote Fläche sieht. Eine Kachel ist gut 3 m groß

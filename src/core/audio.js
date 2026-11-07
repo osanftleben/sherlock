@@ -509,22 +509,35 @@ export class Audio {
     }
   }
 
-  // Ein Tropfen aus dem Fallrohr: kurzes Plinken, dessen Ton nach oben gleitet, und ein Klatschen.
-  drip() {
+  // Ein Tropfen fällt ins Wasser: kurzes Plinken, dessen Ton nach oben gleitet, und ein Klatschen.
+  plink(out, vol = 1, when = 0) {
     const ctx = this.ctx;
-    const t = ctx.currentTime;
+    const t = ctx.currentTime + when;
     const f = 700 + Math.random() * 900;
     const osc = ctx.createOscillator();
     osc.frequency.setValueAtTime(f, t);
     osc.frequency.exponentialRampToValueAtTime(f * 1.8, t + 0.04);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.03 + Math.random() * 0.04, t + 0.004);
+    g.gain.exponentialRampToValueAtTime((0.03 + Math.random() * 0.04) * vol + 0.0001, t + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-    osc.connect(g).connect(this.gutterOut);
+    osc.connect(g).connect(out);
     osc.start(t);
     osc.stop(t + 0.08);
-    this.burst({ freq: 3200 + Math.random() * 1500, q: 1, dur: 0.03, gain: 0.05 + Math.random() * 0.05, out: this.gutterOut });
+    this.burst({ freq: 3200 + Math.random() * 1500, q: 1, dur: 0.03, gain: (0.05 + Math.random() * 0.05) * vol, when, out });
+  }
+
+  // Ein Tropfen aus dem Fallrohr.
+  drip() {
+    this.plink(this.gutterOut);
+  }
+
+  // Ein Tropfen aus dem Gewölbe des Viaduktdurchgangs in eine Pfütze (drips.js), mit einem leisen
+  // Nachhall unter dem Bogen.
+  vaultDrip(vol, pan) {
+    const out = this.panned(pan * 0.85, 0.6);
+    this.plink(out, vol);
+    this.plink(out, vol * 0.25, 0.05 + Math.random() * 0.03);
   }
 
   // Ferner Wagen: Hufe im Trab, gedämpft und von einer Seite, schwillt an und wieder ab.

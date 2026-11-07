@@ -2,6 +2,18 @@ import * as THREE from 'three';
 import { fogPuff } from '../textures.js';
 import { merge } from '../kit.js';
 
+// Überdachte Stellen (loc.dry: Rechtecke, etwa Tordurchfahrten oder der Viaduktbogen) als
+// x0, x1, z0, z1 für Shader: Dort fällt kein Regen, und in den Pfützen gibt es keine Regenringe
+// (wetStreet in index.js). Feste Anzahl, damit sich die Shader nicht ändern, wenn ein Viertel
+// mehr oder weniger hat; freie Plätze sind leere Rechtecke.
+export const DRY = 4;
+export function dryRects(loc) {
+  return Array.from({ length: DRY }, (_, i) => {
+    const d = loc.dry?.[i];
+    return d ? new THREE.Vector4(d.minX, d.maxX, d.minZ, d.maxZ) : new THREE.Vector4(0, -1, 0, -1);
+  });
+}
+
 export function buildWeather(loc, r) {
   const { scene } = loc;
   // Bodennebel, der dem Spieler folgt. Jede Schwade blendet nah an der Kamera und am Rand ihres
@@ -34,15 +46,9 @@ export function buildWeather(loc, r) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('tail', new THREE.BufferAttribute(tail, 1));
-  // Überdachte Stellen (loc.dry: Rechtecke, etwa Tordurchfahrten oder der Viaduktbogen), dort
-  // fällt bis zur Höhe `top` (sonst 4,5 m) kein Regen. Feste Anzahl, damit sich der Shader nicht
-  // ändert, wenn ein Viertel mehr oder weniger hat.
-  const DRY = 4;
+  // Überdachte Stellen (loc.dry), dort fällt bis zur Höhe `top` (sonst 4,5 m) kein Regen.
   if ((loc.dry?.length ?? 0) > DRY) console.warn(`weather.js: nur ${DRY} trockene Stellen, ${loc.dry.length} eingetragen`);
-  const dry = Array.from({ length: DRY }, (_, i) => {
-    const d = loc.dry?.[i];
-    return d ? new THREE.Vector4(d.minX, d.maxX, d.minZ, d.maxZ) : new THREE.Vector4(0, -1, 0, -1);
-  });
+  const dry = dryRects(loc);
   const dryTop = Array.from({ length: DRY }, (_, i) => loc.dry?.[i]?.top ?? 4.5);
   const rain = new THREE.LineSegments(g, new THREE.ShaderMaterial({
     transparent: true,

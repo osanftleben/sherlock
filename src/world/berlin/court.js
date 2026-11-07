@@ -20,9 +20,10 @@ export function buildCourt(loc, facades, { brickMat, ironMat }) {
   const quer = facades.courtWall({ x: x1, z: -81.4, face: 'west', bays: 3, ground: ['ground', 'door', 'ground'], color: 0x847a6a, lit: 0.3, glow: [0] });
   facades.courtWall({ x: x1, z: z1, face: 'north', bays: 3, color: 0x8e8472, lit: 0.25, glow: [2] });
 
-  // Brandmauer: nackter Ziegel, so hoch wie die Hofwände.
+  // Brandmauer: nackter Ziegel im Kreuzverband wie am Viadukt, so hoch wie die Hofwände.
+  // UV × 0,33 wie dort, sonst gerieten die Steine zu klein.
   const H = quer.H + 0.3;
-  addMesh(scene, box(x1 - x0, H, 0.06, (x0 + x1) / 2, H / 2, z0 + 0.03), brickMat);
+  addMesh(scene, box(x1 - x0, H, 0.06, (x0 + x1) / 2, H / 2, z0 + 0.03, 0.33), brickMat);
   loc.collide(x0 - 0.34, x1 + 0.34, -81.4, z0 + 0.06);
 
   const { px, pz } = courtProps(loc);

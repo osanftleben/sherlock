@@ -358,6 +358,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const curbs = [];
   // Fallrohre, je Haus eines an der rechten Hauskante (gutters.js).
   const pipes = [];
+  // Mündungen der Schornsteine in Weltkoordinaten, für den Rauch (smoke.js).
+  const chimneys = [];
 
   // Erker, Balkone und Gauben eines Hauses, aus eigenem Zufall (reliefRand), damit Häuser,
   // Fenster und Läden bleiben, wie sie sind. Erker und Balkone halten eine Achse Abstand
@@ -816,10 +818,13 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     for (let i = 0; i < Math.max(2, bays / 3); i++) {
       const ch = new Bag();
-      ch.box(0x4a3a30, 0.7, 2.2, 0.5, 1 + rand() * (W - 2), H + 2.6, -2 - rand() * (depth - 4));
+      const cx = 1 + rand() * (W - 2);
+      const cz = -2 - rand() * (depth - 4);
+      ch.box(0x4a3a30, 0.7, 2.2, 0.5, cx, H + 2.6, cz);
       const g = ch.build();
       g.applyMatrix4(base);
       massing.parts.push(g);
+      chimneys.push(new THREE.Vector3(cx, H + 3.75, cz).applyMatrix4(base));
     }
 
     if (relief) buildRelief(plan, { base, types, col, cTrim, H });
@@ -935,7 +940,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
-  return { block, row, courtWall, cornerTower, finish };
+  return { block, row, courtWall, cornerTower, finish, chimneys };
 }
 
 // Licht aus erleuchteten Schaufenstern und Erdgeschossfenstern fällt auf den nassen Gehweg davor:

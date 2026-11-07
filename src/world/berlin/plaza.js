@@ -313,6 +313,7 @@ function buildCabRank(loc, ironMat) {
   addMesh(scene, cyl(0.31, 0.31, 0.05, bx, 0.96, bz, 12), coalMat);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xff7a30, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.position.set(bx, 1.15, bz);
+  (loc.braziers ??= []).push(new THREE.Vector3(bx, 1.0, bz));
   glow.scale.setScalar(2.2);
   scene.add(glow);
   const pool = addPool(scene, bx, bz, 5, 0xd0602a, 0.32);

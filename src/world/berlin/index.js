@@ -14,6 +14,7 @@ import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
 import { buildWeather } from './weather.js';
+import { buildSmoke } from './smoke.js';
 
 // Das erste Viertel: Hackescher Markt, Rosenthaler und Oranienburger Straße, Sophienstraße,
 // die Stadtbahn am Bahnhof Börse und die Spree. Norden ist -Z.
@@ -400,6 +401,7 @@ export function buildBerlin() {
   buildTraffic(loc, r);
   buildWeather(loc, r);
   buildLife(loc);
+  buildSmoke(loc, { chimneys: facades.chimneys });
   loc.onUpdate((dt, t) => {
     rainTime.value = t % 1000;
   });

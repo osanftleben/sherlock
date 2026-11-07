@@ -35,6 +35,7 @@ export function buildRailway(loc, r, brickMat) {
   const fronts = [];
   const lanterns = new Bag();
   const flames = [];
+  const glows = [];
   const pools = [];
   const rf = rng(1892);
   const stationArches = new Set([-3, -2, 2, 3]);
@@ -84,10 +85,24 @@ export function buildRailway(loc, r, brickMat) {
       if (lit && Math.abs(x) < 70) {
         const lx = x + (entrance ? -1.5 : cell === 0 ? 0.9 : 3.2);
         const lz = VZ0 + 1.14;
-        lanterns.box(0x161616, 0.04, 0.04, 0.5, lx, 3.05, lz - 0.25);
-        lanterns.box(0x161616, 0.26, 0.05, 0.26, lx, 3.08, lz - 0.55);
-        lanterns.box(0x161616, 0.18, 0.06, 0.18, lx, 2.72, lz - 0.55);
-        flames.push(new THREE.BoxGeometry(0.16, 0.3, 0.16).translate(lx, 2.9, lz - 0.55));
+        // Wandlaterne: Arm mit Strebe aus der Wand, daran ein eisernes Gehäuse mit vier
+        // Scheiben, Eckstreben, Boden und spitzem Dach. Die Scheiben leuchten, ein Hof umgibt sie.
+        const ly = 2.88;
+        const lc = lz - 0.52;
+        lanterns.box(0x161616, 0.035, 0.035, 0.56, lx, 3.2, lz - 0.28);
+        const brace = new THREE.BoxGeometry(0.025, 0.025, 0.5);
+        brace.rotateX(Math.atan2(0.32, 0.36));
+        lanterns.add(brace.translate(lx, 3.04, lz - 0.2), 0x161616);
+        lanterns.box(0x161616, 0.012, 0.08, 0.012, lx, 3.14, lc);
+        for (const dx of [-0.09, 0.09]) {
+          for (const dz of [-0.09, 0.09]) lanterns.box(0x161616, 0.022, 0.3, 0.022, lx + dx, ly, lc + dz);
+        }
+        lanterns.box(0x161616, 0.22, 0.035, 0.22, lx, ly - 0.16, lc);
+        lanterns.box(0x161616, 0.08, 0.05, 0.08, lx, ly - 0.2, lc);
+        lanterns.add(new THREE.CylinderGeometry(0.02, 0.17, 0.12, 4).rotateY(Math.PI / 4).translate(lx, ly + 0.21, lc), 0x161616);
+        lanterns.add(new THREE.SphereGeometry(0.025, 6, 4).translate(lx, ly + 0.29, lc), 0x161616);
+        flames.push(new THREE.BoxGeometry(0.17, 0.28, 0.17).translate(lx, ly, lc));
+        glows.push([lx, ly, lc]);
         pools.push(new THREE.PlaneGeometry(5.5, 4.5).rotateX(-Math.PI / 2).translate(x, 0.03, VZ0 - 0.4));
       }
       if (entrance) {
@@ -112,7 +127,14 @@ export function buildRailway(loc, r, brickMat) {
   const af = archFronts();
   addMesh(scene, merge(fronts), std({ map: af.map, emissive: 0xffffff, emissiveMap: af.emissiveMap, emissiveIntensity: 0.9, roughness: 0.8 }));
   addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
-  addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) }));
+  addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.5, 0.85, 0.35) }));
+  const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
+  for (const [gx, gy, gz] of glows) {
+    const s = new THREE.Sprite(glowMat);
+    s.position.set(gx, gy, gz);
+    s.scale.setScalar(1.5);
+    scene.add(s);
+  }
   addMesh(scene, merge(pools), lightPool(0xc08040, 0.5));
   const deck = new Bag();
   const deckW = 49 * SEG;

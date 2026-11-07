@@ -247,7 +247,7 @@ function buildHead(L) {
   H.add(ball(0.012 * nk, 0, 0.006, 0.093, 0.8, 1.9, 0.9, 8, 6), skin);
   H.add(ball(0.016 * nk, 0, -0.014, 0.097, 0.9, 0.95, 1, 8, 6), skin);
   for (const s of [-1, 1]) {
-    H.add(ball(0.026, s * 0.08, 0.005, -0.005, 0.35, 1, 0.65, 8, 6), skin);
+    for (const [g, c] of ear(s, L.female ? 0.88 : 1)) H.add(g, c === 'dark' ? shade(skin, 0.78) : skin);
     // Brauen liegen auf dem Brauenbogen und fallen nach außen leicht ab.
     const brow = ball(0.019, 0, 0, 0, 1, L.female ? 0.17 : 0.3, 0.38, 10, 6).rotateZ(-s * 0.09);
     H.add(brow.translate(s * 0.035, 0.046, 0.0815), shade(hair, L.female ? 0.95 : 0.8));
@@ -329,6 +329,26 @@ function buildHead(L) {
   eyes.add(pupils);
   head.add(eyes);
   return { head, eyes, pupils };
+}
+
+// Ohr auf Seite s, zwischen Brauen- und Nasenhöhe hinter dem Kieferwinkel: flache Muschel, darin
+// eine dunklere Mulde, am Rand die eingerollte Krempe, unten das Läppchen. Etwas nach hinten
+// geneigt, die Hinterkante steht vom Kopf ab. Gebaut für jede Seite einzeln statt gespiegelt,
+// damit die Flächen richtig herum liegen.
+function ear(s, k = 1) {
+  const parts = [
+    [ball(0.03, 0, 0, 0, 0.3, 1, 0.6, 10, 8), 'skin'],
+    [ball(0.014, s * 0.0062, -0.002, 0.002, 0.3, 1.1, 0.8, 8, 6), 'dark'],
+    [tube([[s * 0.004, -0.02, -0.013], [s * 0.0055, 0.0, -0.0195], [s * 0.0055, 0.021, -0.0145], [s * 0.0045, 0.0285, 0.0], [s * 0.003, 0.021, 0.0125]], 0.0045), 'skin'],
+    [ball(0.009, s * 0.001, -0.026, -0.002, 0.7, 1, 1, 8, 6), 'skin'],
+  ];
+  for (const [g] of parts) {
+    g.scale(k, k, k);
+    g.rotateX(-0.22);
+    g.rotateY(-s * 0.38);
+    g.translate(s * 0.083 * (k === 1 ? 1 : 0.97), 0.004, -0.016);
+  }
+  return parts;
 }
 
 function addHat(H, L) {

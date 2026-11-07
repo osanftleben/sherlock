@@ -108,13 +108,13 @@ export function buildPlaza(loc, r, ironMat) {
   });
 
   // Droschkenplatz mit wartender Droschke
-  const cab = makeDroschke({ horse: 0x3a2516 });
+  const cab = makeDroschke({ horse: 0x3a2516, number: '1307' });
   cab.position.set(24, 0, -2);
   cab.rotation.y = Math.PI;
   scene.add(cab);
   loc.collide(22.8, 25.2, -8, 2.2);
   // Die zweite wartet ohne Kutscher, der steht mit dem Kollegen am Kohlebecken.
-  const cab2 = makeDroschke({ driver: false, horse: 0x1d1a17, waiting: true });
+  const cab2 = makeDroschke({ driver: false, horse: 0x1d1a17, waiting: true, color: 0x17211a, number: '842' });
   cab2.position.set(24, 0, -12);
   cab2.rotation.y = Math.PI;
   scene.add(cab2);

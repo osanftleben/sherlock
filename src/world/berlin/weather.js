@@ -21,7 +21,7 @@ export function buildWeather(loc, r) {
   }
 
   // Nieselregen als kurze Linien in einem Kasten um die Kamera.
-  const N = 900;
+  const N = 450;
   const pos = new Float32Array(N * 6);
   const tail = new Float32Array(N * 2);
   for (let i = 0; i < N; i++) {
@@ -67,14 +67,14 @@ export function buildWeather(loc, r) {
         }
         gl_Position = projectionMatrix * mv;
       }`,
-    fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(0.65, 0.72, 0.85, vA * 0.2); }`,
+    fragmentShader: `varying float vA; void main(){ gl_FragColor = vec4(0.65, 0.72, 0.85, vA * 0.15); }`,
   }));
   rain.frustumCulled = false;
   scene.add(rain);
 
   // Spritzer: wo ein Tropfen aufschlägt, sprüht für einen Augenblick ein Hauch feiner Tröpfchen
   // hoch. Sie sind beleuchtet, man sieht sie also vor allem im Schein der Laternen und Fenster.
-  const SPLASHES = 260;
+  const SPLASHES = 90;
   const splashGeo = merge([
     new THREE.PlaneGeometry(0.14, 0.1).translate(0, 0.05, 0),
     new THREE.PlaneGeometry(0.14, 0.1).translate(0, 0.05, 0).rotateY(Math.PI / 2),

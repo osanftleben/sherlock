@@ -62,7 +62,7 @@ export class Audio {
 
     // Nieselregen: nur ein Hauch Rauschen, der Rest sind einzelne Tropfen
     this.rainGain = ctx.createGain();
-    this.rainGain.gain.value = 0.004;
+    this.rainGain.gain.value = 0.0025;
     const rainFilter = ctx.createBiquadFilter();
     rainFilter.type = 'highpass';
     rainFilter.frequency.value = 4500;
@@ -195,7 +195,7 @@ export class Audio {
     const t = this.ctx.currentTime;
     this.windGain.gain.setTargetAtTime(outdoors ? 0.065 : 0.025, t, 0.4);
     this.cityGain.gain.setTargetAtTime(outdoors ? 0.03 : 0.006, t, 0.4);
-    this.rainGain.gain.setTargetAtTime(outdoors ? 0.004 : 0.0007, t, 0.4);
+    this.rainGain.gain.setTargetAtTime(outdoors ? 0.0025 : 0.0005, t, 0.4);
     this.dropGain.gain.setTargetAtTime(outdoors ? 1 : 0.35, t, 0.4);
     this.dropMuffle.frequency.setTargetAtTime(outdoors ? 16000 : 1800, t, 0.4);
   }
@@ -671,10 +671,10 @@ export class Audio {
     }
   }
 
-  // Regen als dichte, zufällige Folge harter, kurzer Einschläge auf Pflaster,
+  // Nieselregen als lockere, zufällige Folge harter, kurzer Einschläge auf Pflaster,
   // Dach und Fensterblech. Manchmal treffen zwei, drei Tropfen fast gleichzeitig.
   rain(dt) {
-    const rate = this.env === 'street' ? 55 : 10;
+    const rate = this.env === 'street' ? 22 : 5;
     this.nextDrop -= dt;
     while (this.nextDrop < 0) {
       this.drop();

@@ -425,7 +425,7 @@ vec2 ripple(vec2 xz, float cell, float seed) {
   float u = rainTime / (0.9 + h * 1.4) + h * 13.0;
   float cyc = floor(u);
   float ph = fract(u);
-  float on = step(rippleHash(id + cyc * 7.31), 0.5);
+  float on = step(rippleHash(id + cyc * 7.31), 0.22);
   vec2 c = vec2(rippleHash(id + cyc * 3.7 + 1.3), rippleHash(id + cyc * 5.1 + 2.9)) * 0.6 + 0.2;
   vec2 d = (fract(p) - c) * cell;
   float r = length(d);

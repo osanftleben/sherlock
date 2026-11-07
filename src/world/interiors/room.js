@@ -6,6 +6,18 @@ import { WINDOW_VIEW, clockFace, rainOnGlass, softDisc, windowView, wood } from 
 // Abstand der Häuser gegenüber hinter den Fenstern, in Metern (Straßenbreite).
 const VIEW_DEPTH = 12;
 
+// Gebogener Rundstab durch die Punkte [x, y, z].
+export function rod(points, r) {
+  const curve = new THREE.CatmullRomCurve3(points.map(([x, y, z]) => new THREE.Vector3(x, y, z)));
+  return new THREE.TubeGeometry(curve, points.length * 6, r, 6, false);
+}
+
+// Gedrechseltes Tischbein der Länge h, Fuß bei y = 0: Wulst, Hals, Vase, Ring.
+const LEG = [[0.018, 0], [0.023, 0.02], [0.016, 0.05], [0.019, 0.25], [0.027, 0.45], [0.029, 0.58], [0.024, 0.7], [0.018, 0.78], [0.025, 0.88], [0.028, 1]];
+export function turnedLeg(h) {
+  return new THREE.LatheGeometry(LEG.map(([r, t]) => new THREE.Vector2(r, t * h)), 10);
+}
+
 // Stuben entstehen nach demselben Muster: Raum um den Ursprung, Tür in der Südwand (+Z).
 export class Room {
   constructor({ id, name, w, d, h = 3.5, wall, floor, ceiling = 0x4a4438, surface = 'wood', ambience = 'interior', ambient = 0.5 }) {
@@ -58,25 +70,50 @@ export class Room {
     this.loc.collide(x - w / 2, x + w / 2, z - d / 2, z + d / 2);
   }
 
+  // Tisch mit abgesetzter Platte, Zarge und gedrechselten Beinen unter einem Vierkantklotz.
   table(x, z, w, d, h = 0.78, color = 0x5a3a22, collide = true) {
-    this.woodBag.box(color, w, 0.06, d, x, h, z);
+    const dark = new THREE.Color(color).multiplyScalar(0.78);
+    const bag = this.woodBag;
+    bag.box(color, w, 0.035, d, x, h + 0.0125, z);
+    bag.box(color, w - 0.03, 0.02, d - 0.03, x, h - 0.015, z);
+    this.roundEdge(color, x, h + 0.012, z, w, d, 0.018);
+    for (const s of [-1, 1]) {
+      bag.box(dark, w - 0.16, 0.09, 0.022, x, h - 0.07, z + s * (d / 2 - 0.08));
+      bag.box(dark, 0.022, 0.09, d - 0.16, x + s * (w / 2 - 0.08), h - 0.07, z);
+    }
+    const leg = turnedLeg(h - 0.125);
     for (const sx of [-1, 1]) {
       for (const sz of [-1, 1]) {
-        this.woodBag.box(color, 0.07, h, 0.07, x + (sx * (w - 0.14)) / 2, h / 2, z + (sz * (d - 0.14)) / 2);
+        const lx = x + sx * (w / 2 - 0.08);
+        const lz = z + sz * (d / 2 - 0.08);
+        bag.box(color, 0.055, 0.1, 0.055, lx, h - 0.075, lz);
+        bag.add(leg.clone().translate(lx, 0, lz), color);
       }
     }
     if (collide) this.solid(x, z, w, d);
   }
 
-  chair(x, z, facing = 0, color = 0x4a2e1c) {
-    const s = Math.sin(facing);
-    const c = Math.cos(facing);
-    const back = [x - s * 0.21, z - c * 0.21];
-    this.woodBag.box(color, 0.44, 0.05, 0.44, x, 0.46, z);
-    for (const a of [-0.19, 0.19]) {
-      for (const b of [-0.19, 0.19]) this.woodBag.box(color, 0.05, 0.46, 0.05, x + a, 0.23, z + b);
+  // Gerundete Kante um eine rechteckige Platte: vier liegende Rundstäbe.
+  roundEdge(color, x, y, z, w, d, r) {
+    for (const s of [-1, 1]) {
+      this.woodBag.add(new THREE.CylinderGeometry(r, r, w, 8).rotateZ(Math.PI / 2).translate(x, y, z + s * (d / 2 - r * 0.4)), color);
+      this.woodBag.add(new THREE.CylinderGeometry(r, r, d, 8).rotateX(Math.PI / 2).translate(x + s * (w / 2 - r * 0.4), y, z), color);
     }
-    this.woodBag.box(color, Math.abs(c) * 0.44 + 0.05, 0.55, Math.abs(s) * 0.44 + 0.05, back[0], 0.76, back[1]);
+  }
+
+  // Bugholzstuhl: runder Sitz mit Wiener Geflecht, gespreizte Beine mit Fußreif; die
+  // Hinterbeine laufen in einem Bogen als Lehne durch, darin ein zweiter, kleinerer Bogen.
+  chair(x, z, facing = 0, color = 0x4a2e1c) {
+    const parts = [
+      [cyl(0.205, 0.2, 0.03, 0, 0.455, 0, 20), color],
+      [cyl(0.19, 0.19, 0.004, 0, 0.471, 0, 20), 0x9a7a48],
+      [new THREE.TorusGeometry(0.205, 0.012, 6, 24).rotateX(Math.PI / 2).translate(0, 0.465, 0), color],
+      [rod([[-0.17, 0, -0.2], [-0.15, 0.45, -0.16], [-0.155, 0.72, -0.2], [-0.125, 0.88, -0.23], [0, 0.93, -0.245], [0.125, 0.88, -0.23], [0.155, 0.72, -0.2], [0.15, 0.45, -0.16], [0.17, 0, -0.2]], 0.015), color],
+      [rod([[-0.11, 0.47, -0.17], [-0.115, 0.66, -0.195], [0, 0.78, -0.215], [0.115, 0.66, -0.195], [0.11, 0.47, -0.17]], 0.011), color],
+      [new THREE.TorusGeometry(0.2, 0.008, 5, 24).rotateX(Math.PI / 2).scale(1, 1, 1.05).translate(0, 0.2, -0.01), color],
+    ];
+    for (const s of [-1, 1]) parts.push([rod([[s * 0.13, 0.45, 0.12], [s * 0.155, 0.22, 0.15], [s * 0.18, 0, 0.18]], 0.014), color]);
+    for (const [g, c] of parts) this.woodBag.add(g.rotateY(facing).translate(x, 0, z), c);
     this.solid(x, z, 0.5, 0.5);
   }
 
@@ -122,7 +159,9 @@ export class Room {
   // kein Loch: Der Shader verlängert jeden Sehstrahl von der Scheibe bis zur gemalten Häuserzeile
   // VIEW_DEPTH Meter dahinter. So verschiebt sich der Ausblick, wenn man sich bewegt, und
   // mehrere Fenster derselben Wand zeigen dieselbe Straße.
-  viewMaterial(wall) {
+  // chosen legt den Ausschnitt fest (0 bis 1 über die Straßenbreite), wenn der aus der
+  // Raumkennung abgeleitete nur Fassade zeigt.
+  viewMaterial(wall, chosen = null) {
     this.viewMats ??= {};
     if (this.viewMats[wall]) return this.viewMats[wall];
     // Nach außen und längs der Wand, je Wand des Raums (Tür im Süden, +z).
@@ -131,6 +170,7 @@ export class Room {
     // Jeder Raum und jede Wand blickt auf ein anderes Stück der Straße.
     let shift = { east: 0.13, west: 0.61, south: 0.37, north: 0.84 }[wall];
     for (const ch of this.loc.id) shift += ch.charCodeAt(0) * 0.0173;
+    if (chosen !== null) shift = chosen;
     const mat = new THREE.ShaderMaterial({
       uniforms: {
         uView: { value: windowView() },
@@ -178,10 +218,10 @@ export class Room {
     return mat;
   }
 
-  window(wall, along, y, w, h) {
+  window(wall, along, y, w, h, shift = null) {
     const off = wall === 'east' ? this.w / 2 - 0.05 : -this.w / 2 + 0.05;
     const pane = new THREE.PlaneGeometry(w, h).rotateY(wall === 'east' ? -Math.PI / 2 : Math.PI / 2).translate(off, y, along);
-    addMesh(this.scene, pane, this.viewMaterial(wall));
+    addMesh(this.scene, pane, this.viewMaterial(wall, shift));
     const bx = wall === 'east' ? off - 0.03 : off + 0.03;
     this.woodBag.box(0x2a1a10, 0.05, h + 0.14, 0.09, bx, y, along - w / 2);
     this.woodBag.box(0x2a1a10, 0.05, h + 0.14, 0.09, bx, y, along + w / 2);

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { addMesh, box, cyl, merge, std } from '../kit.js';
 import { chalkboard, chalkLabel, fogPuff, rng, signTexture, wallpaper, wood } from '../textures.js';
-import { Room } from './room.js';
+import { Room, rod } from './room.js';
 import { wainscot } from './fittings.js';
 
 export function buildDestille() {
@@ -38,6 +38,10 @@ export function buildDestille() {
   const TW = 5.2;
   room.woodBag.box(0x4a2c18, TW, 1.08, 0.7, TX, 0.54, TZ);
   room.woodBag.box(0x7a5430, TW + 0.1, 0.06, 0.85, TX, 1.1, TZ);
+  // Wulst an der Vorderkante, darunter ein abgesetztes Profil
+  room.woodBag.add(new THREE.CylinderGeometry(0.034, 0.034, TW + 0.1, 10).rotateZ(Math.PI / 2).translate(TX, 1.1, TZ + 0.41), 0x7a5430);
+  room.woodBag.box(0x5a3a22, TW, 0.035, 0.03, TX, 1.045, TZ + 0.36);
+  for (let i = 0; i <= 6; i++) room.woodBag.box(0x3e2412, 0.07, 0.86, 0.03, TX - TW / 2 + (i * TW) / 6, 0.58, TZ + 0.36);
   for (let i = 0; i < 6; i++) room.woodBag.box(0x5a3a22, TW / 6 - 0.14, 0.62, 0.02, TX - TW / 2 + TW / 12 + (i * TW) / 6, 0.62, TZ + 0.36);
   room.woodBag.box(0x2a180c, TW, 0.12, 0.03, TX, 0.06, TZ + 0.36);
   room.metalBag.box(0xa58a4a, TW, 0.03, 0.03, TX, 0.2, -1.88);
@@ -99,10 +103,20 @@ export function buildDestille() {
 
   // Tische: Stammtisch, Brandts Tisch, Kartentisch
   const tables = [[3, -1.8], [3.3, 1.7], [-1.8, 1.4]];
+  // Runde Platte mit gerundeter Kante und Zarge, gedrechselte Säule auf vier geschweiften Füßen.
+  const column = new THREE.LatheGeometry(
+    [[0.075, 0.07], [0.05, 0.13], [0.034, 0.22], [0.046, 0.36], [0.052, 0.43], [0.034, 0.52], [0.03, 0.66], [0.046, 0.72], [0.062, 0.76]].map(([cr, y]) => new THREE.Vector2(cr, y)),
+    12,
+  );
   for (const [x, z] of tables) {
-    room.woodBag.add(cyl(0.48, 0.48, 0.05, x, 0.8, z, 20), 0x5a3a22);
-    room.woodBag.add(cyl(0.06, 0.08, 0.78, x, 0.39, z, 8), 0x3a2412);
-    room.woodBag.add(cyl(0.25, 0.3, 0.03, x, 0.02, z, 12), 0x3a2412);
+    room.woodBag.add(cyl(0.48, 0.48, 0.05, x, 0.8, z, 28), 0x5a3a22);
+    room.woodBag.add(new THREE.TorusGeometry(0.478, 0.025, 6, 40).rotateX(Math.PI / 2).translate(x, 0.8, z), 0x5a3a22);
+    room.woodBag.add(cyl(0.4, 0.4, 0.06, x, 0.745, z, 24), 0x3a2412);
+    room.woodBag.add(column.clone().translate(x, 0, z), 0x3a2412);
+    for (let k = 0; k < 4; k++) {
+      const foot = rod([[0.05, 0.1, 0], [0.17, 0.07, 0], [0.28, 0.025, 0], [0.31, 0.02, 0]], 0.022);
+      room.woodBag.add(foot.rotateY(Math.PI / 4 + (k * Math.PI) / 2).translate(x, 0, z), 0x3a2412);
+    }
     room.solid(x, z, 0.8, 0.8);
   }
   const top = 0.825;
@@ -153,7 +167,8 @@ export function buildDestille() {
   room.metalBag.add(new THREE.TorusGeometry(0.1, 0.012, 6, 16).rotateX(Math.PI / 2).translate(-0.7, 0.12, -1.62), 0xa58a4a);
 
   // Fenster, warmes Lampenlicht, Qualm unter der Decke
-  room.window('east', 0.2, 1.8, 1.5, 1.5);
+  // Ausschnitt mit erleuchtetem Fenster und Laterne gegenüber.
+  room.window('east', 0.2, 1.8, 1.5, 1.5, 0.4);
   room.lamp(-2.4, 2.45, -1.6, { intensity: 7 });
   room.lamp(3, 2.45, -1.5, { intensity: 5 });
   room.lamp(3.3, 2.05, 1.7, { intensity: 3.8, glow: 0.6 });

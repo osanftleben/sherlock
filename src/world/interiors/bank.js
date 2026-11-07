@@ -34,6 +34,8 @@ export function buildBank() {
   // Wendts Schreibtisch: Doppelpult mit Schubladen zur Besucherseite, grünes Leder
   room.woodBag.box(0x4a2a16, 2.6, 0.82, 1.1, 0, 0.41, -1.3);
   room.woodBag.box(0x6a3e20, 2.7, 0.05, 1.2, 0, 0.84, -1.3);
+  room.roundEdge(0x6a3e20, 0, 0.84, -1.3, 2.7, 1.2, 0.026);
+  room.woodBag.box(0x2e1a0c, 2.64, 0.08, 1.14, 0, 0.04, -1.3);
   room.plainBag.box(0x1e3a28, 2.3, 0.004, 0.9, 0, 0.867, -1.3);
   room.plainBag.box(0x140c06, 0.9, 0.62, 0.02, 0, 0.36, -0.74);
   for (const s of [-1, 1]) {

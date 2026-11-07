@@ -196,6 +196,7 @@ function salesCounter(room, glaze, r) {
   const T = 0.995;
   room.woodBag.box(0x3a2212, len, 0.95, D, cx, 0.475, z);
   room.woodBag.box(0x6a4628, len + 0.04, 0.045, D + 0.08, cx, 0.972, z + 0.02);
+  room.woodBag.add(new THREE.CylinderGeometry(0.024, 0.024, len + 0.04, 10).rotateZ(Math.PI / 2).translate(cx, 0.972, z + 0.02 + D / 2 + 0.03), 0x6a4628);
   room.woodBag.box(0x24140a, len, 0.08, 0.02, cx, 0.04, z + D / 2 + 0.01);
   // Füllungen zur Kundenseite
   const n = 8;

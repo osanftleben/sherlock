@@ -120,7 +120,7 @@ export function buildPlaza(loc, r, ironMat) {
   scene.add(cab2);
   // Die wartenden Pferde schnauben ab und zu und stampfen, wenn sie den Huf wieder aufsetzen
   // (idleHorse hebt ihn, solange sin(t / 2) über 0,97 liegt).
-  const waiting = [[cab, 0], [cab2, 7.3]].map(([c, off]) => ({ horse: c.userData.horse, off, lifted: false, snort: 4 + Math.random() * 15 }));
+  const waiting = [[cab, 0], [cab2, 7.3]].map(([c, off]) => ({ horse: c.userData.horse, off, lifted: false, snort: 4 + Math.random() * 15, neigh: 20 + Math.random() * 40 }));
   const horseAt = new THREE.Vector3();
   loc.onUpdate((dt, t, { camera }) => {
     for (const w of waiting) {
@@ -135,6 +135,12 @@ export function buildPlaza(loc, r, ironMat) {
       if (w.snort < 0) {
         w.snort = 12 + Math.random() * 25;
         (loc.sounds ??= []).push({ type: 'snort', ...ear });
+      }
+      // Ab und zu wiehert eins; das trägt weiter als Schnauben und Stampfen.
+      w.neigh -= dt;
+      if (w.neigh < 0) {
+        w.neigh = 40 + Math.random() * 70;
+        (loc.sounds ??= []).push({ type: 'neigh', ...hearing(camera, horseAt.x, horseAt.z, 60) });
       }
     }
   });

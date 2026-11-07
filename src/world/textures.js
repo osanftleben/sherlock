@@ -2744,3 +2744,250 @@ export function twigs() {
   t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
   return t;
 }
+
+// Fronten der Stadtbahnbögen, vier Sorten im Atlas 2 × 2: Destille (0) und Schlosserei (1)
+// mit Licht, Kohlenhandlung (2) und Speditionslager (3) dunkel. Eine Zelle zeigt die ganze
+// Bogenöffnung, 8,8 m breit und 8,5 m hoch: unten die Ladenfront, darüber die verglaste
+// Lünette mit Strahlensprossen. map ist die Farbe, emissiveMap das Licht hinter den Scheiben.
+export const ARCH_FRONT = { w: 8.8, h: 8.5, spring: 4.1 };
+export function archFronts() {
+  return cached('archFronts', () => {
+    const C = 768;
+    const color = canvas(C * 2);
+    const glow = canvas(C * 2);
+    const cx = color.getContext('2d');
+    const gx = glow.getContext('2d');
+    gx.fillStyle = '#000';
+    gx.fillRect(0, 0, C * 2, C * 2);
+    const { w: W, h: H, spring: SP } = ARCH_FRONT;
+    const sx = C / W;
+    const sy = C / H;
+    const r = rng(1893);
+    for (let cell = 0; cell < 4; cell++) {
+      const ox = (cell % 2) * C;
+      const oy = Math.floor(cell / 2) * C;
+      const lit = cell < 2;
+      // Meter (x von links, y von unten) in Pixel der Zelle.
+      const X = (x) => ox + x * sx;
+      const Y = (y) => oy + C - y * sy;
+      const rect = (ctx, x0, y0, x1, y1, style) => {
+        ctx.fillStyle = style;
+        ctx.fillRect(X(x0), Y(y1), (x1 - x0) * sx, (y1 - y0) * sy);
+      };
+      cx.save();
+      cx.beginPath();
+      cx.rect(ox, oy, C, C);
+      cx.clip();
+      // Ziegel wie am Viadukt.
+      cx.fillStyle = '#5c3326';
+      cx.fillRect(ox, oy, C, C);
+      for (let row = 0, y = oy; y < oy + C; row++, y += 7) {
+        for (let x = ox - (row % 2) * 11; x < ox + C; x += 22) {
+          const v = 70 + r() * 40;
+          cx.fillStyle = `rgb(${v + 30},${v * 0.48},${v * 0.36})`;
+          cx.fillRect(x + 1, y + 1, 20, 5);
+        }
+      }
+      // Lünette: Halbkreis über dem Kämpfer, Glas zwischen Strahlensprossen.
+      const lx = X(W / 2);
+      const ly = Y(SP);
+      const R = (W / 2 - 0.25) * sx;
+      // Mit Licht: Schein von den Lampen im Raum, nach oben ins dunkle Gewölbe abnehmend.
+      // Ohne Licht: dunkles Glas, in dem sich der Platz schwach spiegelt.
+      const glass = (ctx, warm) => {
+        const g = ctx.createLinearGradient(0, ly, 0, ly - R);
+        if (warm) {
+          g.addColorStop(0, '#d89048');
+          g.addColorStop(0.45, '#8a4a1c');
+          g.addColorStop(1, '#2e180a');
+        } else {
+          g.addColorStop(0, '#3a434a');
+          g.addColorStop(1, '#232a30');
+        }
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(lx, ly, R, Math.PI, 0);
+        ctx.closePath();
+        ctx.fill();
+        if (!warm) {
+          ctx.save();
+          ctx.clip();
+          ctx.fillStyle = 'rgba(150,165,180,0.12)';
+          for (const off of [-0.35, 0.1]) {
+            ctx.beginPath();
+            ctx.moveTo(lx + R * off, ly);
+            ctx.lineTo(lx + R * (off + 0.22), ly);
+            ctx.lineTo(lx + R * (off + 0.62), ly - R);
+            ctx.lineTo(lx + R * (off + 0.4), ly - R);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
+      };
+      glass(cx, lit);
+      if (lit) glass(gx, true);
+      const mullions = (ctx) => {
+        ctx.strokeStyle = '#141414';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(lx, ly, R, Math.PI, 0);
+        ctx.stroke();
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(lx, ly, R * 0.55, Math.PI, 0);
+        ctx.stroke();
+        for (let k = 1; k < 12; k++) {
+          const a = Math.PI + (k / 12) * Math.PI;
+          const inner = k % 2 ? R * 0.55 : R * 0.12;
+          ctx.beginPath();
+          ctx.moveTo(lx + Math.cos(a) * inner, ly + Math.sin(a) * inner);
+          ctx.lineTo(lx + Math.cos(a) * R, ly + Math.sin(a) * R);
+          ctx.stroke();
+        }
+        ctx.lineWidth = 10;
+        ctx.beginPath();
+        ctx.moveTo(X(0), ly);
+        ctx.lineTo(X(W), ly);
+        ctx.stroke();
+      };
+      mullions(cx);
+      mullions(gx);
+      // Sprossenfenster mit Licht dahinter; curtain: Scheibengardine in der unteren Hälfte.
+      const pane = (x0, y0, x1, y1, cols, rows, frame, curtain) => {
+        rect(cx, x0 - 0.12, y0 - 0.12, x1 + 0.12, y1 + 0.12, frame);
+        const paint = (ctx, isGlow) => {
+          const g = ctx.createLinearGradient(0, Y(y1), 0, Y(y0));
+          if (lit) {
+            g.addColorStop(0, isGlow ? '#c8782c' : '#e0a050');
+            g.addColorStop(1, isGlow ? '#ffc070' : '#f0c27a');
+          } else {
+            g.addColorStop(0, '#181c20');
+            g.addColorStop(1, '#262b30');
+          }
+          rect(ctx, x0, y0, x1, y1, g);
+          if (curtain && lit) {
+            const cy = y0 + (y1 - y0) * 0.5;
+            rect(ctx, x0, y0, x1, cy, isGlow ? 'rgba(255,214,150,0.9)' : 'rgba(236,222,196,0.95)');
+            ctx.fillStyle = isGlow ? 'rgba(60,30,10,0.35)' : 'rgba(120,100,80,0.35)';
+            for (let px = X(x0); px < X(x1); px += 9) {
+              for (let py = Y(cy); py < Y(y0); py += 9) ctx.fillRect(px + ((py / 9) % 2) * 4, py, 3, 3);
+            }
+          }
+          ctx.fillStyle = '#121212';
+          for (let c = 1; c < cols; c++) ctx.fillRect(X(x0 + ((x1 - x0) * c) / cols) - 2, Y(y1), 4, (y1 - y0) * sy);
+          for (let k = 1; k < rows; k++) ctx.fillRect(X(x0), Y(y0 + ((y1 - y0) * k) / rows) - 2, (x1 - x0) * sx, 4);
+        };
+        paint(cx, false);
+        if (lit) paint(gx, true);
+      };
+      const lettering = (text, x, y, size, style, font = '"EB Garamond", serif') => {
+        cx.font = `${size}px ${font}`;
+        cx.fillStyle = style;
+        cx.textAlign = 'center';
+        cx.textBaseline = 'middle';
+        cx.fillText(text, X(x), Y(y), (W - 1) * sx);
+      };
+      const planks = (x0, y0, x1, y1, base) => {
+        rect(cx, x0, y0, x1, y1, base);
+        cx.fillStyle = 'rgba(0,0,0,0.35)';
+        for (let x = x0; x < x1; x += 0.16) cx.fillRect(X(x), Y(y1), 2, (y1 - y0) * sy);
+      };
+      if (cell === 0) {
+        // Destille: grüne Holzfront mit Firmenschild, zwei Fenster mit Gardinen, Tür in der Mitte.
+        rect(cx, 0.25, 0, W - 0.25, 4.0, '#22301f');
+        rect(cx, 0.25, 3.3, W - 0.25, 3.95, '#0f1410');
+        lettering('Destillation  ·  Bier-Ausschank', W / 2, 3.62, 40, '#d8b56a', '"UnifrakturMaguntia", serif');
+        pane(0.8, 1.0, 3.5, 3.0, 3, 4, '#2c3c28', true);
+        pane(5.3, 1.0, 8.0, 3.0, 3, 4, '#2c3c28', true);
+        rect(cx, 3.85, 0, 4.95, 2.75, '#1a2418');
+        pane(4.05, 1.5, 4.75, 2.55, 2, 2, '#1a2418', false);
+        pane(3.95, 2.82, 4.85, 3.2, 3, 1, '#1a2418', false);
+      } else if (cell === 1) {
+        // Schlosserei: großes Werkstattfenster mit vielen Scheiben, Schatten von Werkzeug.
+        pane(0.6, 0.9, 5.6, 3.6, 8, 5, '#2a2622', false);
+        gx.fillStyle = 'rgba(0,0,0,0.55)';
+        cx.fillStyle = 'rgba(30,20,10,0.5)';
+        for (const ctx of [cx, gx]) {
+          ctx.fillRect(X(0.9), Y(1.6), 4.2 * sx, 0.12 * sy);
+          for (let k = 0; k < 9; k++) ctx.fillRect(X(1.1 + k * 0.42), Y(3.2), 0.05 * sx, (0.3 + (k % 3) * 0.12) * sy);
+          ctx.beginPath();
+          ctx.arc(X(4.6), Y(2.4), 0.35 * sx, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        planks(6.3, 0, 7.6, 2.6, '#3a2a1c');
+        rect(cx, 0.6, 3.72, 5.6, 4.02, '#1c1a16');
+        lettering('Schlosserei  C. Brandt', 3.1, 3.87, 26, '#e6dcc2');
+      } else if (cell === 2) {
+        // Kohlenhandlung: zweiflügliges Tor, Schrift direkt auf den Ziegeln.
+        planks(2.6, 0, 6.2, 3.4, '#2e241a');
+        rect(cx, 4.37, 0, 4.43, 3.4, '#120e0a');
+        for (const y of [0.6, 2.8]) rect(cx, 2.6, y, 6.2, y + 0.12, '#1e1810');
+        pane(0.9, 1.7, 1.9, 2.8, 2, 2, '#241c14', false);
+        pane(6.9, 1.7, 7.9, 2.8, 2, 2, '#241c14', false);
+        lettering('KOHLEN  ·  KOKS  ·  BRIKETTS', W / 2, 3.72, 34, 'rgba(232,226,210,0.85)');
+      } else {
+        // Speditionslager: Doppeltür, kleine vergitterte Fenster, verblasste Schrift.
+        planks(3.4, 0, 5.4, 2.9, '#33291f');
+        rect(cx, 4.37, 0, 4.43, 2.9, '#120e0a');
+        for (const x0 of [1.0, 6.6]) {
+          pane(x0, 2.3, x0 + 1.2, 3.2, 1, 1, '#1e1a16', false);
+          cx.fillStyle = '#0c0c0c';
+          for (let k = 1; k < 5; k++) cx.fillRect(X(x0 + k * 0.24) - 2, Y(3.2), 4, 0.9 * sy);
+        }
+        lettering('Speditions-Lager  A. Kunze', W / 2, 3.68, 34, 'rgba(220,214,196,0.55)');
+      }
+      cx.restore();
+    }
+    const map = tex(color);
+    map.wrapS = map.wrapT = THREE.ClampToEdgeWrapping;
+    const emissiveMap = tex(glow);
+    emissiveMap.wrapS = emissiveMap.wrapT = THREE.ClampToEdgeWrapping;
+    return { map, emissiveMap };
+  });
+}
+
+// Fenster der Bahnhofshalle Börse: Stichbogen mit Sprossen, warmes Licht der Bahnsteige.
+export function hallWindow() {
+  return cached('hallWindow', () => {
+    const c = canvas(256, 128);
+    const ctx = c.getContext('2d');
+    const shape = () => {
+      ctx.beginPath();
+      ctx.moveTo(8, 124);
+      ctx.lineTo(8, 34);
+      ctx.quadraticCurveTo(128, -6, 248, 34);
+      ctx.lineTo(248, 124);
+      ctx.closePath();
+    };
+    shape();
+    ctx.fillStyle = '#16120e';
+    ctx.fill();
+    ctx.save();
+    ctx.translate(128, 64);
+    ctx.scale(0.93, 0.86);
+    ctx.translate(-128, -64);
+    shape();
+    const g = ctx.createLinearGradient(0, 10, 0, 124);
+    g.addColorStop(0, '#ffe2a8');
+    g.addColorStop(0.6, '#f0b060');
+    g.addColorStop(1, '#a8601e');
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.restore();
+    // Lampenkugeln unter dem Hallendach.
+    for (const x of [70, 186]) {
+      const l = ctx.createRadialGradient(x, 40, 1, x, 40, 22);
+      l.addColorStop(0, 'rgba(255,250,230,1)');
+      l.addColorStop(1, 'rgba(255,230,170,0)');
+      ctx.fillStyle = l;
+      ctx.fillRect(x - 24, 16, 48, 48);
+    }
+    ctx.fillStyle = '#16120e';
+    for (const x of [70, 128, 186]) ctx.fillRect(x - 3, 0, 6, 128);
+    for (const x of [41, 99, 157, 215]) ctx.fillRect(x - 1.5, 0, 3, 128);
+    for (const y of [62, 94]) ctx.fillRect(0, y - 2, 256, 4);
+    const t = tex(c);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    return t;
+  });
+}

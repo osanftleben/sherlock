@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
-import { brick, fogPuff, signTexture } from '../textures.js';
+import { ARCH_FRONT, archFronts, brick, fogPuff, hallWindow, rng, signTexture, softDisc } from '../textures.js';
 import { addSign } from './facades.js';
 
 // Stadtbahn: Viadukt mit Bögen, Bahnhof Börse, durchfahrender Zug mit Rauch.
@@ -30,8 +30,33 @@ export function buildRailway(loc, r, brickMat) {
   const archGeo = new THREE.ExtrudeGeometry(archShape(), { depth: VZ1 - VZ0, bevelEnabled: false, curveSegments: 12 });
   const viaductParts = [];
   const infill = new Bag();
-  const archLights = new Bag();
+  const fronts = [];
+  const lanterns = new Bag();
+  const flames = [];
+  const pools = [];
+  const rf = rng(1892);
   const stationArches = new Set([-3, -2, 2, 3]);
+  // Front einer Bogenöffnung aus dem Atlas archFronts, mit der Ansichtsseite nach -z (side -1,
+  // zum Platz) oder +z (side 1, zur Spree).
+  const front = (cell, x, z, side) => {
+    const { w, h, spring } = ARCH_FRONT;
+    const s = new THREE.Shape();
+    s.moveTo(-w / 2, 0);
+    s.lineTo(w / 2, 0);
+    s.lineTo(w / 2, spring);
+    s.absarc(0, spring, w / 2, 0, Math.PI, false);
+    s.closePath();
+    const g = new THREE.ShapeGeometry(s, 16);
+    const pos = g.attributes.position;
+    const uv = g.attributes.uv;
+    const cu = cell % 2;
+    const cv = Math.floor(cell / 2);
+    for (let k = 0; k < pos.count; k++) {
+      uv.setXY(k, (cu + (pos.getX(k) + w / 2) / w) / 2, (1 - cv + Math.min(1, pos.getY(k) / h)) / 2);
+    }
+    if (side < 0) g.rotateY(Math.PI);
+    fronts.push(g.translate(x, 0, z));
+  };
   for (let i = -24; i <= 24; i++) {
     const g = archGeo.clone();
     const ax = i * SEG - SEG / 2;
@@ -46,11 +71,25 @@ export function buildRailway(loc, r, brickMat) {
     viaductParts.push(g);
     if (i !== 0) {
       // Gefüllte Bögen: Lager und Kneipen unter der Bahn.
+      // Destille oder Schlosserei mit Licht, sonst Kohlenhandlung oder Lager. Die Zahl aus r
+      // bleibt, damit sich der Zufall des Viertels dahinter nicht verschiebt.
       const lit = r() < 0.28 || stationArches.has(i);
-      infill.box(0xa88872, SEG - 2, 8, 0.3, i * SEG, 4, VZ0 + 1.3);
-      infill.box(0x241a14, 1.5, 2.7, 0.1, i * SEG + 2.2, 1.35, VZ0 + 1.1);
-      if (lit) archLights.box(0xffffff, 3, 1.6, 0.04, i * SEG - 1.8, 2.3, VZ0 + 1.13);
-      infill.box(0xa88872, SEG - 2, 8, 0.3, i * SEG, 4, VZ1 - 1.3);
+      const cell = (lit ? 0 : 2) + (rf() < 0.5 ? 0 : 1);
+      const x = i * SEG;
+      infill.box(0xa88872, SEG - 2, 8, 0.3, x, 4, VZ0 + 1.3);
+      infill.box(0xa88872, SEG - 2, 8, 0.3, x, 4, VZ1 - 1.3);
+      front(cell, x, VZ0 + 1.14, -1);
+      front(2 + Math.floor(rf() * 2), x, VZ1 - 1.14, 1);
+      // Vor den hellen Bögen am Platz eine Wandlaterne und ein Lichtfleck auf dem Pflaster.
+      if (lit && Math.abs(x) < 70) {
+        const lx = x + (cell === 0 ? 0.9 : 3.2);
+        const lz = VZ0 + 1.14;
+        lanterns.box(0x161616, 0.04, 0.04, 0.5, lx, 3.05, lz - 0.25);
+        lanterns.box(0x161616, 0.26, 0.05, 0.26, lx, 3.08, lz - 0.55);
+        lanterns.box(0x161616, 0.18, 0.06, 0.18, lx, 2.72, lz - 0.55);
+        flames.push(new THREE.BoxGeometry(0.16, 0.3, 0.16).translate(lx, 2.9, lz - 0.55));
+        pools.push(new THREE.PlaneGeometry(5.5, 4.5).rotateX(-Math.PI / 2).translate(x, 0.03, VZ0 - 0.4));
+      }
       loc.collide(ax, ax + SEG, VZ0, VZ1);
     } else {
       loc.collide(ax, ax + 1.1, VZ0, VZ1);
@@ -61,7 +100,11 @@ export function buildRailway(loc, r, brickMat) {
   }
   addMesh(scene, merge(viaductParts), brickMat);
   addMesh(scene, infill.build(), matte({ vertexColors: true, ...brick() }));
-  addMesh(scene, archLights.build(), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.31, 0.09), vertexColors: true }));
+  const af = archFronts();
+  addMesh(scene, merge(fronts), std({ map: af.map, emissive: 0xffffff, emissiveMap: af.emissiveMap, emissiveIntensity: 0.9, roughness: 0.8 }));
+  addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
+  addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.9, 0.8) }));
+  addMesh(scene, merge(pools), new THREE.MeshBasicMaterial({ map: softDisc('lampPool', 'rgba(255,255,255,0.9)', 'rgba(255,255,255,0.33)'), color: 0xc08040, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending }));
   const deck = new Bag();
   const deckW = 49 * SEG;
   deck.box(0x2c2622, deckW, 0.5, VZ1 - VZ0 + 0.8, 0, VH + 0.25, (VZ0 + VZ1) / 2);
@@ -101,12 +144,12 @@ export function buildRailway(loc, r, brickMat) {
   ribs.box(0x3a2c24, 72, 3.2, 0.5, 0, VH + 1.9, VZ1 - 0.2);
   addMesh(scene, ribs.build(), std({ vertexColors: true, roughness: 0.6 }));
   // Hallenfenster, durch die das Licht der Bahnsteige fällt.
-  const hallWindows = new Bag();
+  const hallWindows = [];
   for (let x = -34; x <= 34; x += 4) {
-    hallWindows.box(0xffffff, 2.6, 1.3, 0.08, x, VH + 2, VZ0 - 0.1);
-    hallWindows.box(0xffffff, 2.6, 1.3, 0.08, x, VH + 2, VZ1 + 0.1);
+    hallWindows.push(new THREE.PlaneGeometry(2.6, 1.3).rotateY(Math.PI).translate(x, VH + 2, VZ0 - 0.07));
+    hallWindows.push(new THREE.PlaneGeometry(2.6, 1.3).translate(x, VH + 2, VZ1 + 0.07));
   }
-  addMesh(scene, hallWindows.build(), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.7, 0.42, 0.15), vertexColors: true }));
+  addMesh(scene, merge(hallWindows), new THREE.MeshBasicMaterial({ map: hallWindow(), alphaTest: 0.5, color: new THREE.Color(0.95, 0.72, 0.5) }));
 
   addSign(loc, new THREE.Vector3(0, 7.65, VZ0 - 0.1), 0, signTexture('Bahnhof Börse', { bg: '#20201c', fg: '#e0c98a' }), 9, 1.4);
 

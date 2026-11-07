@@ -97,6 +97,14 @@ function checkReferences(c, locations, errors) {
   for (const d of Object.values(c.deductions)) {
     for (const id of d.pairs.flat()) if (!c.clues[id]) errors.push(`Schluss „${d.title}“ nutzt unbekannten Hinweis ${id}.`);
   }
+  // Ein Beinahe-Paar darf kein echtes Paar verdecken und nur bekannte Hinweise nennen.
+  const real = new Set(Object.values(c.deductions).flatMap((d) => d.pairs.map((p) => [...p].sort().join('+'))));
+  for (const n of c.near || []) {
+    for (const p of n.pairs) {
+      for (const id of p) if (!c.clues[id]) errors.push(`Beinahe-Paar nutzt unbekannten Hinweis ${id}.`);
+      if (real.has([...p].sort().join('+'))) errors.push(`Beinahe-Paar ${p.join('+')} ist schon ein echter Schluss.`);
+    }
+  }
   for (const q of c.accusation.questions) {
     const n = q.options.filter((o) => o.correct).length;
     if (n !== 1) errors.push(`Anklagefrage „${q.text}“ hat ${n} richtige Antworten.`);

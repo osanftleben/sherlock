@@ -477,6 +477,9 @@ class Game {
     const hit = Object.entries(this.case.deductions).find(([, d]) =>
       d.pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a)));
     if (!hit) {
+      const near = (this.case.near || []).find((n) =>
+        n.pairs.some(([x, y]) => (x === a && y === b) || (x === b && y === a)));
+      if (near) return { text: near.text };
       const key = [a, b].sort().join('+');
       this.state.triedPairs.add(key);
       return { text: RETORTS[this.state.triedPairs.size % RETORTS.length] };

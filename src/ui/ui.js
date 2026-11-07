@@ -231,7 +231,11 @@ export class UI {
 
     this.keyHandler = (code) => {
       if (code === 'Escape' || code === 'Tab' || code === 'KeyN') book.onClose();
-      if (code === 'KeyM') this.notebook(book, tab === 'map' ? 'clues' : 'map');
+      // M schaltet den Stadtplan um wie N das Notizbuch: Wer ihn mit M geöffnet hat, schließt ihn mit M.
+      if (code === 'KeyM') {
+        if (tab === 'map') book.onClose();
+        else this.notebook(book, 'map');
+      }
     };
   }
 
@@ -243,16 +247,20 @@ export class UI {
       return;
     }
     const picked = new Set();
+    const titles = Object.fromEntries(clues.map((c) => [c.id, c.title]));
     const bar = el('div', 'combine');
     const result = el('div', 'result', 'Wählen Sie zwei Hinweise aus, die zusammengehören.');
+    // Die Auswahl steht unten in der Leiste, denn beim Blättern verschwindet der erste Hinweis aus dem Bild.
+    const showPicked = () => {
+      const names = [...picked].map((id) => `„${titles[id]}“`);
+      result.textContent = names.length === 2 ? `${names[0]} und ${names[1]} verknüpfen?`
+        : names.length === 1 ? `${names[0]} und …?` : 'Wählen Sie zwei Hinweise aus, die zusammengehören.';
+    };
     const go = button('Verknüpfen', 'btn', () => {
       const [a, b] = [...picked];
       const outcome = book.combine(a, b);
-      if (outcome.title) {
-        this.notebook(book, 'deductions');
-        return;
-      }
-      result.textContent = outcome.text;
+      // Auf der Seite bleiben, damit man gleich weiter verknüpfen kann; der Schluss steht unten.
+      result.textContent = outcome.title ? `Neuer Schluss: ${outcome.title}. ${outcome.text}` : outcome.text;
       picked.clear();
       page.querySelectorAll('.clue.sel').forEach((n) => n.classList.remove('sel'));
       go.disabled = true;
@@ -269,6 +277,7 @@ export class UI {
           b.classList.add('sel');
         }
         go.disabled = picked.size !== 2;
+        showPicked();
       });
       b.append(el('b', '', c.title), document.createTextNode(c.text));
       page.append(b);

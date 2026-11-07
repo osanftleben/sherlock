@@ -89,7 +89,11 @@ function cached(key, make) {
   return cache.get(key);
 }
 
-// Nasses Kopfsteinpflaster: map, normalMap und roughnessMap aus einem Guss.
+// Nasses Granitpflaster in Reihen, 8 m pro Kachel (128 px/m): map, normalMap und roughnessMap
+// aus einem Guss. Die Steine sind etwa 17 cm breit und 16 bis 27 cm lang, jede Reihe beginnt
+// versetzt. Jeder Stein liegt ein wenig schief, damit sich Laternenlicht darauf in einzelne
+// Glanzpunkte bricht; in den Fugen steht Wasser. Pfützen und großflächige Unterschiede kommen
+// über streetWet() dazu, das in einem anderen Maß wiederholt.
 export function cobble() {
   return cached('cobble', () => {
     const size = 1024;
@@ -98,45 +102,123 @@ export function cobble() {
     const rough = canvas(size);
     const c = color.getContext('2d');
     const h = height.getContext('2d');
+    const rc = rough.getContext('2d');
     const r = rng(7);
-    c.fillStyle = '#17171a';
+    const gray = (v) => `rgb(${v | 0},${v | 0},${v | 0})`;
+    c.fillStyle = '#100f0e';
     c.fillRect(0, 0, size, size);
     h.fillStyle = '#000';
     h.fillRect(0, 0, size, size);
-    const rowH = 26;
-    const stoneW = 30;
-    for (let row = 0; row * rowH < size; row++) {
-      const off = row % 2 ? stoneW / 2 : 0;
-      for (let i = -1; i * stoneW < size + stoneW; i++) {
-        const x = i * stoneW + off + (r() - 0.5) * 4;
-        const y = row * rowH + (r() - 0.5) * 4;
-        const w = stoneW - 3 - r() * 3;
-        const hh = rowH - 3 - r() * 3;
-        const v = 62 + r() * 46;
-        const tint = r() * 10;
-        c.fillStyle = `rgb(${v + tint},${v + tint * 0.5},${v})`;
-        h.fillStyle = `rgb(${130 + r() * 110},${130},${130})`;
-        for (const ctx of [c, h]) {
-          for (const ox of [0, x + w > size ? -size : 0]) {
+    rc.fillStyle = gray(70);
+    rc.fillRect(0, 0, size, size);
+    const rows = 48;
+    const rowH = size / rows;
+    for (let row = 0; row < rows; row++) {
+      const lens = [];
+      let sum = 0;
+      while (sum < size - 20) {
+        const l = 20 + r() * 14;
+        lens.push(l);
+        sum += l;
+      }
+      const k = size / sum;
+      let x = r() * size;
+      const y0 = row * rowH;
+      for (const len of lens) {
+        const w = len * k;
+        const j = () => (r() - 0.5) * 3;
+        const top = y0 + 1.6 + r() * 1.2;
+        const bottom = y0 + rowH - 1.6 - r() * 1.2;
+        const pts = [
+          [x + 1.6 + j(), top + j() * 0.5],
+          [x + w - 1.6 + j(), top + j() * 0.5],
+          [x + w - 1.6 + j(), bottom + j() * 0.5],
+          [x + 1.6 + j(), bottom + j() * 0.5],
+        ];
+        // Granit: meist grau, einzelne Steine rötlich oder bläulich.
+        const v = 46 + r() * 34;
+        const kind = r();
+        const [cr, cg, cb] = kind < 0.15 ? [v + 10, v + 2, v - 2] : kind < 0.3 ? [v - 3, v, v + 7] : [v + 2, v + 1, v];
+        const cx = x + w / 2;
+        const cy = (top + bottom) / 2;
+        const a = r() * Math.PI * 2;
+        const hv = 140 + r() * 80;
+        const tilt = 20 + r() * 40;
+        const grad = h.createLinearGradient(cx - Math.cos(a) * 12, cy - Math.sin(a) * 12, cx + Math.cos(a) * 12, cy + Math.sin(a) * 12);
+        grad.addColorStop(0, gray(hv - tilt));
+        grad.addColorStop(1, gray(hv + tilt));
+        // Glatt gefahrene Steine glänzen mehr als raue.
+        const fills = [[c, `rgb(${cr | 0},${cg | 0},${cb | 0})`], [h, grad], [rc, gray(85 + r() * 70)]];
+        for (const ox of [0, -size]) {
+          if (x + w + ox < 0 || x + ox > size) continue;
+          for (const [ctx, fill] of fills) {
+            ctx.save();
+            ctx.translate(ox, 0);
+            ctx.fillStyle = fill;
             ctx.beginPath();
-            ctx.roundRect(x + ox, y, w, hh, 7);
+            pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+            ctx.closePath();
             ctx.fill();
+            ctx.restore();
+          }
+        }
+        x += w;
+      }
+    }
+    grain(c, size, 18, 3);
+    blotches(c, size, 26, 30, 120, 'rgba(28,22,14,0.3)', 13);
+    // Kanten der Steine leicht runden: die Höhe weichzeichnen, über den Kachelrand hinweg.
+    const pad = 8;
+    const wrap = canvas(size + pad * 2);
+    const wc = wrap.getContext('2d');
+    for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) wc.drawImage(height, pad + ox * size, pad + oy * size);
+    const soft = canvas(size);
+    const sc = soft.getContext('2d');
+    sc.filter = 'blur(1.6px)';
+    sc.drawImage(wrap, -pad, -pad);
+    return {
+      map: tex(color),
+      normalMap: tex(normalFromHeight(soft, 3), { srgb: false }),
+      roughnessMap: tex(rough, { srgb: false }),
+    };
+  });
+}
+
+// Großflächige Unterschiede auf der Fahrbahn, 37 m pro Kachel und damit gegen das Muster der
+// Steine versetzt: Rot ist Pfütze, Grün Schmutz und Nässe (128 = neutral).
+export function streetWet() {
+  return cached('streetWet', () => {
+    const size = 512;
+    const cv = canvas(size);
+    const c = cv.getContext('2d');
+    c.fillStyle = 'rgb(0,128,0)';
+    c.fillRect(0, 0, size, size);
+    blotches(c, size, 40, 30, 110, 'rgba(0,210,0,0.25)', 41);
+    blotches(c, size, 40, 30, 110, 'rgba(0,40,0,0.3)', 43);
+    // Pfützen: jeweils ein paar sich überlagernde Flecken, im Shader scharf abgeschnitten.
+    c.globalCompositeOperation = 'lighter';
+    const r = rng(47);
+    for (let i = 0; i < 14; i++) {
+      const x = r() * size;
+      const y = r() * size;
+      const n = 3 + Math.floor(r() * 5);
+      for (let k = 0; k < n; k++) {
+        const px = x + (r() - 0.5) * 40;
+        const py = y + (r() - 0.5) * 25;
+        const rad = 6 + r() * 16;
+        for (const ox of [-size, 0, size]) {
+          for (const oy of [-size, 0, size]) {
+            const g = c.createRadialGradient(px + ox, py + oy, 0, px + ox, py + oy, rad);
+            g.addColorStop(0, 'rgba(255,0,0,0.9)');
+            g.addColorStop(1, 'rgba(255,0,0,0)');
+            c.fillStyle = g;
+            c.fillRect(px + ox - rad, py + oy - rad, rad * 2, rad * 2);
           }
         }
       }
     }
-    grain(c, size, 16, 3);
-    const rc = rough.getContext('2d');
-    rc.fillStyle = 'rgb(180,180,180)';
-    rc.fillRect(0, 0, size, size);
-    // Pfützen: glatter und dunkler.
-    blotches(rc, size, 22, 40, 150, 'rgba(25,25,25,0.85)', 11);
-    blotches(c, size, 22, 40, 150, 'rgba(8,10,14,0.55)', 11);
-    return {
-      map: tex(color),
-      normalMap: tex(normalFromHeight(height, 2.2), { srgb: false }),
-      roughnessMap: tex(rough, { srgb: false }),
-    };
+    c.globalCompositeOperation = 'source-over';
+    return tex(cv, { srgb: false });
   });
 }
 

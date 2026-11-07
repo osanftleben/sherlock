@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
 import { Bag, addMesh, box, matte, std } from '../kit.js';
-import { brick, cobble, plaster, signTexture, slate, softDisc, rng } from '../textures.js';
+import { brick, cobble, plaster, signTexture, slate, softDisc, rng, streetWet } from '../textures.js';
 import { BAY_W, addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
 import { buildHorizon } from './horizon.js';
@@ -142,7 +142,7 @@ export function buildBerlin() {
   const streetDepth = STREET_Z1 - STREET_Z0;
   const street = new THREE.Mesh(
     new THREE.PlaneGeometry(720, streetDepth),
-    std({ ...cob, roughness: 1, metalness: 0.05, normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 1.6 }),
+    wetStreet(std({ ...cob, roughness: 1, metalness: 0.05, normalScale: new THREE.Vector2(0.9, 0.9), envMapIntensity: 1.6 })),
   );
   // Pflastergröße wie bisher: 8 m pro Kachel.
   for (const t of Object.values(cob)) t.repeat.set(90, streetDepth / 8);
@@ -369,4 +369,46 @@ export function buildBerlin() {
   buildWeather(loc, r);
 
   return loc;
+}
+
+// Legt streetWet() in Weltkoordinaten über das Pflaster: Pfützen sind dunkel, glatt und ohne
+// Steinrelief, dazu großflächig hellere und dunklere Stellen, damit sich die 8-m-Kachel
+// nicht wiederholt.
+function wetStreet(material) {
+  const wet = streetWet();
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.wetMap = { value: wet };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        vec4 wet = texture2D(wetMap, vGroundXZ / 37.0);
+        // Das Wasser füllt zuerst die Fugen; am Rand ragen die Steine heraus.
+        float puddle = smoothstep(0.35, 0.6, wet.r + 0.1 - 3.0 * sampledDiffuseColor.g);
+        diffuseColor.rgb *= (0.7 + 0.6 * wet.g) * mix(1.0, 0.35, puddle);`,
+      )
+      .replace(
+        '#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>
+        roughnessFactor *= 1.25 - 0.5 * wet.g;
+        roughnessFactor = mix(roughnessFactor, 0.06, puddle);`,
+      )
+      .replace(
+        '#include <lights_fragment_end>',
+        `#include <lights_fragment_end>
+        // Die Pfütze spiegelt den dunklen Himmel und die Laternen, nicht den Lichtschein der Umgebungskarte.
+        reflectedLight.indirectSpecular *= mix(1.0, 0.4, puddle);`,
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        `#include <normal_fragment_maps>
+        normal = normalize(mix(normal, nonPerturbedNormal, puddle));`,
+      );
+  };
+  material.customProgramCacheKey = () => 'wetStreet';
+  return material;
 }

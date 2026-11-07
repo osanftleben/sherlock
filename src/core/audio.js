@@ -99,6 +99,37 @@ export class Audio {
     this.nextSlap = 0;
     this.nextCreak = 4;
 
+    // Fahrende Droschke: Eisenreifen rattern über das Kopfsteinpflaster, im unruhigen Takt der
+    // Steine; dazu ein helles Klappern der Beschläge. Pegel und Seite setzt update.
+    this.cabPan = ctx.createStereoPanner();
+    this.cabOut = ctx.createGain();
+    this.cabOut.gain.value = 0;
+    this.cabOut.connect(this.cabPan).connect(this.master);
+    const rumble = ctx.createBiquadFilter();
+    rumble.type = 'bandpass';
+    rumble.frequency.value = 240;
+    rumble.Q.value = 0.9;
+    const rattle = ctx.createGain();
+    rattle.gain.value = 0.12;
+    this.cobbles = ctx.createOscillator();
+    this.cobbles.type = 'square';
+    this.cobbles.frequency.value = 22;
+    const cobbleDepth = ctx.createGain();
+    cobbleDepth.gain.value = 0.08;
+    this.cobbles.connect(cobbleDepth).connect(rattle.gain);
+    this.cobbles.start();
+    this.loop(rumble);
+    rumble.connect(rattle).connect(this.cabOut);
+    const clatter = ctx.createBiquadFilter();
+    clatter.type = 'bandpass';
+    clatter.frequency.value = 1900;
+    clatter.Q.value = 1.5;
+    const clatterGain = ctx.createGain();
+    clatterGain.gain.value = 0.018;
+    this.loop(clatter);
+    clatter.connect(clatterGain).connect(this.cabOut);
+    this.nextCobble = 0;
+
     this.setEnvironment(this.env);
   }
 
@@ -169,6 +200,41 @@ export class Audio {
       this.burst({ freq: 900 + Math.random() * 300, q: 0.9, dur: 0.06, gain: 0.2 });
       this.burst({ freq: 180, q: 1, dur: 0.07, gain: 0.25 });
     }
+  }
+
+  // Eigener Panner für ein einzelnes Ereignis; er wird abgehängt, wenn der Klang vorbei ist.
+  panned(pan, life = 1) {
+    const out = this.ctx.createStereoPanner();
+    out.pan.value = pan;
+    out.connect(this.master);
+    setTimeout(() => out.disconnect(), life * 1000);
+    return out;
+  }
+
+  // Ein Hufpaar im Trab: Eisen auf Stein, die beiden diagonalen Hufe fast gleichzeitig.
+  hoof(vol, pan) {
+    const out = this.panned(pan * 0.85);
+    for (const [when, k] of [[0, 1], [0.016 + Math.random() * 0.02, 0.7]]) {
+      this.burst({ freq: 2200 + Math.random() * 600, q: 2.5, dur: 0.035, gain: 0.08 * vol * k, when, out });
+      this.burst({ freq: 620 + Math.random() * 160, q: 1.6, dur: 0.07, gain: 0.16 * vol * k, when, out });
+      this.burst({ freq: 190, q: 1, dur: 0.06, gain: 0.12 * vol * k, when, out });
+    }
+  }
+
+  // Ein stehendes Pferd setzt den Huf hart auf.
+  stamp(vol, pan) {
+    const out = this.panned(pan * 0.85);
+    this.burst({ freq: 1800, q: 2, dur: 0.04, gain: 0.08 * vol, out });
+    this.burst({ freq: 480, q: 1.4, dur: 0.09, gain: 0.2 * vol, out });
+    this.burst({ freq: 150, q: 1, dur: 0.12, gain: 0.18 * vol, out });
+  }
+
+  // Schnauben: ein Atemstoß durch die Nüstern, die Lippen flattern dabei.
+  snort(vol, pan) {
+    const out = this.panned(pan * 0.85, 1.5);
+    this.burst({ freq: 520, q: 0.6, dur: 0.6, gain: 0.22 * vol, attack: 0.05, out });
+    this.burst({ freq: 1500, q: 0.8, dur: 0.45, gain: 0.05 * vol, attack: 0.04, out });
+    for (let i = 0; i < 9; i++) this.burst({ freq: 260 + Math.random() * 80, q: 1.2, dur: 0.035, gain: 0.1 * vol * (1 - i / 10), when: 0.08 + i * 0.032, out });
   }
 
   hooves() {
@@ -307,12 +373,30 @@ export class Audio {
   }
 
   // trainDistance in Metern (Infinity, wenn kein Zug in der Nähe ist); river aus river.js
-  // (Abstand und Seite von Quaimauer und Kahn), fehlt in Innenräumen.
-  update(dt, trainDistance, river) {
-    if (!this.ctx) return;
+  // (Abstand und Seite von Quaimauer und Kahn), fehlt in Innenräumen. sounds: Ereignisse des
+  // Orts ({ type: 'hoof' | 'stamp' | 'snort', vol, pan }), werden hier abgespielt und geleert.
+  // cab: Pegel und Seite der fahrenden Droschke (traffic.js).
+  update(dt, trainDistance, river, sounds, cab) {
+    if (!this.ctx) {
+      if (sounds) sounds.length = 0;
+      return;
+    }
     this.rain(dt);
     const outdoors = this.env === 'street';
     const now = this.ctx.currentTime;
+    if (sounds?.length) {
+      if (outdoors) {
+        for (const s of sounds) if (s.vol > 0.005) this[s.type]?.(s.vol, s.pan);
+      }
+      sounds.length = 0;
+    }
+    this.cabOut.gain.setTargetAtTime(outdoors && cab?.moving ? cab.vol : 0, now, 0.25);
+    if (cab) this.cabPan.pan.setTargetAtTime(cab.pan * 0.8, now, 0.1);
+    this.nextCobble -= dt;
+    if (this.nextCobble < 0) {
+      this.cobbles.frequency.setTargetAtTime(16 + Math.random() * 14, now, 0.05);
+      this.nextCobble = 0.12 + Math.random() * 0.2;
+    }
     const nearWater = outdoors && river ? Math.max(0, 1 - river.distance / 18) ** 2 : 0;
     const nearBarge = outdoors && river ? Math.max(0, 1 - river.barge / 30) ** 2 : 0;
     this.waterOut.gain.setTargetAtTime(nearWater, now, 0.3);

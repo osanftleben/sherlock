@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, cyl, merge, std } from '../kit.js';
 import { clockFace, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
-import { makeDroschke } from './traffic.js';
+import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
 
 // Brunnen in der Mitte des Platzes, in der Wendeschleife der Droschke (traffic.js):
@@ -118,9 +118,25 @@ export function buildPlaza(loc, r, ironMat) {
   cab2.position.set(24, 0, -12);
   cab2.rotation.y = Math.PI;
   scene.add(cab2);
-  loc.onUpdate((dt, t) => {
-    idleHorse(cab.userData.horse, t);
-    idleHorse(cab2.userData.horse, t + 7.3);
+  // Die wartenden Pferde schnauben ab und zu und stampfen, wenn sie den Huf wieder aufsetzen
+  // (idleHorse hebt ihn, solange sin(t / 2) über 0,97 liegt).
+  const waiting = [[cab, 0], [cab2, 7.3]].map(([c, off]) => ({ horse: c.userData.horse, off, lifted: false, snort: 4 + Math.random() * 15 }));
+  const horseAt = new THREE.Vector3();
+  loc.onUpdate((dt, t, { camera }) => {
+    for (const w of waiting) {
+      const tt = t + w.off;
+      idleHorse(w.horse, tt);
+      w.horse.getWorldPosition(horseAt);
+      const ear = hearing(camera, horseAt.x, horseAt.z, 30);
+      const lifted = Math.sin(tt * 0.5) > 0.97;
+      if (w.lifted && !lifted) (loc.sounds ??= []).push({ type: 'stamp', ...ear });
+      w.lifted = lifted;
+      w.snort -= dt;
+      if (w.snort < 0) {
+        w.snort = 12 + Math.random() * 25;
+        (loc.sounds ??= []).push({ type: 'snort', ...ear });
+      }
+    }
   });
   loc.collide(22.8, 25.2, -17.2, -9.6);
   buildCabRank(loc, ironMat);

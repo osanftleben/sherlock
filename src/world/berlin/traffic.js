@@ -3,6 +3,18 @@ import { Bag, merge, std } from '../kit.js';
 import { makeFigure, makeHorse, trotHorse, walkFigure } from '../figures.js';
 import { rng, signTexture } from '../textures.js';
 
+const toSource = new THREE.Vector3();
+const earRight = new THREE.Vector3();
+
+// Lautstärke (0..1, quadratisch abfallend bis range Meter) und Stereoseite (-1 links bis 1
+// rechts) einer Geräuschquelle bei (x, z), vom Kamerastandpunkt aus.
+export function hearing(camera, x, z, range) {
+  toSource.set(x - camera.position.x, 0, z - camera.position.z);
+  const d = toSource.length();
+  earRight.setFromMatrixColumn(camera.matrixWorld, 0).setY(0).normalize();
+  return { vol: Math.max(0, 1 - d / range) ** 2, pan: d > 0.01 ? toSource.divideScalar(d).dot(earRight) : 0 };
+}
+
 const WHEEL = 0x5e2216;
 const IRON = 0x161616;
 const BRASS = 0x9a7c3c;
@@ -160,6 +172,7 @@ export function buildTraffic(loc, r) {
   const pathLen = curve.getLength();
   let u = 0.1;
   let phase = 0;
+  let lastBeat = 0;
   const ahead = new THREE.Vector3();
   loc.onUpdate((dt, t, { camera }) => {
     const p = curve.getPointAt(u);
@@ -170,10 +183,18 @@ export function buildTraffic(loc, r) {
     u = (u + (speed * dt) / pathLen) % 1;
     cab.position.set(p.x, 0, p.z);
     cab.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z);
+    // Rattern der Räder (audio.js) und je halbem Schritt ein Hufpaar, so wie die Beine schwingen.
+    const ear = hearing(camera, p.x, p.z, 45);
+    loc.cab = { vol: ear.vol, pan: ear.pan, moving: speed > 0 };
     if (speed > 0) {
       phase += dt * 9;
       trotHorse(cab.userData.horse, phase);
       for (const w of cab.userData.wheels) w.pivot.rotation.x += (speed * dt) / w.r;
+      const beat = Math.floor(phase / Math.PI);
+      if (beat !== lastBeat) {
+        lastBeat = beat;
+        (loc.sounds ??= []).push({ type: 'hoof', vol: ear.vol, pan: ear.pan });
+      }
     }
     light.copy(p);
   });

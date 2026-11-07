@@ -17,6 +17,8 @@ const TAU = Math.PI * 2;
 const cloth = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
 // Neigung des Schirmstocks nach hinten, zum Kopf hin.
 const UMBRELLA_TILT = -0.15;
+// Seitliche Neigung der Oberarme in Ruhe: die Hände hängen am Rocksaum, nicht davor.
+const ARM_Z = 0.06;
 const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.9, 0.8) });
 
 const color = (c) => (c instanceof THREE.Color ? c.clone() : new THREE.Color(c));
@@ -80,11 +82,11 @@ const DEPTH = 0.66;
 
 // Schnitte der Männerröcke: Profil des Schoßes und Breite des Spalts vorn.
 const COATS = {
-  frock: { pts: [[0.215, 0.5], [0.2, 0.7], [0.178, 0.9], [0.165, 1.04]], gap: 0.42, sz: 0.74 },
-  overcoat: { pts: [[0.26, 0.3], [0.23, 0.6], [0.19, 0.9], [0.168, 1.04]], gap: 0.12, sz: 0.8 },
-  labcoat: { pts: [[0.215, 0.52], [0.195, 0.78], [0.17, 1.04]], gap: 0.1, sz: 0.76 },
-  jacket: { pts: [[0.182, 0.8], [0.176, 0.9], [0.164, 1.04]], gap: 0, sz: 0.72 },
-  tunic: { pts: [[0.178, 0.8], [0.172, 0.88], [0.164, 1.04]], gap: 0, sz: 0.7 },
+  frock: { pts: [[0.215, 0.5], [0.2, 0.7], [0.178, 0.9], [0.165, 1.04]], gap: 0.42, sz: 0.74, drop: 0.07 },
+  overcoat: { pts: [[0.26, 0.3], [0.23, 0.6], [0.19, 0.9], [0.168, 1.04]], gap: 0.12, sz: 0.8, drop: 0.04 },
+  labcoat: { pts: [[0.215, 0.52], [0.195, 0.78], [0.17, 1.04]], gap: 0.1, sz: 0.76, drop: 0.04 },
+  jacket: { pts: [[0.182, 0.8], [0.176, 0.9], [0.164, 1.04]], gap: 0, sz: 0.72, drop: 0.025 },
+  tunic: { pts: [[0.178, 0.8], [0.172, 0.88], [0.164, 1.04]], gap: 0, sz: 0.7, drop: 0.02 },
 };
 
 // Alte und neue Schreibweise der Looks auf einen vollständigen Satz bringen.
@@ -375,38 +377,55 @@ function frontZ(profile, y, w, depth) {
   return radiusAt(profile, y) * w * depth;
 }
 
-// Hemd, Weste und Krawatte als V im Ausschnitt des Rocks.
+// Legt eine flach gebaute Form (z um 0) auf die Brust: Jeder Punkt rückt auf die Oberfläche
+// des Rumpfprofils an seiner Stelle, plus off. So liegen Weste, Hemd und Revers an, statt
+// in der Brust zu verschwinden oder vor ihr zu schweben.
+function conform(g, w, off) {
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const r = Math.max(0.02, radiusAt(TORSO_M, y) * w);
+    const front = r * DEPTH * Math.sqrt(Math.max(0, 1 - (x / r) ** 2));
+    pos.setZ(i, front + off + pos.getZ(i));
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+function flat(points) {
+  const shape = new THREE.Shape(points.map(([x, y]) => new THREE.Vector2(x, y)));
+  return new THREE.ShapeGeometry(shape);
+}
+
+// Hemd, Weste und Krawatte als V im Ausschnitt des Rocks; darüber die Revers mit Kerbe und
+// der Kragen des Rocks im Nacken.
 function addVee(T, L, w) {
-  const zTop = frontZ(TORSO_M, 1.47, w, DEPTH);
-  const tilt = -0.07;
-  const vee = (width, height, c, dz) => {
-    const s = new THREE.Shape();
-    s.moveTo(-width / 2, 0);
-    s.lineTo(width / 2, 0);
-    s.lineTo(0, -height);
-    s.closePath();
-    const g = new THREE.ShapeGeometry(s);
-    g.rotateX(tilt);
-    g.translate(0, 1.47, zTop + 0.004 + dz);
-    T.add(g, c);
-  };
-  vee(0.15, 0.27, L.vest, 0);
-  vee(0.085, 0.15, L.shirt, 0.002);
-  const tieZ = zTop + 0.008;
+  const top = 1.47;
+  const bottom = 1.2;
+  T.add(conform(flat([[-0.078, top], [0.078, top], [0, bottom]]), w, 0.002), L.vest);
+  T.add(conform(flat([[-0.045, top + 0.01], [0.045, top + 0.01], [0, 1.33]]), w, 0.0035), L.shirt);
   if (L.neck === 'tie') {
-    T.add(box(0.022, 0.11, 0.006, 0, 1.4, tieZ).rotateX(tilt), L.tie);
-    T.add(box(0.03, 0.022, 0.01, 0, 1.462, tieZ), L.tie);
+    T.add(conform(flat([[-0.01, 1.455], [0.01, 1.455], [0.013, 1.37], [0, 1.345], [-0.013, 1.37]]), w, 0.005), L.tie);
+    T.add(conform(box(0.026, 0.02, 0.008, 0, 1.463, 0), w, 0.006), L.tie);
   } else if (L.neck === 'cravat') {
-    T.add(ball(0.03, 0, 1.43, tieZ, 1.2, 1.5, 0.5, 8, 6), L.tie);
+    // Plastron: Knoten unter dem Kragen, darunter fällt der Stoff gebauscht in die Weste.
+    T.add(conform(ball(0.011, 0, 1.462, 0, 1.2, 0.9, 0.6, 8, 6), w, 0.006), L.tie);
+    T.add(conform(flat([[-0.008, 1.45], [0.008, 1.45], [0.016, 1.395], [0.007, 1.35], [-0.007, 1.35], [-0.016, 1.395]]), w, 0.005), L.tie);
+    T.add(ball(0.004, 0, 1.4, 0, 1, 1, 1, 6, 4).translate(0, 0, frontZ(TORSO_M, 1.4, w, DEPTH) + 0.008), GOLD);
   }
-  // Revers entlang der Kanten des V
+  // Stehkragen des Hemds mit umgelegten Ecken.
+  if (L.neck !== 'scarf' && L.neck !== 'none') {
+    for (const s of [-1, 1]) T.add(ball(0.016, s * 0.016, 1.497, 0.05, 1, 0.55, 0.35, 6, 5).rotateZ(s * 0.5), L.collar);
+  }
+  const lapelColor = shade(L.coat, 0.88);
   for (const s of [-1, 1]) {
-    const lapel = box(0.032, 0.22, 0.008, 0, 0, 0);
-    lapel.rotateZ(s * 0.28);
-    lapel.rotateX(tilt);
-    lapel.translate(s * 0.05, 1.37, zTop + 0.008);
-    T.add(lapel, shade(L.coat, 0.85));
+    const pts = [[0.004, bottom], [0.058, 1.405], [0.073, 1.396], [0.1, 1.418], [0.096, 1.36], [0.034, bottom]];
+    const lapel = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(s * x, y))), { depth: 0.005, bevelEnabled: false });
+    T.add(conform(lapel, w, 0.004), lapelColor);
   }
+  // Rockkragen im Nacken, vorn offen.
+  T.add(lathe([[0.082 * w, 1.45], [0.074 * w, 1.5], [0.062 * w, 1.535]], { sz: 0.82, phiStart: 0.75, phiLength: TAU - 1.5 }), lapelColor);
 }
 
 function buttonsDown(T, x, ys, profile, w, depth, c, r = 0.009) {
@@ -441,8 +460,7 @@ function buildTorso(L, w) {
   T.add(lathe(scaleProfile([[0, 0.84], [0.15, 0.86], [0.165, 0.92], [0.16, 1.0]], w), { sz: 0.72 }), L.trousers);
   T.add(lathe(torso, { sz: DEPTH }), L.coat);
   const coat = COATS[L.outfit] || COATS.jacket;
-  T.add(lathe(scaleProfile(coat.pts, w), { sz: coat.sz, phiStart: coat.gap, phiLength: TAU - coat.gap * 2 }), L.coat);
-  if (L.build === 'stout') T.add(ball(0.16, 0, 1.08, 0.03, 1, 1, 0.75), L.coat);
+  T.add(hemDrop(lathe(scaleProfile(coat.pts, w), { sz: coat.sz, phiStart: coat.gap, phiLength: TAU - coat.gap * 2, seg: 24 }), coat.drop), L.coat);
   for (const s of [-1, 1]) T.add(ball(0.064, s * 0.158 * w, 1.425, 0, 1, 0.72, 0.8), L.coat);
 
   if (L.outfit === 'tunic') {
@@ -486,24 +504,62 @@ function buildTorso(L, w) {
     T.add(box(0.012, 0.012, 0.09, -0.205 * w, 0.95, 0.09), GOLD);
   }
   T.add(cyl(0.043, 0.047, 0.11, 0, 1.555, 0, 10), L.skin);
-  return T.mesh();
+  const mesh = T.mesh();
+  if (L.build === 'stout') paunch(mesh.geometry);
+  return mesh;
+}
+
+// Der Schoß fällt hinten tiefer als vorn: Die Saumkante sinkt zum Rücken hin um drop und
+// zieht den unteren Teil des Stoffs mit.
+function hemDrop(g, drop) {
+  const pos = g.attributes.position;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    y0 = Math.min(y0, pos.getY(i));
+    y1 = Math.max(y1, pos.getY(i));
+  }
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const back = (1 - z / Math.max(1e-6, Math.hypot(x, z))) / 2;
+    const low = 1 - (pos.getY(i) - y0) / (y1 - y0);
+    pos.setY(i, pos.getY(i) - drop * back * back * low);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
+// Bauch der Kräftigen: vorn in den fertigen Rumpf geformt, samt Knöpfen und Uhrkette.
+function paunch(g) {
+  const pos = g.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const f = Math.exp(-(((y - 1.1) / 0.14) ** 2)) * THREE.MathUtils.smoothstep(z, -0.04, 0.09);
+    pos.setXYZ(i, pos.getX(i) * (1 + 0.05 * f), y, z + 0.035 * f);
+  }
 }
 
 // --- Glieder ---------------------------------------------------------------------
 function buildArm(L, w, s) {
   const upperGroup = new THREE.Group();
-  upperGroup.position.set(s * (L.female ? 0.155 * w + 0.015 : 0.17 * w + 0.02), 1.43, 0);
-  upperGroup.rotation.z = s * 0.1;
+  upperGroup.position.set(s * (L.female ? 0.155 * w + 0.012 : 0.17 * w + 0.014), 1.43, 0);
+  upperGroup.rotation.z = s * ARM_Z;
   const sleeve = L.coat;
   const U = new Parts();
-  U.add(cyl(0.052, 0.046, 0.3, 0, -0.15, 0, 10), sleeve);
-  U.add(ball(0.046, 0, -0.3, 0, 1, 1, 1, 8, 6), sleeve);
+  // Oberarm mit gerundeter Schulterkappe, oben kräftiger, zum Ellbogen schmaler.
+  const k = L.female ? 0.9 : 1;
+  const upper = [[0.045, -0.3], [0.047, -0.22], [0.051, -0.11], [0.054, -0.035], [0.05, 0.005], [0.036, 0.026], [0, 0.034]];
+  U.add(lathe(upper.map(([r, y]) => [r * k, y]), { seg: 12, sz: 0.92 }), sleeve);
+  U.add(ball(0.046 * k, 0, -0.3, 0, 1, 1, 1, 8, 6), sleeve);
   upperGroup.add(U.mesh());
 
   const fore = new THREE.Group();
   fore.position.y = -0.3;
   const F = new Parts();
-  F.add(cyl(0.045, 0.037, 0.26, 0, -0.13, 0, 10), sleeve);
+  // Ärmel: am Ellbogen etwas Stoff, zur Manschette hin leicht schmaler.
+  F.add(lathe([[0.04, -0.26], [0.041, -0.2], [0.045, -0.09], [0.047, -0.02], [0.044, 0.01]], { seg: 10, sz: 0.95 }), sleeve);
   const cuff = L.cuffs ?? (L.outfit === 'tunic' ? L.piping ?? sleeve : L.female ? L.collar : L.shirt);
   F.add(cyl(0.037, 0.037, 0.024, 0, -0.256, 0, 10), cuff);
   const grip = s > 0 ? Boolean(L.cane || L.glass || L.punch || L.umbrella) : L.lantern;
@@ -849,8 +905,8 @@ export function idleFigure(figure, time, lookAt) {
   let foreR = f.restR;
   let armLx = sway(0.9);
   let foreL = f.restL;
-  let armRz = 0.1;
-  let armLz = -0.1;
+  let armRz = ARM_Z;
+  let armLz = -ARM_Z;
   if (habit === 'tidy') {
     // Beide Hände auf dem Tresen, sie schieben und rücken etwas zurecht.
     armRx = lerp(armRx, -0.6 + Math.sin(time * 2.1) * 0.06, busy);
@@ -863,7 +919,7 @@ export function idleFigure(figure, time, lookAt) {
     // Die Hand liegt schwer auf dem Knauf, der Stock steht etwas seitlich vor dem Fuß;
     // zwischendurch hebt er ihn kurz an und setzt ihn neu auf.
     armRx = -0.06 - busy * 0.12;
-    armRz = 0.16;
+    armRz = ARM_Z + 0.06;
     foreR = f.restR - busy * 0.22;
   } else if (habit === 'punch') {
     // Die Knipszange wippt in der Hand, ab und zu klappt sie zweimal ins Leere.

@@ -321,7 +321,7 @@ function buildCabRank(loc, ironMat) {
 
   // Zwei Kutscher in Pelerinen und lackierten Hüten, wie der auf dem Bock.
   const looks = [
-    { outfit: 'overcoat', cape: true, coat: 0x2a241c, hat: 'top', hatColor: 0x15120e, beard: 'full', hair: 0x6a6258, build: 'stout' },
+    { outfit: 'overcoat', cape: true, coat: 0x2a241c, hat: 'top', hatColor: 0x15120e, beard: 'full', hair: 0x6a6258, build: 'stout', pipe: true },
     { outfit: 'overcoat', cape: true, coat: 0x1e2226, hat: 'top', hatColor: 0x121418, moustache: 'walrus', neck: 'scarf', tie: 0x5a2a20, height: 1.74 },
   ];
   // Auf der Seite zu den Häusern hin, damit man vom Platz aus die Glut und die Gesichter sieht.

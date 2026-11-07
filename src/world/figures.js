@@ -551,12 +551,32 @@ function buildLeg(L, w, s) {
   return { thigh, shin };
 }
 
+// Gebogene Tabakspfeife im rechten Mundwinkel, der Kopf hängt vorn unter dem Kinn. Die Glut ist
+// ein eigenes Material je Pfeife, damit sie beim Ziehen aufleuchten kann (smoke.js); bowl ist
+// die Öffnung des Kopfes in Kopfkoordinaten, dort steigt der Rauch auf.
+let pipeMat = null;
+function buildPipe() {
+  pipeMat ??= new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.45 });
+  const group = new THREE.Group();
+  const stem = strut(V3(0.014, 0.058, 0.082), V3(0.026, 0.024, 0.16), 0.0045, 0.004, 6);
+  const elbow = strut(V3(0.026, 0.024, 0.16), V3(0.028, 0.012, 0.172), 0.005, 0.006, 6);
+  const head = new THREE.CylinderGeometry(0.014, 0.011, 0.042, 10).translate(0.03, 0.031, 0.182);
+  group.add(new THREE.Mesh(merge([stem, elbow, head]), pipeMat));
+  const ember = new THREE.Mesh(
+    // Flache Kuppel, die knapp über den Rand ragt: so sieht man die Glut auch von der Seite.
+    new THREE.SphereGeometry(0.0115, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 1).translate(0.03, 0.05, 0.182),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(1.2, 0.3, 0.06) }),
+  );
+  group.add(ember);
+  return { group, ember, bowl: V3(0.03, 0.055, 0.182) };
+}
+
 // --- Figur -----------------------------------------------------------------------
 // look: outfit (frock, overcoat, labcoat, jacket, tunic, dress), coat, trousers, vest, shirt,
 // neck (tie, cravat, scarf, none), tie, collar, skin, hair, hairStyle (short, parted,
 // receding, bald, bun), beard (full, mutton, goatee, stubble), moustache (kaiser, walrus,
 // brush), eyewear (monocle, pincenez, spectacles), hat (top, bowler, cap, peaked,
-// pickelhaube, bonnet, bandage), hatColor, apron, shawl, cape, cane, lantern, umbrella (Farbe), glass, sabre,
+// pickelhaube, bonnet, bandage), hatColor, apron, shawl, cape, cane, lantern, umbrella (Farbe), pipe, glass, sabre,
 // chain, piping, buttons, build (slim, normal, stout), height, pose (stand, sit).
 // Ältere Angaben wie skirt: true oder beard: true werden weiter verstanden.
 export function makeFigure(look = {}) {
@@ -574,6 +594,8 @@ export function makeFigure(look = {}) {
   const { head, eyes } = buildHead(L);
   head.position.y = 1.555;
   body.add(head);
+  const pipe = look.pipe ? buildPipe() : null;
+  if (pipe) head.add(pipe.group);
 
   const armL = buildArm(L, w, -1);
   const armR = buildArm(L, w, 1);
@@ -604,6 +626,7 @@ export function makeFigure(look = {}) {
     foreL: armL.fore,
     foreR: armR.fore,
     umbrella: armR.fore.userData.hold ?? null,
+    pipe: pipe && { ember: pipe.ember, bowl: pipe.bowl },
     restL: armL.rest,
     restR: armR.rest,
     gesture: gestureArm === armR ? 'R' : gestureArm === armL ? 'L' : null,

@@ -117,7 +117,10 @@ export function buildSmoke(loc, { chimneys = [] } = {}) {
     if (!breathers) {
       breathers = [];
       scene.traverse((o) => {
-        if (o.userData.figure) breathers.push({ o, head: o.userData.figure.head, horse: false, next: Math.random() * 4 });
+        if (o.userData.figure) {
+          const pipe = o.userData.figure.pipe;
+          breathers.push({ o, head: o.userData.figure.head, horse: false, next: Math.random() * 4, pipe, draw: pipe ? 2 + Math.random() * 8 : 0, glow: 0, wisp: 0, exhale: -1 });
+        }
         else if (o.userData.head && o.userData.legs) breathers.push({ o, head: o.userData.head, horse: true, bag: o.userData.tilt > 0, next: Math.random() * 3 });
       });
     }
@@ -143,6 +146,43 @@ export function buildSmoke(loc, { chimneys = [] } = {}) {
       b.next = 0.18 + Math.random() * 0.12;
       w.copy(b.p).add(v.set((Math.random() - 0.5) * 0.3, 0, (Math.random() - 0.5) * 0.3));
       emit(w, v.set(0, 0.7 + Math.random() * 0.3, 0), { life: 3.5 + Math.random(), s0: 0.25, s1: 1.8, alpha: 0.3, color: BRAZIER, drag: 0.5, rise: 0.15 });
+    }
+
+    // Pfeifenraucher: aus dem Kopf der Pfeife kräuselt dauernd ein dünner Faden. Alle paar
+    // Sekunden ein Zug: Die Glut leuchtet auf und verglimmt, kurz danach kommt eine Wolke aus dem Mund.
+    for (const b of breathers) {
+      if (!b.pipe || !b.o.visible) continue;
+      b.draw -= dt;
+      if (b.draw < 0) {
+        b.draw = 7 + Math.random() * 8;
+        b.exhale = 1.8;
+        b.next = Math.max(b.next, 4);
+      }
+      const drawing = b.exhale > 0.6;
+      b.glow += ((drawing ? 1 : 0) - b.glow) * Math.min(1, dt * (drawing ? 3 : 0.8));
+      b.pipe.ember.material.color.setRGB(1.2 + 2.4 * b.glow, 0.3 + 0.55 * b.glow, 0.06 + 0.1 * b.glow);
+      b.o.getWorldPosition(w);
+      const close = (w.x - cam.x) ** 2 + (w.z - cam.z) ** 2 < 16 * 16;
+      if (b.exhale > 0) {
+        b.exhale -= dt;
+        if (b.exhale <= 0 && close) {
+          b.head.localToWorld(at.copy(MOUTH));
+          dir.set(0, 0.35, 1).transformDirection(b.head.matrixWorld);
+          const k = 0.5 + 0.5 * lightAt(at);
+          for (let i = 0; i < 4; i++) {
+            emit(at, w.copy(dir).multiplyScalar(0.5 * (1 - i * 0.2)), {
+              life: 2.4, s0: 0.06, s1: 0.65, alpha: 0.26 * k, color: tmpC.setRGB(0.55 * k, 0.58 * k, 0.64 * k), drag: 1.6, rise: 0.12,
+            });
+          }
+        }
+      }
+      b.wisp -= dt;
+      if (b.wisp < 0 && close) {
+        b.wisp = 0.35 + Math.random() * 0.2;
+        b.head.localToWorld(at.copy(b.pipe.bowl));
+        const k = 0.5 + 0.5 * lightAt(at);
+        emit(at, v.set(0, 0.22, 0), { life: 2.4, s0: 0.025, s1: 0.32, alpha: (0.1 + 0.12 * b.glow) * k, color: tmpC.setRGB(0.5 * k, 0.53 * k, 0.6 * k), drag: 0.9, rise: 0.22 });
+      }
     }
 
     // Atem: nur in der Nähe, im Takt der Atemzüge, Pferde kräftiger als Leute.

@@ -41,7 +41,7 @@ export function buildLife(loc) {
   people[1].lookAt = he.position;
 
   // Auf der Bank (14, 6) mit dem Rücken nach Süden: ein alter Mann, der den Brunnen ansieht.
-  const old = place({ outfit: 'overcoat', coat: 0x2e2a24, hat: 'cap', hatColor: 0x1e1c1a, beard: 'full', hair: 0x8a847a, neck: 'scarf', tie: 0x3a2e24, pose: 'sit', build: 'stout' }, 14.4, 6.05, Math.PI, -0.39);
+  const old = place({ outfit: 'overcoat', coat: 0x2e2a24, hat: 'cap', hatColor: 0x1e1c1a, beard: 'full', hair: 0x8a847a, neck: 'scarf', tie: 0x3a2e24, pose: 'sit', build: 'stout', pipe: true }, 14.4, 6.05, Math.PI, -0.39);
 
   loc.onUpdate((dt, t, { camera }) => {
     for (const p of people) idleFigure(p.fig, t, p.lookAt ?? camera.position);

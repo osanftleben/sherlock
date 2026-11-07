@@ -267,7 +267,7 @@ export function buildTraffic(loc, r) {
     { outfit: 'dress', coat: 0x38242a, hat: 'bonnet', hatColor: 0x22161a, shawl: 0x4a3a30, height: 1.62, umbrella: 0x2a161c },
     { outfit: 'dress', coat: 0x2a2c38, hat: 'bonnet', hatColor: 0x1c1c26, collar: 0xe0dacb, build: 'slim', height: 1.6, umbrella: 0x16181e },
     { outfit: 'frock', coat: 0x1c1f24, hat: 'bowler', cane: true, beard: 'mutton', eyewear: 'spectacles' },
-    { coat: 0x322a22, neck: 'none', hat: 'cap', apron: 0x8a8272, moustache: 'brush', build: 'stout' },
+    { coat: 0x322a22, neck: 'none', hat: 'cap', apron: 0x8a8272, moustache: 'brush', build: 'stout', pipe: true },
     { outfit: 'overcoat', coat: 0x2c2a26, hat: 'bowler', moustache: 'brush', neck: 'scarf', tie: 0x3a2a24, build: 'slim', umbrella: 0x141416 },
     { outfit: 'dress', coat: 0x2c2420, hat: 'bonnet', hatColor: 0x1a1612, shawl: 0x5a4a3a, build: 'stout', height: 1.58 },
     { coat: 0x26221e, hat: 'cap', trousers: 0x1e1c1a, neck: 'scarf', tie: 0x2a3a4a, beard: 'stubble', height: 1.72 },

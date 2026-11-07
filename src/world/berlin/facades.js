@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
+import { bakeBayShade, bayShaded } from './bayshade.js';
 import { grimy } from './grime.js';
 import { lightPool } from './lamps.js';
 import { buildDownpipes } from './gutters.js';
@@ -220,12 +221,31 @@ function bayParts(type) {
   return { wall: wall.build(), glass: merge(glass) };
 }
 
+// Was am Haus über und unter einer Achse vorspringt (die Gesimse aus block()), für die
+// Verschattung in bayshade.js. y relativ zum Fuß der Achse, z die Vorderkante.
+const GROUND_TYPES = ['ground', 'shop', 'display', 'door', 'gate'];
+function bayContext(type) {
+  if (type === 'dormer') return { H: 2.1, context: [], padWall: false };
+  const H = FLOOR[GROUND_TYPES.includes(type) ? 'ground' : type];
+  const belt = (y) => ({ y0: y - 0.05, y1: y + 0.05, z: 0.1 });
+  // Gesims über dem Erdgeschoss: 0,3 m hoch, 0,36 m tief, Mitte 0,1 m vor der Wand.
+  const ground = (y) => ({ y0: y + 0.02 - 0.15, y1: y + 0.02 + 0.15, z: 0.28 });
+  if (GROUND_TYPES.includes(type)) return { H, context: [ground(H)], padWall: true };
+  const below = type === 'noble' ? ground(0) : belt(0);
+  // Über dem Dachgeschoss das Hauptgesims mit Zahnschnitt darunter.
+  const above = type === 'attic'
+    ? [{ y0: H - 0.49, y1: H - 0.35, z: 0.34 }, { y0: H - 0.3, y1: H + 0.2, z: 0.51 }]
+    : [belt(H)];
+  return { H, context: [below, ...above], padWall: true };
+}
+
 class FacadeBatcher {
   constructor() {
     this.types = {};
     for (const t of ['ground', 'shop', 'display', 'door', 'gate', 'noble', 'upper', 'attic', 'dormer']) {
       this.types[t] = { parts: bayParts(t), walls: [], lit: [], dark: [], kinds: {}, rooms: [], shades: [] };
     }
+    this.shade = bakeBayShade(Object.entries(this.types).map(([t, { parts }]) => ({ geo: parts.wall, ...bayContext(t) })), BAY_W);
   }
 
   // glass: false lässt die Scheibe weg, wenn der Aufrufer sie selbst baut (Schaufenster).
@@ -247,6 +267,7 @@ class FacadeBatcher {
   // Die Scheiben (12 Dreiecke) bleiben je Art ein Mesh: Mehr Zeichenaufrufe kosten dort mehr,
   // als das Culling spart.
   build(scene, wallMat, darkGlass, litGlass) {
+    bayShaded(wallMat, this.shade);
     const color = new THREE.Color();
     // Geschlossene Läden haben Klappläden, erleuchtete zeigen ihre Auslage.
     const shutter = std({ map: shopShutter(), roughness: 0.85 });

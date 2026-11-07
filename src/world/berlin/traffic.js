@@ -108,7 +108,7 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
   for (const s of [-1, 1]) body.add(new THREE.BoxGeometry(0.03, 0.03, 0.45).rotateX(0.5).translate(s * 0.45, 0.66, 0.4), IRON);
   body.add(new THREE.BoxGeometry(1.0, 0.6, 0.02).rotateX(0.2).translate(0, 0.85, 0.92), LEATHER);
   body.add(new THREE.CylinderGeometry(0.012, 0.012, 1.0, 4).rotateZ(Math.PI / 2).translate(0, 1.14, 0.98), IRON);
-  // Fahrwerk: Achsen, Langbaum, Drehkranz, Druckfedern. Deichseln steigen zur Sellette an.
+  // Fahrwerk: Achsen, Langbaum, Drehkranz, Druckfedern. Deichseln und Geschirr siehe harness().
   body.add(new THREE.CylinderGeometry(0.03, 0.03, 1.56, 6).rotateZ(Math.PI / 2).translate(0, 0.62, -1.3), IRON);
   body.add(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6).rotateZ(Math.PI / 2).translate(0, 0.42, 0.5), IRON);
   body.box(0x1e1a14, 0.07, 0.07, 1.9, 0, 0.55, -0.4);
@@ -116,7 +116,6 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
   for (const s of [-1, 1]) {
     body.add(new THREE.TorusGeometry(0.26, 0.022, 4, 18).scale(1, 0.22, 1).rotateY(Math.PI / 2).translate(s * 0.5, 0.69, -1.3), IRON);
     body.add(new THREE.TorusGeometry(0.22, 0.02, 4, 16).scale(1, 0.18, 1).rotateY(Math.PI / 2).translate(s * 0.42, 0.49, 0.5), IRON);
-    body.add(new THREE.BoxGeometry(0.06, 0.06, 2.7).rotateX(-0.11).translate(s * 0.45, 0.95, 1.75), 0x1e1a14);
   }
   g.add(new THREE.Mesh(body.build(), cabMats.body));
   g.add(new THREE.Mesh(merge(glass), cabMats.glass));
@@ -148,7 +147,60 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
   horse.position.set(0, 0, 3.0);
   g.add(horse);
   g.userData.horse = horse;
+  g.add(new THREE.Mesh(harness(withDriver), cabMats.body));
   return g;
+}
+
+// Stab von a nach b, Querschnitt r.
+function rod(a, b, r, sides = 6) {
+  const d = new THREE.Vector3().subVectors(b, a);
+  const geo = new THREE.CylinderGeometry(r, r, d.length(), sides);
+  geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
+  return geo.translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
+}
+
+// Durchhängender Riemen von a nach b, in n Stücken.
+function strap(bag, a, b, sag, r, color, n = 4) {
+  let prev = a;
+  for (let i = 1; i <= n; i++) {
+    const k = i / n;
+    const p = new THREE.Vector3().lerpVectors(a, b, k);
+    p.y -= sag * 4 * k * (1 - k);
+    bag.add(rod(prev, p, r, 4), color);
+    prev = p;
+  }
+}
+
+// Anspannung zwischen Wagen und Pferd (Pferd bei z = 3, siehe makeDroschke), in Wagenkoordinaten.
+// Die Deichseln steigen vom Drehkranz an den Flanken entlang bis vor die Schulter und hängen am
+// Sattel in Trageösen; das Hinterzeug greift an ihnen an. Die Zugstränge laufen vom Kummet zum
+// Ortscheit vorn am Wagen. Die Leinen gehen vom Sattel zu den Händen des Kutschers, beim
+// wartenden Wagen hängen sie lose über dem Spritzleder.
+function harness(withDriver) {
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  const wood = 0x1e1a14;
+  const b = new Bag();
+  for (const s of [-1, 1]) {
+    // Deichsel in drei Stücken, vorn leicht nach innen gebogen, mit Messingkappe.
+    const pts = [V(s * 0.45, 0.8, 0.45), V(s * 0.53, 0.98, 2.2), V(s * 0.53, 1.08, 3.1), V(s * 0.47, 1.15, 3.62)];
+    for (let i = 1; i < pts.length; i++) b.add(rod(pts[i - 1], pts[i], 0.032), wood);
+    b.add(new THREE.SphereGeometry(0.036, 8, 6).translate(pts[3].x, pts[3].y, pts[3].z), BRASS);
+    // Trageöse am Sattel, Riemen hinauf zum Sattelkissen.
+    b.add(new THREE.TorusGeometry(0.05, 0.014, 4, 12).translate(s * 0.53, 1.08, 3.12), LEATHER);
+    b.add(rod(V(s * 0.18, 1.55, 3.12), V(s * 0.53, 1.13, 3.12), 0.014, 4), LEATHER);
+    // Hinterzeug an die Deichsel.
+    b.add(rod(V(s * 0.4, 1.13, 2.5), V(s * 0.53, 1.0, 2.35), 0.014, 4), LEATHER);
+    // Zugstrang vom Ende am Pferd (Hüfte) zum Ortscheit.
+    strap(b, V(s * 0.36, 1.06, 2.38), V(s * 0.4, 0.8, 1.18), 0.06, 0.014, LEATHER);
+    // Leinen.
+    if (withDriver) strap(b, V(s * 0.1, 1.64, 3.12), V(s * 0.16, 1.2, 0.48), 0.12, 0.007, LEATHER, 6);
+    else strap(b, V(s * 0.1, 1.64, 3.12), V(s * 0.22, 1.16, 0.98), 0.3, 0.007, LEATHER, 6);
+  }
+  // Ortscheit quer vor dem Wagen, an einer Stange zum Langbaum.
+  b.add(rod(V(-0.44, 0.8, 1.18), V(0.44, 0.8, 1.18), 0.03), wood);
+  b.add(rod(V(0, 0.55, 0.55), V(0, 0.8, 1.18), 0.03), IRON);
+  for (const s of [-1, 1]) b.add(new THREE.SphereGeometry(0.03, 6, 5).translate(s * 0.44, 0.8, 1.18), IRON);
+  return b.build();
 }
 
 export function buildTraffic(loc, r) {

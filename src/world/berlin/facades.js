@@ -3,6 +3,7 @@ import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } fr
 import { grimy } from './grime.js';
 import { lightPool } from './lamps.js';
 import { buildDownpipes } from './gutters.js';
+import { hearing } from './traffic.js';
 import {
   SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
@@ -985,8 +986,26 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
   const finish = () => {
     batcher.build(scene, wallMat, darkGlass, litGlass);
-    loc.onUpdate((dt, t) => {
+    // Geschirrklappern aus erleuchteten Wohnungen bis zum zweiten Stock (audio.js dishes):
+    // alle 6 bis 20 s aus einem Fenster in Hörweite, wenn es eines gibt.
+    const kitchens = [];
+    for (const t of Object.values(batcher.types)) {
+      for (const w of t.rooms) {
+        const p = new THREE.Vector3(BAY_W / 2, 1.9, 0).applyMatrix4(w.matrix);
+        if (p.y < 10) kitchens.push(p);
+      }
+    }
+    let nextDish = 4 + Math.random() * 8;
+    loc.onUpdate((dt, t, { camera }) => {
       windowTime.value = t % 100000;
+      nextDish -= dt;
+      if (nextDish > 0) return;
+      nextDish = 6 + Math.random() * 14;
+      const { x, z } = camera.position;
+      const near = kitchens.filter((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < 18 * 18);
+      if (!near.length) return;
+      const p = near[Math.floor(Math.random() * near.length)];
+      (loc.sounds ??= []).push({ type: 'dishes', ...hearing(camera, p.x, p.z, 18) });
     });
     buildSpills(scene, spills);
     buildDownpipes(loc, pipes);

@@ -424,6 +424,60 @@ export class Audio {
     }
   }
 
+  // Geschirr hinter einem Fenster: Porzellan klingt mit wenigen unharmonischen Teiltönen kurz
+  // nach, Besteck höher und dünner. Durch Scheibe und Zimmer hört man es gedämpft (Tiefpass).
+  // Drei Arten: Teller werden gestapelt, Tassen auf Untertassen gestellt, ein Löffel rührt.
+  dishes(volume, pan) {
+    if (!this.ctx) return;
+    const vol = volume * 1.5;
+    const muffle = this.ctx.createBiquadFilter();
+    muffle.type = 'lowpass';
+    muffle.frequency.value = 3800;
+    muffle.connect(this.panned(pan * 0.7, 6));
+    const out = muffle;
+    setTimeout(() => muffle.disconnect(), 6000);
+    const clink = (when, f0, gain, decay, ratios) => {
+      this.burst({ freq: f0 * 1.8, q: 1.5, dur: 0.018, gain: gain * 1.4, when, out });
+      ratios.forEach((r, i) => this.tone({ freq: f0 * r * (1 + (Math.random() - 0.5) * 0.02), dur: decay / (1 + i * 0.6), gain: gain / (1 + i * 0.8), when, attack: 0.002, out }));
+    };
+    const plate = [1, 2.32, 4.1];
+    const cup = [1, 1.59, 2.76];
+    const spoon = [1, 1.47, 2.9];
+    const kind = Math.random();
+    let when = 0;
+    if (kind < 0.45) {
+      // Teller auf Teller, mal zwei, mal fünf, mit einem dumpfen Absetzen darunter.
+      const n = 2 + Math.floor(Math.random() * 4);
+      for (let i = 0; i < n; i++) {
+        const f0 = 1500 + Math.random() * 700;
+        clink(when, f0, 0.035 * vol, 0.22, plate);
+        this.burst({ freq: 420, q: 1, dur: 0.05, gain: 0.25 * vol, when, out });
+        if (Math.random() < 0.4) clink(when + 0.025 + Math.random() * 0.03, f0 * 1.12, 0.02 * vol, 0.15, plate);
+        when += 0.25 + Math.random() * 0.5;
+      }
+    } else if (kind < 0.75) {
+      // Tasse auf die Untertasse, dann noch eine.
+      const n = 1 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) {
+        const f0 = 2300 + Math.random() * 600;
+        clink(when, f0, 0.03 * vol, 0.16, cup);
+        clink(when + 0.06 + Math.random() * 0.03, f0 * 0.94, 0.018 * vol, 0.12, cup);
+        when += 0.7 + Math.random() * 1.2;
+      }
+    } else {
+      // Ein Löffel rührt in der Tasse und wird zum Schluss auf die Untertasse gelegt.
+      const f0 = 3600 + Math.random() * 900;
+      const n = 4 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < n; i++) {
+        clink(when, f0 * (1 + (Math.random() - 0.5) * 0.04), 0.012 * vol * (0.6 + Math.random() * 0.4), 0.1, spoon);
+        when += 0.14 + Math.random() * 0.05;
+      }
+      when += 0.35;
+      clink(when, f0 * 0.82, 0.02 * vol, 0.14, spoon);
+      clink(when + 0.05, 2400, 0.015 * vol, 0.14, cup);
+    }
+  }
+
   // Ferner Wagen: Hufe im Trab, gedämpft und von einer Seite, schwillt an und wieder ab.
   hooves() {
     const ctx = this.ctx;

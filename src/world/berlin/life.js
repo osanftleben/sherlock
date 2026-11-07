@@ -7,13 +7,17 @@ import { hearing } from './traffic.js';
 // Leute, die miteinander reden: abwechselnd ein paar gemurmelte Sätze, dazwischen Pausen und ab
 // und zu ein längeres Schweigen. Hört man nur aus der Nähe. speakers: [{ pos, voice }];
 // cough: mittlere Sekunden zwischen zwei Hustern (0 = nie); talk: false für jemanden, der nur hustet.
+// Das künstlich erzeugte Murmeln klingt zu unnatürlich; geredet wird erst wieder, wenn echte
+// Aufnahmen auf Berlinisch da sind (docs/aufnahmeliste-stimmen.md). Husten bleibt.
+const SPEAK = false;
+
 export function chatter(loc, speakers, { range = 12, cough = 0, talk = true } = {}) {
   let turn = 0;
   let next = 1 + Math.random() * 3;
   let nextCough = cough * (0.5 + Math.random());
   loc.onUpdate((dt, t, { camera }) => {
     next -= dt;
-    if (talk && next < 0) {
+    if (SPEAK && talk && next < 0) {
       const sp = speakers[turn];
       const ear = hearing(camera, sp.pos.x, sp.pos.z, range);
       const words = 1 + Math.floor(Math.random() * 5);

@@ -97,7 +97,7 @@ export function buildBerlin() {
   const darkGlass = std({ color: 0x0b0f16, roughness: 0.18, metalness: 0.5 });
   const litGlass = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 0.31, 0.09) });
   const roofMat = matte(slate());
-  const brickMat = grimy(matte(brick()));
+  const brickMat = grimy(matte(brick()), 'brick');
   const ironMat = std({ color: 0x0f1211, roughness: 0.55, metalness: 0.5 });
   // Ladensorten je Straße, damit man die Straßen an ihren Läden unterscheidet:
   // Rosenthaler Straße Alltagsbedarf, Sophienstraße Handwerk und Bücher,

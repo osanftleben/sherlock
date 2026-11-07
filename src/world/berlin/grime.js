@@ -4,8 +4,9 @@ import { facadeGrime } from '../textures.js';
 // Fassade (x + z, weil alle Häuser an achsparallelen Straßen stehen) und in der Höhe. Dazu
 // ein dunkler, feuchter Streifen über dem Pflaster, wo der Regen hochspritzt.
 // Für Lambert- und Standardmaterialien, mit und ohne Instanzen.
-export function grimy(material) {
-  const grime = facadeGrime();
+// kind: 'plaster' oder 'brick' (facadeGrime).
+export function grimy(material, kind = 'plaster') {
+  const grime = facadeGrime(kind);
   material.onBeforeCompile = (shader) => {
     shader.uniforms.grimeMap = { value: grime };
     shader.vertexShader = shader.vertexShader

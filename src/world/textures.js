@@ -302,18 +302,23 @@ export function brick() {
     h.fillRect(0, 0, size, size);
     const bh = 16;
     const bw = 64;
+    // Einzelne Steine sind dunkler gebrannt (Klinker) oder verrußt; eigener Zufall, damit die
+    // übrigen Steine ihre Farbe behalten.
+    const burnt = rng(44);
     for (let row = 0; row * bh < size; row++) {
       const off = row % 2 ? bw / 2 : 0;
       for (let i = -1; i * bw < size; i++) {
         const v = r();
-        c.fillStyle = `rgb(${96 + v * 50},${46 + v * 22},${34 + v * 16})`;
+        const k = burnt() < 0.09 ? 0.55 + burnt() * 0.2 : 1;
+        c.fillStyle = `rgb(${(96 + v * 50) * k},${(46 + v * 22) * k},${(34 + v * 16) * k})`;
         c.fillRect(i * bw + off + 1, row * bh + 1, bw - 2, bh - 2);
         h.fillStyle = `rgb(${160 + r() * 90},0,0)`;
         h.fillRect(i * bw + off + 1, row * bh + 1, bw - 2, bh - 2);
       }
     }
     grain(c, size, 20, 42);
-    blotches(c, size, 16, 30, 100, 'rgba(10,8,8,0.45)', 43);
+    // Nur kleine Rußspuren: Große Flecken wiederholen sich mit der Kachel alle drei Meter.
+    blotches(c, size, 10, 8, 26, 'rgba(10,8,8,0.22)', 43);
     return { map: tex(color), normalMap: tex(normalFromHeight(height, 1.8), { srgb: false }) };
   });
 }
@@ -3404,8 +3409,11 @@ export function hallWindow() {
 // Verwitterung für Putz und Ziegel, 8 m breit und 16 m hoch je Kachel (32 px/m), nur der
 // Rotkanal zählt, 160 ist neutral: Ruß und Regen ziehen dunkle Streifen von oben nach unten,
 // dazu fleckige Stellen. Siehe grime.js.
-export function facadeGrime() {
-  return cached('facadeGrime', () => {
+// kind 'brick': Auf Ziegel sitzen Ruß und Regen als Laufspuren, kaum als Flecken; runde Flecken
+// wirken auf dem Mauerwerk wie Schimmel.
+export function facadeGrime(kind = 'plaster') {
+  const brick = kind === 'brick';
+  return cached(`facadeGrime-${kind}`, () => {
     const w = 256;
     const h = 512;
     const cv = canvas(w, h);
@@ -3422,7 +3430,8 @@ export function facadeGrime() {
       const y = r() * h;
       const rad = 15 + r() * 60;
       const dark = r() < 0.65;
-      const col = dark ? `rgba(60,60,60,${0.12 + r() * 0.18})` : `rgba(230,230,230,${0.06 + r() * 0.1})`;
+      const a = r();
+      const col = dark ? `rgba(60,60,60,${(0.12 + a * 0.18) * (brick ? 0.3 : 1)})` : `rgba(230,230,230,${(0.06 + a * 0.1) * (brick ? 0.5 : 1)})`;
       wrapped((ox, oy) => {
         const g = c.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad);
         g.addColorStop(0, col);
@@ -3432,12 +3441,12 @@ export function facadeGrime() {
       });
     }
     // Laufspuren: oben am dunkelsten, nach unten auslaufend, einzelne gebündelt.
-    for (let i = 0; i < 170; i++) {
+    for (let i = 0; i < (brick ? 260 : 170); i++) {
       const x = r() * w;
       const y = r() * h;
       const len = 30 + r() * 200;
       const sw = 1 + r() * 5;
-      const a = 0.1 + r() * 0.3;
+      const a = (0.1 + r() * 0.3) * (brick ? 0.8 : 1);
       wrapped((ox, oy) => {
         const g = c.createLinearGradient(0, y + oy, 0, y + oy + len);
         g.addColorStop(0, `rgba(40,40,40,${a})`);

@@ -4,36 +4,16 @@ import { rng } from '../textures.js';
 import { idleFigure, makeFigure } from '../figures.js';
 import { hearing } from './traffic.js';
 
-// Leute, die miteinander reden: abwechselnd ein paar gemurmelte Sätze, dazwischen Pausen und ab
-// und zu ein längeres Schweigen. Hört man nur aus der Nähe. speakers: [{ pos, voice }];
-// cough: mittlere Sekunden zwischen zwei Hustern (0 = nie); talk: false für jemanden, der nur hustet.
-// Das künstlich erzeugte Murmeln klingt zu unnatürlich; geredet wird erst wieder, wenn echte
-// Aufnahmen auf Berlinisch da sind (docs/aufnahmeliste-stimmen.md). Husten bleibt.
-const SPEAK = false;
-
-export function chatter(loc, speakers, { range = 12, cough = 0, talk = true } = {}) {
-  let turn = 0;
-  let next = 1 + Math.random() * 3;
-  let nextCough = cough * (0.5 + Math.random());
+// Jemand hustet oder räuspert sich ab und zu: im Mittel alle every Sekunden einer der Leute an
+// positions, zu hören bis range Meter.
+export function coughs(loc, positions, { every, range }) {
+  let next = every * (0.5 + Math.random());
   loc.onUpdate((dt, t, { camera }) => {
     next -= dt;
-    if (SPEAK && talk && next < 0) {
-      const sp = speakers[turn];
-      const ear = hearing(camera, sp.pos.x, sp.pos.z, range);
-      const words = 1 + Math.floor(Math.random() * 5);
-      if (ear.vol > 0.01) (loc.sounds ??= []).push({ type: 'murmur', vol: ear.vol, pan: ear.pan, voice: sp.voice, words });
-      // Wer weiterredet, setzt nach kurzem Atemholen neu an; die Antwort lässt etwas länger auf sich warten.
-      const other = speakers.length > 1 && Math.random() < 0.7;
-      if (other) turn = (turn + 1) % speakers.length;
-      next = words * 0.55 + (Math.random() < 0.15 ? 4 + Math.random() * 8 : other ? 0.4 + Math.random() * 0.9 : 0.25 + Math.random() * 0.3);
-    }
-    if (!cough) return;
-    nextCough -= dt;
-    if (nextCough < 0) {
-      const sp = speakers[Math.floor(Math.random() * speakers.length)];
-      (loc.sounds ??= []).push({ type: 'cough', ...hearing(camera, sp.pos.x, sp.pos.z, range * 2.5) });
-      nextCough = cough * (0.5 + Math.random());
-    }
+    if (next > 0) return;
+    const p = positions[Math.floor(Math.random() * positions.length)];
+    (loc.sounds ??= []).push({ type: 'cough', ...hearing(camera, p.x, p.z, range) });
+    next = every * (0.5 + Math.random());
   });
 }
 
@@ -66,9 +46,8 @@ export function buildLife(loc) {
   loc.onUpdate((dt, t, { camera }) => {
     for (const p of people) idleFigure(p.fig, t, p.lookAt ?? camera.position);
   });
-  // Das Paar unterhält sich leise; der Alte auf der Bank hustet von Zeit zu Zeit.
-  chatter(loc, [{ pos: he.position, voice: 'm' }, { pos: she.position, voice: 'f' }], { range: 11 });
-  chatter(loc, [{ pos: old.position, voice: 'm' }], { range: 14, cough: 40, talk: false });
+  // Der Alte auf der Bank hustet von Zeit zu Zeit.
+  coughs(loc, [old.position], { every: 40, range: 35 });
 
   // Pferdeäpfel: je ein Häufchen aus ein paar plattgedrückten Ballen, nass glänzend.
   const lumps = [];

@@ -313,7 +313,6 @@ export function buildTraffic(loc, r) {
     // Schuhwerk für die Schritte: Damenabsätze, Arbeiterstiefel (Mütze oder Schürze), sonst Herrenschuhe.
     w.kind = look.outfit === 'dress' ? 'heel' : look.hat === 'cap' || look.apron ? 'boot' : 'shoe';
     w.cane = !!look.cane;
-    w.voice = look.outfit === 'dress' ? 'f' : 'm';
     scene.add(fig);
     return w;
   });

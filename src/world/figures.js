@@ -142,24 +142,50 @@ function hairCap(tilt, thetaLength = 0.56 * Math.PI, thetaStart = 0) {
   return g;
 }
 
+// Glockenkurve um (cx, cy) in Einheitskoordinaten der Kopfkugel.
+const bump = (x, y, cx, cy, sx, sy) => Math.exp(-(((x - cx) / sx) ** 2) - ((y - cy) / sy) ** 2);
+const pair = (x, y, cx, cy, sx, sy) => bump(Math.abs(x), y, cx, cy, sx, sy);
+
 // Schädel und Kiefer aus einer einzigen verformten Kugel: Zwei sich durchdringende
 // Kugeln hinterlassen quer über den Wangen eine harte Schnittkante, die wie eine Narbe
 // aussieht. Nach unten wird die Kugel schmaler, länger und am Kinn etwas vorgezogen.
-// Die Haut ist pro Vertex gefärbt: Bartstoppeln gehen weich in die Hautfarbe über,
-// statt als zweite Schale aufzuliegen (die schneidet sonst wieder Kanten ins Gesicht).
+// Darauf modelliert: Augenhöhlen, Brauenbogen, Nasenwurzel, Wangenknochen, Mundpartie und
+// Kinn, bei Frauen weicher. Die Haut ist pro Vertex gefärbt: Augenhöhlen etwas dunkler, Wangen
+// wärmer, Bartstoppeln gehen weich in die Hautfarbe über, statt als zweite Schale aufzuliegen
+// (die schneidet sonst wieder Kanten ins Gesicht).
 function headShape(female, skin, stubble = null) {
-  let g = new THREE.SphereGeometry(0.1, 24, 18);
+  let g = new THREE.SphereGeometry(0.1, 32, 24);
   const pos = g.attributes.position;
   const unit = new Float32Array(pos.count * 3);
   const v = new THREE.Vector3();
   const taper = female ? 0.26 : 0.18;
+  const k = female ? 0.65 : 1;
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i).divideScalar(0.1);
     v.toArray(unit, i * 3);
     const t = Math.max(0, -v.y);
-    const x = v.x * 0.082 * (1 - taper * t ** 1.5);
+    let x = v.x * 0.082 * (1 - taper * t ** 1.5);
     const y = v.y * 0.11 * (1 + 0.08 * t);
-    const z = v.z * 0.097 + 0.01 * t * Math.max(0, v.z);
+    let z = v.z * 0.097 + 0.01 * t * Math.max(0, v.z);
+    const front = THREE.MathUtils.smoothstep(v.z, 0.15, 0.7);
+    const side = THREE.MathUtils.smoothstep(Math.abs(v.x), 0.45, 0.85) * THREE.MathUtils.smoothstep(v.z, -0.5, 0.1);
+    z += front * (
+      -0.0075 * pair(v.x, v.y, 0.4, 0.15, 0.19, 0.13)
+      + 0.0042 * k * pair(v.x, v.y, 0.38, 0.39, 0.3, 0.08)
+      + 0.003 * bump(v.x, v.y, 0, 0.17, 0.11, 0.16)
+      + 0.0035 * k * pair(v.x, v.y, 0.56, -0.12, 0.17, 0.13)
+      - 0.0025 * k * pair(v.x, v.y, 0.52, -0.42, 0.17, 0.14)
+      + 0.0045 * bump(v.x, v.y, 0, -0.45, 0.3, 0.2)
+      - 0.0022 * bump(v.x, v.y, 0, -0.66, 0.2, 0.05)
+      + 0.0045 * k * bump(v.x, v.y, 0, -0.86, 0.22, 0.11)
+    );
+    // Schläfen etwas eingezogen, Kieferwinkel und Jochbögen zur Seite.
+    const sx = Math.sign(v.x) * side * (
+      -0.0035 * bump(0, v.y, 0, 0.32, 1, 0.16)
+      + 0.0025 * k * bump(0, v.y, 0, -0.12, 1, 0.12)
+      + 0.003 * k * bump(0, v.y, 0, -0.62, 1, 0.14)
+    );
+    x += sx;
     pos.setXYZ(i, x, y, z);
   }
   g.setAttribute('unit', new THREE.BufferAttribute(unit, 3));
@@ -171,14 +197,18 @@ function headShape(female, skin, stubble = null) {
 
   const u = g.attributes.unit;
   const base = color(skin);
+  const warm = color(skin).lerp(color(0xc0503c), 0.35);
   const beard = stubble ? color(stubble) : null;
   const out = new Float32Array(u.count * 3);
   const c = new THREE.Color();
   for (let i = 0; i < u.count; i++) {
-    c.copy(base);
+    const ux = u.getX(i);
+    const uy = u.getY(i);
+    const uz = u.getZ(i);
+    const front = THREE.MathUtils.smoothstep(uz, 0.15, 0.7);
+    c.copy(base).lerp(warm, front * 0.5 * pair(ux, uy, 0.5, -0.25, 0.2, 0.18));
+    c.multiplyScalar(1 - front * 0.2 * pair(ux, uy, 0.4, 0.15, 0.17, 0.12));
     if (beard) {
-      const uy = u.getY(i);
-      const uz = u.getZ(i);
       // Bartlinie: vorn knapp unter der Nase, zu den Ohren hin ansteigend, hinten keine.
       const line = -0.3 + 0.38 * (1 - Math.max(0, uz));
       const m = (1 - THREE.MathUtils.smoothstep(uy, line - 0.06, line + 0.1)) * THREE.MathUtils.smoothstep(uz, -0.35, 0.05);
@@ -205,8 +235,9 @@ function buildHead(L) {
   H.add(ball(0.016 * nk, 0, -0.014, 0.097, 0.9, 0.95, 1, 8, 6), skin);
   for (const s of [-1, 1]) {
     H.add(ball(0.026, s * 0.08, 0.005, -0.005, 0.35, 1, 0.65, 8, 6), skin);
-    if (L.female) H.add(box(0.03, 0.004, 0.012, s * 0.034, 0.05, 0.081), shade(hair, 0.95));
-    else H.add(box(0.034, 0.009, 0.012, s * 0.034, 0.045, 0.083), shade(hair, 0.8));
+    // Brauen liegen auf dem Brauenbogen und fallen nach außen leicht ab.
+    const brow = ball(0.019, 0, 0, 0, 1, L.female ? 0.17 : 0.3, 0.38, 10, 6).rotateZ(-s * 0.09);
+    H.add(brow.translate(s * 0.035, 0.046, 0.0815), shade(hair, L.female ? 0.95 : 0.8));
   }
   // Lippen als zwei flache Wülste; ein dünner dunkler Strich liest sich als Narbe.
   const lk = L.female ? 0.9 : 1;
@@ -269,18 +300,22 @@ function buildHead(L) {
   const head = new THREE.Group();
   head.add(new THREE.Mesh(geo, cloth));
 
-  // Augen als eigenes Mesh: Lidschlag durch Stauchen in der Höhe.
+  // Augen als eigenes Mesh in den Augenhöhlen: Lidschlag durch Stauchen in der Höhe. Die
+  // Pupillen hängen daran und wandern dem Kopf beim Hinsehen voraus (idleFigure).
   const E = new Parts();
+  const P = new Parts();
   for (const s of [-1, 1]) {
-    E.add(ball(0.0112, s * 0.032, 0, 0.084, 1.1, 1, 0.6, 8, 6), 0xe2ddd2);
-    E.add(ball(0.0062, s * 0.032, -0.0005, 0.0902, 1, 1, 0.5, 8, 6), 0x1a1410);
+    E.add(ball(0.0118, s * 0.032, 0, 0.0795, 1.1, 1, 0.62, 10, 8), 0xe2ddd2);
+    P.add(ball(0.0062, s * 0.032, -0.0005, 0.0857, 1, 1, 0.5, 8, 6), 0x1a1410);
     // Oberlid: nimmt den starren Blick.
-    E.add(ball(0.0125, s * 0.032, 0.0085, 0.0848, 1.1, 0.6, 0.65, 8, 6), shade(skin, 0.9));
+    E.add(ball(0.013, s * 0.032, 0.0098, 0.0805, 1.1, 0.6, 0.65, 10, 6), shade(skin, 0.86));
   }
   const eyes = E.mesh();
   eyes.position.y = SKULL_Y + 0.018;
+  const pupils = P.mesh();
+  eyes.add(pupils);
   head.add(eyes);
-  return { head, eyes };
+  return { head, eyes, pupils };
 }
 
 function addHat(H, L) {
@@ -471,8 +506,8 @@ function buildArm(L, w, s) {
   F.add(cyl(0.045, 0.037, 0.26, 0, -0.13, 0, 10), sleeve);
   const cuff = L.cuffs ?? (L.outfit === 'tunic' ? L.piping ?? sleeve : L.female ? L.collar : L.shirt);
   F.add(cyl(0.037, 0.037, 0.024, 0, -0.256, 0, 10), cuff);
-  F.add(ball(0.04, 0, -0.31, 0.005, 0.62, 1.15, 0.95, 8, 7), L.skin);
-  F.add(ball(0.017, -s * 0.015, -0.29, 0.03, 1, 1.3, 1, 6, 5), L.skin);
+  const grip = s > 0 ? Boolean(L.cane || L.glass || L.punch || L.umbrella) : L.lantern;
+  for (const g of hand(s, grip, L.female ? 0.88 : 1)) F.add(g, L.skin);
 
   let rest = -0.15;
   let gesture = true;
@@ -550,6 +585,36 @@ function buildArm(L, w, s) {
   return { group: upperGroup, fore, rest, gesture };
 }
 
+// Hand am Ende des Unterarms, die Innenfläche zum Körper (-s). Locker hängend mit leicht
+// gekrümmten Fingern und abgespreiztem Daumen; wer etwas trägt, schließt die Faust darum.
+function hand(s, grip, k) {
+  const parts = [ball(0.04, 0, -0.298, 0.004, 0.45, 1.05, 0.95, 10, 8)];
+  const thumb = grip
+    ? [V3(-s * 0.012, -0.288, 0.03), V3(-s * 0.02, -0.312, 0.038), V3(-s * 0.017, -0.33, 0.04)]
+    : [V3(-s * 0.012, -0.285, 0.03), V3(-s * 0.02, -0.315, 0.042), V3(-s * 0.022, -0.338, 0.044)];
+  const joint = (pts, r0, r1, r2) => {
+    parts.push(strut(pts[0], pts[1], r0, r1, 6), ball(r1, pts[1].x, pts[1].y, pts[1].z, 1, 1, 1, 6, 5));
+    parts.push(strut(pts[1], pts[2], r1, r2, 6), ball(r2, pts[2].x, pts[2].y, pts[2].z, 1, 1, 1, 6, 5));
+  };
+  joint(thumb, 0.0095, 0.0088, 0.008);
+  if (grip) {
+    // Eingerollte Finger als Walze quer zur Hand, darauf die Knöchel.
+    parts.push(new THREE.CylinderGeometry(0.019, 0.019, 0.068, 10).rotateX(Math.PI / 2).translate(-s * 0.006, -0.336, 0.002));
+    for (let i = 0; i < 4; i++) parts.push(ball(0.0095, s * 0.006, -0.326, 0.025 - i * 0.016, 1, 1, 1, 6, 5));
+  } else {
+    const len = [0.95, 1, 0.97, 0.82];
+    for (let i = 0; i < 4; i++) {
+      const z = 0.024 - i * 0.016;
+      const l = len[i];
+      const r = 0.0085 - i * 0.0004;
+      const mid = V3(-s * 0.006, -0.335 - 0.042 * l, z + 0.002);
+      joint([V3(0, -0.33, z), mid, V3(-s * 0.017, mid.y - 0.028 * l, z + 0.002)], r, r * 0.92, r * 0.8);
+    }
+  }
+  if (k !== 1) for (const g of parts) g.translate(0, 0.3, 0).scale(k, k, k).translate(0, -0.3, 0);
+  return parts;
+}
+
 function buildLeg(L, w, s) {
   const thigh = new THREE.Group();
   thigh.position.set(s * 0.092 * w, 0.9, 0);
@@ -610,7 +675,7 @@ export function makeFigure(look = {}) {
   const torso = buildTorso(L, w);
   body.add(torso);
 
-  const { head, eyes } = buildHead(L);
+  const { head, eyes, pupils } = buildHead(L);
   head.position.y = 1.555;
   body.add(head);
   const pipe = look.pipe ? buildPipe() : null;
@@ -640,6 +705,7 @@ export function makeFigure(look = {}) {
     torso,
     head,
     eyes,
+    pupils,
     armL: armL.group,
     armR: armR.group,
     foreL: armL.fore,
@@ -765,7 +831,16 @@ export function idleFigure(figure, time, lookAt) {
   const bodyTurn = clamp(turn * 0.45, f.sitting ? -0.12 : -0.6, f.sitting ? 0.12 : 0.6);
   approach(f.body.rotation, 'y', bodyTurn, 0.05);
   approach(f.body.rotation, 'x', habit === 'tidy' ? busy * 0.07 : 0, 0.06);
-  approach(f.head.rotation, 'y', clamp(turn - f.body.rotation.y, -0.95, 0.95), 0.08);
+  const headYaw = clamp(turn - f.body.rotation.y, -0.95, 0.95);
+  // Die Augen sind schneller als der Kopf: Sie springen zum Ziel und gleichen aus, was Kopf
+  // und Oberkörper noch nicht geschafft haben. Ohne Ziel wandern sie in kleinen Sprüngen.
+  const k2 = Math.floor((time + phase) / (f.attending ? 2.2 : 1.3));
+  const jitter = f.attending ? 0.0007 : 0.003;
+  const ex = clamp((turn - f.body.rotation.y - f.head.rotation.y) * 0.006, -0.0035, 0.0035) + (hash(seed + k2 * 1.7) - 0.5) * jitter;
+  const ey = clamp((f.head.rotation.x - pitch) * 0.006, -0.0025, 0.002) + (hash(seed + k2 * 2.3) - 0.5) * jitter * 0.5;
+  approach(f.pupils.position, 'x', ex, 0.4);
+  approach(f.pupils.position, 'y', ey, 0.4);
+  approach(f.head.rotation, 'y', headYaw, 0.08);
   approach(f.head.rotation, 'x', talking ? pitch + Math.sin(time * 6.5) * 0.04 - 0.02 : pitch, 0.1);
   approach(f.head.rotation, 'z', (talking ? Math.sin(time * 1.7) * 0.03 : 0) + side * 0.028, 0.05);
 

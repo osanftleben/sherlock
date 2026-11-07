@@ -5,6 +5,7 @@ import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
 import { lightPool } from './lamps.js';
+import { chatter } from './life.js';
 
 // Brunnen in der Mitte des Platzes, in der Wendeschleife der Droschke (traffic.js):
 // Die Fahrspur bleibt rundum gut 6 m von seiner Mitte weg. Die beiden Laternen daneben
@@ -338,6 +339,8 @@ function buildCabRank(loc, ironMat) {
     label: 'Kutscher am Kohlebecken',
     action: { say: '„N’Abend, Herr. Wärmen Se sich ruhig mit, kost’ nischt.“ Die beiden reden über Hafer und den Kaiser, in dieser Reihenfolge, und finden beides zu teuer.' },
   });
+  // Die beiden reden über Hafer und den Kaiser, und einer hustet in die Kälte.
+  chatter(loc, men.map((fig) => ({ pos: fig.position, voice: 'm' })), { range: 14, cough: 35 });
 
   loc.onUpdate((dt, t, { camera }) => {
     const f = 0.85 + 0.1 * Math.sin(t * 7.3) * Math.sin(t * 2.9 + 1.3) + 0.05 * Math.sin(t * 17);

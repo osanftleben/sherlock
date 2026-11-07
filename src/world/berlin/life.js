@@ -2,6 +2,33 @@ import * as THREE from 'three';
 import { addMesh, merge, std } from '../kit.js';
 import { rng } from '../textures.js';
 import { idleFigure, makeFigure } from '../figures.js';
+import { hearing } from './traffic.js';
+
+// Leute, die miteinander reden: abwechselnd ein paar gemurmelte Sätze, dazwischen Pausen und ab
+// und zu ein längeres Schweigen. Hört man nur aus der Nähe. speakers: [{ pos, voice }];
+// cough: mittlere Sekunden zwischen zwei Hustern (0 = nie).
+export function chatter(loc, speakers, { range = 12, cough = 0 } = {}) {
+  let turn = 0;
+  let next = 1 + Math.random() * 3;
+  let nextCough = cough * (0.5 + Math.random());
+  loc.onUpdate((dt, t, { camera }) => {
+    next -= dt;
+    if (next < 0 && speakers.length) {
+      const sp = speakers[turn];
+      const ear = hearing(camera, sp.pos.x, sp.pos.z, range);
+      if (ear.vol > 0.01) (loc.sounds ??= []).push({ type: 'murmur', vol: ear.vol, pan: ear.pan, voice: sp.voice });
+      if (speakers.length > 1 && Math.random() < 0.7) turn = (turn + 1) % speakers.length;
+      next = Math.random() < 0.2 ? 5 + Math.random() * 8 : 1.8 + Math.random() * 1.6;
+    }
+    if (!cough) return;
+    nextCough -= dt;
+    if (nextCough < 0) {
+      const sp = speakers[Math.floor(Math.random() * speakers.length)];
+      (loc.sounds ??= []).push({ type: 'cough', ...hearing(camera, sp.pos.x, sp.pos.z, range * 2.5) });
+      nextCough = cough * (0.5 + Math.random());
+    }
+  });
+}
 
 // Was den Platz belebt, ohne dass man es anspricht: ein Paar unter einem Schirm, das an der
 // Urania-Säule die Reklame liest, ein Mann auf der Bank, Pferdeäpfel am Halteplatz und auf der
@@ -27,11 +54,14 @@ export function buildLife(loc) {
   people[1].lookAt = he.position;
 
   // Auf der Bank (14, 6) mit dem Rücken nach Süden: ein alter Mann, der den Brunnen ansieht.
-  place({ outfit: 'overcoat', coat: 0x2e2a24, hat: 'cap', hatColor: 0x1e1c1a, beard: 'full', hair: 0x8a847a, neck: 'scarf', tie: 0x3a2e24, pose: 'sit', build: 'stout' }, 14.4, 6.05, Math.PI, -0.39);
+  const old = place({ outfit: 'overcoat', coat: 0x2e2a24, hat: 'cap', hatColor: 0x1e1c1a, beard: 'full', hair: 0x8a847a, neck: 'scarf', tie: 0x3a2e24, pose: 'sit', build: 'stout' }, 14.4, 6.05, Math.PI, -0.39);
 
   loc.onUpdate((dt, t, { camera }) => {
     for (const p of people) idleFigure(p.fig, t, p.lookAt ?? camera.position);
   });
+  // Das Paar unterhält sich leise; der Alte auf der Bank hustet von Zeit zu Zeit.
+  chatter(loc, [{ pos: he.position, voice: 'm' }, { pos: she.position, voice: 'f' }], { range: 11 });
+  chatter(loc, [{ pos: old.position, voice: 'm' }], { range: 14, cough: 40 });
 
   // Pferdeäpfel: je ein Häufchen aus ein paar plattgedrückten Ballen, nass glänzend.
   const lumps = [];

@@ -303,12 +303,17 @@ export function buildTraffic(loc, r) {
   // danach bleibt, wie es war.
   const rw = rng(1894);
   const walkers = routes.map((route, i) => {
-    const fig = makeFigure(looks[i % looks.length]);
+    const look = looks[i % looks.length];
+    const fig = makeFigure(look);
     const from = new THREE.Vector2(route[0][0], route[0][1]);
     const to = new THREE.Vector2(route[1][0], route[1][1]);
     const len = from.distanceTo(to);
     const rr = i < 12 ? r : rw;
     const w = { fig, from, to, len, s: rr() * len, dir: 1, phase: rr() * 6, speed: 1.05 + rr() * 0.4 };
+    // Schuhwerk für die Schritte: Damenabsätze, Arbeiterstiefel (Mütze oder Schürze), sonst Herrenschuhe.
+    w.kind = look.outfit === 'dress' ? 'heel' : look.hat === 'cap' || look.apron ? 'boot' : 'shoe';
+    w.cane = !!look.cane;
+    w.voice = look.outfit === 'dress' ? 'f' : 'm';
     scene.add(fig);
     return w;
   });
@@ -362,9 +367,21 @@ export function buildTraffic(loc, r) {
         const dz = camera.position.z - z;
         if (dx * dx + dz * dz > 1.3) {
           w.s += w.dir * w.speed * dt;
+          const step = Math.floor(w.phase / Math.PI);
           w.phase += dt * w.speed * 5.2;
           w.untilStop -= w.speed * dt;
           walkFigure(w.fig, w.phase);
+          if (Math.floor(w.phase / Math.PI) !== step) {
+            const ear = hearing(camera, x, z, 25);
+            if (ear.vol > 0.01) {
+              // Der Stock setzt nur bei jedem zweiten Schritt auf.
+              (loc.sounds ??= []).push({ type: 'footstep', vol: ear.vol * 0.9, pan: ear.pan, kind: w.kind, cane: w.cane && step % 2 === 0 });
+            }
+          }
+          // Selten hustet jemand im Vorbeigehen.
+          if (Math.random() < dt / 240) {
+            (loc.sounds ??= []).push({ type: 'cough', ...hearing(camera, x, z, 30) });
+          }
         }
         if (w.s >= w.len || w.s <= 0) {
           w.s = THREE.MathUtils.clamp(w.s, 0, w.len);

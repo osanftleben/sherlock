@@ -5,6 +5,7 @@ export class Audio {
     this.env = 'street';
     this.nextHoof = 8;
     this.nextBell = 45;
+    this.nextTram = 25;
     this.nextDrop = 0;
   }
 
@@ -40,6 +41,25 @@ export class Audio {
     lfo.start();
     this.loop(windFilter);
     windFilter.connect(this.windGain).connect(this.master);
+
+    // Ferne Stadt: ein tiefes, langsam an- und abschwellendes Grollen hinter den Häusern,
+    // Räder und Hufe vieler Straßen, zu einem Rauschen verschwommen.
+    this.cityGain = ctx.createGain();
+    this.cityGain.gain.value = 0.03;
+    const cityFilter = ctx.createBiquadFilter();
+    cityFilter.type = 'bandpass';
+    cityFilter.frequency.value = 170;
+    cityFilter.Q.value = 0.8;
+    const citySwell = ctx.createGain();
+    citySwell.gain.value = 1;
+    const cityLfo = ctx.createOscillator();
+    cityLfo.frequency.value = 0.031;
+    const cityLfoGain = ctx.createGain();
+    cityLfoGain.gain.value = 0.35;
+    cityLfo.connect(cityLfoGain).connect(citySwell.gain);
+    cityLfo.start();
+    this.loop(cityFilter);
+    cityFilter.connect(citySwell).connect(this.cityGain).connect(this.master);
 
     // Nieselregen: nur ein Hauch Rauschen, der Rest sind einzelne Tropfen
     this.rainGain = ctx.createGain();
@@ -131,6 +151,7 @@ export class Audio {
     const outdoors = env === 'street';
     const t = this.ctx.currentTime;
     this.windGain.gain.setTargetAtTime(outdoors ? 0.09 : 0.012, t, 0.4);
+    this.cityGain.gain.setTargetAtTime(outdoors ? 0.03 : 0.006, t, 0.4);
     this.rainGain.gain.setTargetAtTime(outdoors ? 0.004 : 0.0007, t, 0.4);
     this.dropGain.gain.setTargetAtTime(outdoors ? 1 : 0.35, t, 0.4);
     this.dropMuffle.frequency.setTargetAtTime(outdoors ? 16000 : 1800, t, 0.4);
@@ -322,9 +343,109 @@ export class Audio {
     }
   }
 
+  // Schritt eines Passanten auf nassem Pflaster. kind: 'heel' (Damenabsatz, hell und spitz),
+  // 'boot' (Arbeiterstiefel, schwer), sonst Herrenschuh. Dazu ein feines Schmatzen von Wasser.
+  footstep(vol, pan, { kind = 'shoe', cane = false } = {}) {
+    const out = this.panned(pan * 0.85, 0.5);
+    const v = vol * (0.8 + Math.random() * 0.4);
+    if (kind === 'heel') {
+      this.burst({ freq: 2600 + Math.random() * 500, q: 2.2, dur: 0.025, gain: 0.32 * v, out });
+      this.burst({ freq: 950, q: 1.6, dur: 0.04, gain: 0.26 * v, out });
+    } else if (kind === 'boot') {
+      this.burst({ freq: 850 + Math.random() * 150, q: 1, dur: 0.05, gain: 0.28 * v, out });
+      this.burst({ freq: 170, q: 1, dur: 0.09, gain: 0.5 * v, out });
+    } else {
+      this.burst({ freq: 1400 + Math.random() * 300, q: 1.2, dur: 0.04, gain: 0.28 * v, out });
+      this.burst({ freq: 300, q: 1, dur: 0.06, gain: 0.34 * v, out });
+    }
+    this.burst({ freq: 4200, q: 0.7, dur: 0.06, gain: 0.07 * v, when: 0.015, out });
+    // Spazierstock: die Zwinge tickt kurz nach dem Schritt.
+    if (cane) this.burst({ freq: 3400, q: 3, dur: 0.018, gain: 0.22 * v, when: 0.18 + Math.random() * 0.05, out });
+  }
+
+  // Husten: zwei, drei raue Stöße; ab und zu nur ein Räuspern mit etwas Stimme darin.
+  cough(vol, pan) {
+    const out = this.panned(pan * 0.85, 1.5);
+    if (Math.random() < 0.4) {
+      this.burst({ freq: 450, q: 1.2, dur: 0.22, gain: 0.9 * vol, attack: 0.03, out });
+      this.tone({ freq: 125 + Math.random() * 20, dur: 0.18, gain: 0.12 * vol, type: 'sawtooth', when: 0.12, attack: 0.03, out });
+      this.burst({ freq: 380, q: 1.4, dur: 0.16, gain: 0.6 * vol, attack: 0.02, when: 0.3, out });
+      return;
+    }
+    const n = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const when = i * (0.32 + Math.random() * 0.1);
+      const k = 1 - i * 0.2;
+      this.burst({ freq: 700 + Math.random() * 200, q: 0.8, dur: 0.16, gain: 1.2 * vol * k, attack: 0.008, when, out });
+      this.burst({ freq: 260, q: 1, dur: 0.12, gain: 0.9 * vol * k, attack: 0.008, when, out });
+    }
+  }
+
+  // Leises Reden, durch Regen und Abstand gedämpft: eine Folge von Silben mit Stimme (Sägezahn
+  // durch zwei Formanten), die Tonhöhe sinkt zum Satzende. voice: 'm' oder 'f'.
+  murmur(vol, pan, { voice = 'm' } = {}) {
+    const ctx = this.ctx;
+    const out = this.panned(pan * 0.85, 3);
+    const soft = ctx.createBiquadFilter();
+    soft.type = 'lowpass';
+    soft.frequency.value = 1100;
+    soft.connect(out);
+    const base = voice === 'f' ? 210 : 115;
+    const n = 4 + Math.floor(Math.random() * 6);
+    let when = 0;
+    for (let i = 0; i < n; i++) {
+      const dur = 0.09 + Math.random() * 0.14;
+      const t = ctx.currentTime + when;
+      const f0 = base * (1.12 - (0.22 * i) / n) * (0.95 + Math.random() * 0.1);
+      const osc = ctx.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(f0, t);
+      osc.frequency.linearRampToValueAtTime(f0 * (0.92 + Math.random() * 0.12), t + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime((voice === 'f' ? 0.2 : 0.3) * vol, t + 0.025);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      for (const [freq, q] of [[400 + Math.random() * 400, 4], [1100 + Math.random() * 700, 5]]) {
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = freq;
+        bp.Q.value = q;
+        osc.connect(bp).connect(g);
+      }
+      g.connect(soft);
+      osc.start(t);
+      osc.stop(t + dur + 0.02);
+      // Zischlaute zwischen den Silben.
+      if (Math.random() < 0.3) this.burst({ freq: 3000, q: 1, dur: 0.05, gain: 0.03 * vol, when: when + dur, out: soft });
+      when += dur + 0.03 + Math.random() * 0.08;
+    }
+  }
+
+  // Ferner Wagen: Hufe im Trab, gedämpft und von einer Seite, schwillt an und wieder ab.
   hooves() {
-    for (let i = 0; i < 8; i++) {
-      this.burst({ freq: 1100, q: 3, dur: 0.05, gain: 0.05 + i * 0.006, when: i * 0.24 + (i % 2) * 0.05 });
+    const ctx = this.ctx;
+    const out = this.panned((Math.random() - 0.5) * 1.6, 8);
+    const far = ctx.createBiquadFilter();
+    far.type = 'lowpass';
+    far.frequency.value = 1400;
+    far.connect(out);
+    const beats = 14 + Math.floor(Math.random() * 8);
+    const step = 0.26 + Math.random() * 0.06;
+    for (let i = 0; i < beats; i++) {
+      const env = Math.sin((i / (beats - 1)) * Math.PI);
+      const when = i * step + (i % 2) * 0.04;
+      this.burst({ freq: 900 + Math.random() * 200, q: 2, dur: 0.05, gain: 0.27 * env, when, out: far });
+      this.burst({ freq: 300, q: 1.2, dur: 0.06, gain: 0.2 * env, when, out: far });
+    }
+  }
+
+  // Pferdebahn in einer Nachbarstraße: das Glöckchen am Wagen, zweimal angeschlagen.
+  trambell() {
+    const out = this.panned((Math.random() - 0.5) * 1.4, 3);
+    for (const when of [0, 0.32 + Math.random() * 0.1]) {
+      this.tone({ freq: 1760, dur: 0.9, gain: 0.014, when, out });
+      this.tone({ freq: 2790, dur: 0.5, gain: 0.007, when, out });
+      this.tone({ freq: 4330, dur: 0.25, gain: 0.003, when, out });
     }
   }
 
@@ -471,7 +592,7 @@ export class Audio {
     const now = this.ctx.currentTime;
     if (sounds?.length) {
       if (outdoors) {
-        for (const s of sounds) if (s.vol > 0.005) this[s.type]?.(s.vol, s.pan);
+        for (const s of sounds) if (s.vol > 0.005) this[s.type]?.(s.vol, s.pan, s);
       }
       sounds.length = 0;
     }
@@ -505,6 +626,11 @@ export class Audio {
       if (this.nextHoof < 0) {
         this.hooves();
         this.nextHoof = 18 + Math.random() * 30;
+      }
+      this.nextTram -= dt;
+      if (this.nextTram < 0) {
+        this.trambell();
+        this.nextTram = 50 + Math.random() * 80;
       }
     }
     this.nextBell -= dt;

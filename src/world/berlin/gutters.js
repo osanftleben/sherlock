@@ -123,6 +123,6 @@ export function buildDownpipes(loc, pipes) {
         best = o;
       }
     }
-    Object.assign(loc.gutter, best ? hearing(camera, best.x, best.z, 12) : { vol: 0, pan: 0 });
+    Object.assign(loc.gutter, best ? hearing(camera, best.x, best.z, 7) : { vol: 0, pan: 0 });
   });
 }

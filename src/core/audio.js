@@ -129,12 +129,12 @@ export class Audio {
     trickle.frequency.value = 2400;
     trickle.Q.value = 1.2;
     const bubble = ctx.createGain();
-    bubble.gain.value = 0.05;
+    bubble.gain.value = 0.015;
     const flutter = ctx.createBiquadFilter();
     flutter.type = 'lowpass';
     flutter.frequency.value = 22;
     const flutterDepth = ctx.createGain();
-    flutterDepth.gain.value = 1.5;
+    flutterDepth.gain.value = 0.4;
     this.loop(flutter);
     flutter.connect(flutterDepth).connect(bubble.gain);
     this.loop(trickle);

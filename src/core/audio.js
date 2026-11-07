@@ -93,8 +93,27 @@ export class Audio {
     const trainFilter = ctx.createBiquadFilter();
     trainFilter.type = 'lowpass';
     trainFilter.frequency.value = 130;
+    // Das Mauerwerk dröhnt mit: tiefes Grollen kräftiger als das Rollen, dazu ein Dröhnen um
+    // 180 Hz, das auch kleine Lautsprecher wiedergeben. Es schwillt im Takt der Bögen, über die
+    // der Zug gerade rollt.
+    const rumble = ctx.createGain();
+    rumble.gain.value = 2.2;
     this.loop(trainFilter);
-    trainFilter.connect(this.trainGain);
+    trainFilter.connect(rumble).connect(this.trainGain);
+    const boomFilter = ctx.createBiquadFilter();
+    boomFilter.type = 'bandpass';
+    boomFilter.frequency.value = 180;
+    boomFilter.Q.value = 1.4;
+    const boom = ctx.createGain();
+    boom.gain.value = 1.4;
+    const arches = ctx.createOscillator();
+    arches.frequency.value = 0.9;
+    const archDepth = ctx.createGain();
+    archDepth.gain.value = 0.5;
+    arches.connect(archDepth).connect(boom.gain);
+    arches.start();
+    this.loop(boomFilter);
+    boomFilter.connect(boom).connect(this.trainGain);
     const rollFilter = ctx.createBiquadFilter();
     rollFilter.type = 'bandpass';
     rollFilter.frequency.value = 420;
@@ -759,7 +778,7 @@ export class Audio {
   clack(vol) {
     for (const when of [0, 0.11 + Math.random() * 0.02]) {
       this.burst({ freq: 700 + Math.random() * 150, q: 1.8, dur: 0.04, gain: 0.22 * vol, when, out: this.trainPan });
-      this.burst({ freq: 110, q: 1.2, dur: 0.1, gain: 0.5 * vol, when, out: this.trainPan });
+      this.burst({ freq: 110, q: 1.2, dur: 0.16, gain: 0.8 * vol, when, out: this.trainPan });
     }
   }
 

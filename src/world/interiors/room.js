@@ -29,6 +29,8 @@ export class Room {
     this.plainBag = new Bag();
     this.metalBag = new Bag();
     this.glassBag = new Bag();
+    // Selbstleuchtendes ohne Licht (Lampenglas, Schirminnenseiten).
+    this.glowBag = new Bag();
     const scene = (this.scene = loc.scene);
     scene.background = new THREE.Color(0x050403);
     scene.add(new THREE.HemisphereLight(0xcdb596, 0x4a3828, ambient * 3));
@@ -131,22 +133,42 @@ export class Room {
     this.solid(x, z, 0.85, 0.85);
   }
 
+  // Petroleum-Hängelampe: Das Licht sitzt im mattierten Glaszylinder, darüber ein weiter Blechschirm
+  // (außen emailliert, innen hell), darunter der Ölbehälter aus Messing. Schirm und Behälter
+  // verdecken die Flamme aus den meisten Blickwinkeln; der Zylinder leuchtet warm, ohne zu blenden.
   // visible: false ergibt reines Fülllicht ohne sichtbare Lampe.
-  lamp(x, y, z, { intensity = 9, color = 0xffb06a, range = 14, glow = 1.0, hang = true, visible = true } = {}) {
+  lamp(x, y, z, { intensity = 9, color = 0xffb06a, range = 14, glow = 1.0, hang = true, visible = true, shade = 0x2a3a26 } = {}) {
     const power = intensity * 2.6;
     const l = new THREE.PointLight(color, power, range, 1.8);
     l.position.set(x, y, z);
     this.scene.add(l);
+    const at = (g) => g.translate(x, y, z);
+    const turned = (pts, seg = 20) => new THREE.LatheGeometry(pts.map(([r, py]) => new THREE.Vector2(r, py)), seg);
     if (visible) {
-      addMesh(this.scene, new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.5, 0.7) }), x, y, z);
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xffb060, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending }));
-      s.position.set(x, y, z);
-      s.scale.setScalar(glow);
+      const brass = 0xa58a4a;
+      const SHADE = [[0.29, 0], [0.255, 0.035], [0.17, 0.11], [0.085, 0.18], [0.06, 0.205]];
+      this.plainBag.add(at(turned(SHADE, 28)), shade);
+      // Innenseite: eigene Fläche mit Normalen nach innen, ungerührt vom Licht gleichmäßig hell.
+      this.glowBag.add(at(turned(SHADE.map(([r, py]) => [r * 0.965, py - 0.004]).reverse(), 28)), new THREE.Color(0.62, 0.48, 0.32));
+      this.metalBag.add(at(new THREE.TorusGeometry(0.29, 0.007, 5, 32).rotateX(Math.PI / 2)), brass);
+      this.glowBag.add(at(turned([[0.026, -0.005], [0.043, 0.035], [0.048, 0.08], [0.038, 0.125], [0.027, 0.16], [0.024, 0.24]], 14)), new THREE.Color(1.25, 0.82, 0.42));
+      this.metalBag.add(at(cyl(0.032, 0.03, 0.025, 0, -0.012, 0, 14)), brass);
+      this.metalBag.add(at(turned([[0, -0.155], [0.035, -0.152], [0.07, -0.12], [0.078, -0.085], [0.058, -0.045], [0.03, -0.028], [0.03, -0.02]], 18)), brass);
+      for (let k = 0; k < 3; k++) {
+        const a = (k / 3) * Math.PI * 2;
+        this.metalBag.add(at(rod([[Math.cos(a) * 0.27, 0, Math.sin(a) * 0.27], [Math.cos(a) * 0.075, -0.09, Math.sin(a) * 0.075]], 0.004)), brass);
+      }
+      // Rauchglocke über dem Zylinder.
+      this.metalBag.add(at(cyl(0.02, 0.055, 0.04, 0, 0.29, 0, 12)), brass);
+      // Schwacher Schein im Tabakdunst unter dem Schirm.
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xffb060, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending }));
+      s.position.set(x, y - 0.03, z);
+      s.scale.setScalar(glow * 0.8);
       this.scene.add(s);
     }
     if (hang) {
-      this.metalBag.box(0x1a1610, 0.015, this.h - y, 0.015, x, (this.h + y) / 2, z);
-      this.metalBag.add(cyl(0.16, 0.3, 0.13, x, y + 0.12, z, 12), 0x25301f);
+      const top = visible ? y + 0.31 : y;
+      this.metalBag.box(0x1a1610, 0.015, this.h - top, 0.015, x, (this.h + top) / 2, z);
     }
     const seed = x * 3.1 + z;
     this.loc.onUpdate((dt, t) => {
@@ -281,6 +303,7 @@ export class Room {
     if (this.woodBag.parts.length) addMesh(this.scene, this.woodBag.build(), std({ ...woodTex, vertexColors: true, roughness: 0.62 }));
     if (this.plainBag.parts.length) addMesh(this.scene, this.plainBag.build(), std({ vertexColors: true, roughness: 0.8 }));
     if (this.metalBag.parts.length) addMesh(this.scene, this.metalBag.build(), std({ vertexColors: true, roughness: 0.4, metalness: 0.7 }));
+    if (this.glowBag.parts.length) addMesh(this.scene, this.glowBag.build(), new THREE.MeshBasicMaterial({ vertexColors: true }));
     if (this.glassBag.parts.length) {
       const glass = addMesh(this.scene, this.glassBag.build(), std({ vertexColors: true, roughness: 0.08, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide }));
       glass.renderOrder = 1;

@@ -5,6 +5,7 @@ export class Audio {
     this.env = 'street';
     this.nextHoof = 8;
     this.nextBell = 45;
+    this.nextClack = 0;
     this.nextTram = 25;
     this.nextDrop = 0;
   }
@@ -704,7 +705,22 @@ export class Audio {
       this.bell();
       this.nextBell = 90 + Math.random() * 60;
     }
-    const near = this.env === 'street' ? Math.max(0, 1 - trainDistance / 150) : 0;
-    this.trainGain.gain.setTargetAtTime(near * near * 0.8, this.ctx.currentTime, 0.3);
+    // Stadtbahn: das Grollen bis 120 m, nah am Viadukt etwa so laut wie eine kräftige Böe,
+    // dazu die Schienenstöße, damit man es als Zug erkennt.
+    const near = this.env === 'street' ? Math.max(0, 1 - trainDistance / 120) : 0;
+    this.trainGain.gain.setTargetAtTime(near * near * 0.18, now, 0.3);
+    this.nextClack -= dt;
+    if (this.nextClack < 0) {
+      if (near > 0.15) this.clack(near * near);
+      this.nextClack = 0.52 + Math.random() * 0.08;
+    }
+  }
+
+  // Ein Drehgestell rollt über einen Schienenstoß: „ta-dam“, hell vom Eisen, dumpf vom Viadukt.
+  clack(vol) {
+    for (const when of [0, 0.11 + Math.random() * 0.02]) {
+      this.burst({ freq: 700 + Math.random() * 150, q: 1.8, dur: 0.04, gain: 0.22 * vol, when });
+      this.burst({ freq: 110, q: 1.2, dur: 0.1, gain: 0.5 * vol, when });
+    }
   }
 }

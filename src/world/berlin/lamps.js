@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Bag, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
+import { MIRROR_LAYER } from './ripples.js';
 
 // Lichtfleck einer Laterne auf dem Boden. Er wird nicht als helle Scheibe daraufgelegt, sondern
 // verstärkt, was schon da ist (Ergebnis = Boden × (1 + Licht)): Die Steine leuchten auf, die
@@ -62,10 +63,13 @@ export function buildLamps(loc, positions, ironMat) {
     const s = new THREE.Sprite(glowMat.clone());
     s.position.set(x, y + 3.8, z);
     s.scale.setScalar(3.6);
+    s.layers.enable(MIRROR_LAYER);
     scene.add(s);
     glows.push({ s, x, z, y, seed: i * 1.7 });
   });
   postMesh.frustumCulled = glassMesh.frustumCulled = pools.frustumCulled = false;
+  postMesh.layers.enable(MIRROR_LAYER);
+  glassMesh.layers.enable(MIRROR_LAYER);
   scene.add(postMesh, glassMesh, pools);
 
   // Nur die nächsten Laternen werfen echtes Licht. Die Anzahl bleibt fest, damit nichts neu kompiliert.

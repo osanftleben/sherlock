@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { Bag, addMesh, cyl, merge, std, worldUV } from '../kit.js';
-import { clockFace, granite as graniteTex, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
+import { clockFace, granite as graniteTex, posterWall, rng, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
 import { lightPool } from './lamps.js';
 import { coughs } from './life.js';
+import { MIRROR_LAYER, rainOnWater, waterMirror } from './ripples.js';
 
 // Brunnen in der Mitte des Platzes, in der Wendeschleife der Droschke (traffic.js):
 // Die Fahrspur bleibt rundum gut 6 m von seiner Mitte weg. Die beiden Laternen daneben
@@ -201,7 +202,8 @@ function buildFountain(loc) {
   const lathe = (prof, y, color, seg = 24) => b.add(new THREE.LatheGeometry(prof.map(([r, h]) => new THREE.Vector2(r, h)), seg).translate(x, y, z), color);
 
   // Becken: Boden, Sockelstufe, Wand, zweistufige Deckplatte
-  oct(R - 0.2, 0.3, 0.15, 0x3a3a38);
+  // Grund des Beckens: Granit unter einem bräunlichen Schlammfilm
+  oct(R - 0.2, 0.3, 0.15, 0x5a5644);
   const apothem = R * Math.cos(Math.PI / 8);
   const face = 2 * R * Math.sin(Math.PI / 8);
   for (let i = 0; i < 8; i++) {
@@ -253,13 +255,59 @@ function buildFountain(loc) {
   lathe([[0, 0], [0.05, 0], [0.04, 0.08], [0.1, 0.1], [0.11, 0.16], [0.1, 0.24], [0.08, 0.3], [0.05, 0.36], [0.02, 0.4], [0, 0.42]], 3.58, bronze, 9);
 
   // Granit matt und stumpf, Eisen mit halbmattem Anstrich, Bronze metallisch mit warmem Glanz.
-  addMesh(scene, bags.stone.build(), std({ ...graniteTex(), vertexColors: true, roughness: 0.92, metalness: 0 }));
-  addMesh(scene, bags.iron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.15 }));
-  addMesh(scene, bags.bronze.build(), std({ vertexColors: true, roughness: 0.38, metalness: 0.85 }));
-  // Stehendes Wasser: dunkel und glatt, damit es die Laternen spiegelt.
-  const waterMat = std({ color: 0x0a0e14, roughness: 0.06, metalness: 0.6, envMapIntensity: 1.4 });
-  addMesh(scene, cyl(R - 0.28, R - 0.28, 0.02, 0, 0.46, 0, 8).rotateY(Math.PI / 8).translate(x, 0, z), waterMat);
-  addMesh(scene, cyl(0.99, 0.99, 0.01, x, 2.97, z, 32), waterMat);
+  // Alle drei spiegeln sich im Becken (MIRROR_LAYER).
+  for (const mesh of [
+    addMesh(scene, bags.stone.build(), std({ ...graniteTex(), vertexColors: true, roughness: 0.92, metalness: 0 })),
+    addMesh(scene, bags.iron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.15 })),
+    addMesh(scene, bags.bronze.build(), std({ vertexColors: true, roughness: 0.38, metalness: 0.85 })),
+  ]) mesh.layers.enable(MIRROR_LAYER);
+  // Stehendes Regenwasser: durchsichtig und leicht trüb, von oben sieht man den Grund, bei flachem
+  // Blick spiegelt es Himmel und Laternen; der Regen zieht Ringe (ripples.js).
+  // Im Becken ein echtes Spiegelbild (waterMirror), in der hohen Schale, die man kaum von oben
+  // sieht, nur die Umgebungskarte. Darum zwei Materialien.
+  const water = () => std({ color: 0x1c1e14, roughness: 0.05, metalness: 0, envMapIntensity: 1.6 });
+  const basinWater = 0.46;
+  const bowlWater = 2.97;
+  const basin = addMesh(scene, cyl(R - 0.28, R - 0.28, 0.02, 0, basinWater, 0, 8).rotateY(Math.PI / 8).translate(x, 0, z), water());
+  basin.material = rainOnWater(basin.material, 'fountainBasin', { clear: true, mirror: waterMirror(basin, basinWater + 0.01) });
+  addMesh(scene, cyl(0.99, 0.99, 0.01, x, bowlWater, z, 32), rainOnWater(water(), 'fountainBowl', { clear: true }));
+
+  // Lindenblätter von den Bäumen am Platz: die meisten treiben, vom Wind an den Rand geschoben,
+  // einige sind vollgesogen auf den Grund gesunken und dort dunkel. Ein paar liegen in der Schale.
+  const leafRand = rng(1107);
+  const leafShape = new THREE.Shape();
+  leafShape.moveTo(0, -0.045);
+  leafShape.bezierCurveTo(0.03, -0.03, 0.042, 0.01, 0.03, 0.03);
+  leafShape.bezierCurveTo(0.02, 0.045, 0.004, 0.04, 0, 0.032);
+  leafShape.bezierCurveTo(-0.006, 0.042, -0.026, 0.046, -0.034, 0.03);
+  leafShape.bezierCurveTo(-0.046, 0.008, -0.03, -0.03, 0, -0.045);
+  const leaves = new Bag();
+  const leaf = (lx, y, lz, colors, s = 1) => {
+    const g = new THREE.ShapeGeometry(leafShape, 4);
+    g.scale(s, s, s).rotateX(-Math.PI / 2).rotateY(leafRand() * Math.PI * 2).translate(lx, y, lz);
+    leaves.add(g, colors[Math.floor(leafRand() * colors.length)]);
+  };
+  // Innenraum des Beckens ohne den Pfeiler: Kreisring 0,85 bis 1,9 m um die Mitte.
+  const inBasin = (bias) => {
+    const a = leafRand() * Math.PI * 2;
+    const d = 1.9 - 1.05 * Math.pow(leafRand(), bias);
+    return [x + Math.cos(a) * d, z + Math.sin(a) * d];
+  };
+  for (let i = 0; i < 34; i++) {
+    const [lx, lz] = inBasin(2.2);
+    leaf(lx, basinWater + 0.012 + i * 0.0002, lz, [0x9a7a30, 0x8a6424, 0xb08a3a, 0x6e4e1e, 0xa06a28], 0.9 + leafRand() * 0.5);
+  }
+  for (let i = 0; i < 26; i++) {
+    const [lx, lz] = inBasin(1);
+    leaf(lx, 0.302 + i * 0.0002, lz, [0x3e3420, 0x4a3a1e, 0x342c1c], 0.9 + leafRand() * 0.4);
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = leafRand() * Math.PI * 2;
+    const d = 0.3 + leafRand() * 0.6;
+    leaf(x + Math.cos(a) * d, bowlWater + 0.007 + i * 0.0002, z + Math.sin(a) * d, [0x9a7a30, 0x8a6424, 0x6e4e1e], 1);
+  }
+  // Nasse Blätter glänzen ein wenig, von unten und oben gleich.
+  addMesh(scene, leaves.build(), std({ vertexColors: true, roughness: 0.45, side: THREE.DoubleSide }));
   const w = apothem + 0.1;
   loc.collide(x - w, x + w, z - w, z + w);
   loc.addHotspot({

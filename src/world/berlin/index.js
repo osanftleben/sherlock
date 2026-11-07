@@ -16,6 +16,7 @@ import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
 import { buildWeather } from './weather.js';
 import { buildSmoke } from './smoke.js';
+import { MIRROR_LAYER, RIPPLES, RIPPLE_GLINT, rainTime } from './ripples.js';
 
 // Das erste Viertel: Hackescher Markt, Rosenthaler und Oranienburger Straße, Sophienstraße,
 // die Stadtbahn am Bahnhof Börse und die Spree. Norden ist -Z.
@@ -85,6 +86,7 @@ export function buildBerlin() {
     }),
   );
   sky.renderOrder = -10;
+  sky.layers.enable(MIRROR_LAYER);
   scene.add(sky);
   loc.onUpdate((dt, t, { camera }) => {
     sky.position.copy(camera.position);
@@ -419,29 +421,7 @@ export function buildBerlin() {
 // Legt streetWet() in Weltkoordinaten über das Pflaster: Pfützen sind dunkel, glatt und ohne
 // Steinrelief, dazu großflächig hellere und dunklere Stellen, damit sich die 8-m-Kachel
 // nicht wiederholt. In den Pfützen schlagen Tropfen ein: kleine Ringe, die sich ausbreiten und
-// das Spiegelbild der Laternen kräuseln (nur die Normale, kein eigenes Licht).
-const rainTime = { value: 0 };
-const RIPPLES = `
-uniform float rainTime;
-float rippleGlint;
-float rippleHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-// Ein Ring je Zelle (cell Meter), der in jedem Takt neu und an anderer Stelle einschlägt oder
-// aussetzt. Gibt die Neigung der Wasseroberfläche in x und z zurück.
-vec2 ripple(vec2 xz, float cell, float seed) {
-  vec2 p = xz / cell + seed;
-  vec2 id = floor(p);
-  float h = rippleHash(id);
-  float u = rainTime / (0.9 + h * 1.4) + h * 13.0;
-  float cyc = floor(u);
-  float ph = fract(u);
-  float on = step(rippleHash(id + cyc * 7.31), 0.22);
-  vec2 c = vec2(rippleHash(id + cyc * 3.7 + 1.3), rippleHash(id + cyc * 5.1 + 2.9)) * 0.6 + 0.2;
-  vec2 d = (fract(p) - c) * cell;
-  float r = length(d);
-  float x = r - ph * 0.08;
-  float fade = (1.0 - ph) * (1.0 - ph);
-  return on * fade * sin(x * 110.0) * exp(-x * x * 1400.0) * d / max(r, 0.001);
-}`;
+// das Spiegelbild der Laternen kräuseln (ripples.js).
 function wetStreet(material) {
   const wet = streetWet();
   material.onBeforeCompile = (shader) => {
@@ -472,8 +452,7 @@ function wetStreet(material) {
         // Die Pfütze spiegelt den dunklen Himmel und die Laternen, nicht den Lichtschein der Umgebungskarte.
         reflectedLight.indirectSpecular *= mix(1.0, 0.15, puddle);
         // Die Kämme der Tropfenringe stehen schräg und fangen das Licht der Laternen von allen Seiten:
-        // feine helle Kreise, wo Licht hinfällt, im Dunkeln nichts.
-        reflectedLight.directSpecular += rippleGlint * 1.6 * reflectedLight.directDiffuse / max(material.diffuseColor, vec3(0.01));`
+        // feine helle Kreise, wo Licht hinfällt, im Dunkeln nichts.${RIPPLE_GLINT}`
       )
       .replace(
         '#include <normal_fragment_maps>',

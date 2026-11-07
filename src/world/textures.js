@@ -434,8 +434,9 @@ export function wood(tone = [92, 58, 34], seed = 61) {
 // Wände tragen Welt-UVs mit 0,5 je Meter), also 512 px je Meter. Geklebt in Bahnen von 50 cm,
 // jede ein wenig anders im Ton und um ein paar Millimeter versetzt, mit sichtbarer Naht. Das
 // Muster ist klein und dicht wie bei Papiertapeten der Zeit: Rapport 25 cm, Motiv gut 14 cm.
-export function wallpaper(base = '#4b2f2c', motif = 'rgba(190,150,90,0.2)', seed = 71) {
-  return cached(`paper${base}${motif}`, () => {
+// stains: Deckkraft der großen Flecken; in gepflegten hellen Räumen weniger.
+export function wallpaper(base = '#4b2f2c', motif = 'rgba(190,150,90,0.2)', seed = 71, stains = 0.12) {
+  return cached(`paper${base}${motif}${stains}`, () => {
     const size = 1024;
     const strip = size / 4;
     const step = size / 8;
@@ -488,7 +489,7 @@ export function wallpaper(base = '#4b2f2c', motif = 'rgba(190,150,90,0.2)', seed
       c.fillRect(s * strip + 2, 0, 3, size);
     }
     grain(c, size, 12, seed);
-    blotches(c, size, 10, 80, 260, 'rgba(0,0,0,0.12)', seed + 1);
+    blotches(c, size, 10, 80, 260, `rgba(0,0,0,${stains})`, seed + 1);
     return { map: tex(color) };
   });
 }
@@ -1502,6 +1503,40 @@ export function tileFloor() {
     }
     grain(c, size, 14, 312);
     blotches(c, size, 10, 30, 90, 'rgba(60,40,20,0.08)', 313);
+    return { map: tex(color) };
+  });
+}
+
+// Heller, grau geäderter Marmor (Carrara-Art), 1 Kachel je 2 m bei box()-UVs.
+export function marble() {
+  return cached('marble', () => {
+    const size = 512;
+    const color = canvas(size);
+    const c = color.getContext('2d');
+    const r = rng(517);
+    c.fillStyle = '#d9d4c8';
+    c.fillRect(0, 0, size, size);
+    blotches(c, size, 14, 40, 140, 'rgba(150,145,135,0.12)', 518);
+    blotches(c, size, 8, 30, 90, 'rgba(255,252,240,0.2)', 519);
+    // Adern: geschwungene Linien, die sich verzweigen, zart und unscharf.
+    const vein = (x, y, a, len, wdt, alpha) => {
+      c.strokeStyle = `rgba(90,88,84,${alpha})`;
+      c.lineWidth = wdt;
+      c.beginPath();
+      c.moveTo(x, y);
+      for (let i = 0; i < len; i++) {
+        a += (r() - 0.5) * 0.5;
+        x += Math.cos(a) * 9;
+        y += Math.sin(a) * 9;
+        c.lineTo(x, y);
+        if (wdt > 0.8 && r() < 0.04) vein(x, y, a + (r() - 0.5) * 1.6, len * 0.4, wdt * 0.5, alpha * 0.8);
+      }
+      c.stroke();
+    };
+    c.filter = 'blur(1.2px)';
+    for (let i = 0; i < 7; i++) vein(r() * size, r() * size, 0.5 + (r() - 0.5) * 0.8, 50 + r() * 40, 1 + r() * 1.6, 0.35 + r() * 0.25);
+    c.filter = 'none';
+    grain(c, size, 6, 520);
     return { map: tex(color) };
   });
 }

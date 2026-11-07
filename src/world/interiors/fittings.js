@@ -215,12 +215,14 @@ export function wainscot(room, side, from, to, H = 1.0) {
   for (let a = from + 0.05; a <= to - 0.04; a += 0.75) put(a, 0.055, H / 2, 0.06, H - 0.05, 0.02, 0x2a180c);
 }
 
-// Dreiarmige Gaskrone mit Tulpenschirmen.
-export function gasolier(room, x, z) {
+// Dreiarmige Gaskrone mit Tulpenschirmen. drop verlängert den Stiel, damit die Flammen in hohen
+// Räumen nicht dicht unter einer hellen Decke sitzen und sie weiß überstrahlen.
+export function gasolier(room, x, z, drop = 0) {
   const brass = 0xb08a3a;
-  const h = room.h;
-  room.metalBag.add(cyl(0.012, 0.012, 0.6, x, h - 0.3, z, 6), brass);
-  room.metalBag.add(cyl(0.08, 0.04, 0.05, x, h - 0.025, z, 12), brass);
+  const top = room.h;
+  const h = top - drop;
+  room.metalBag.add(cyl(0.012, 0.012, 0.6 + drop, x, top - (0.6 + drop) / 2, z, 6), brass);
+  room.metalBag.add(cyl(0.08, 0.04, 0.05, x, top - 0.025, z, 12), brass);
   room.metalBag.add(new THREE.SphereGeometry(0.07, 12, 8).scale(1, 1.2, 1).translate(x, h - 0.64, z), brass);
   const glowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 1.6, 0.8) });
   for (let i = 0; i < 3; i++) {
@@ -240,5 +242,5 @@ export function gasolier(room, x, z) {
     s.scale.setScalar(0.5);
     room.scene.add(s);
   }
-  room.lamp(x, h - 0.55, z, { intensity: 6.5, visible: false, hang: false });
+  return room.lamp(x, h - 0.55, z, { intensity: 6.5, visible: false, hang: false });
 }

@@ -298,6 +298,21 @@ export class Room {
     });
   }
 
+  // Dieses Licht wirft Schatten (View.castShadows erfasst beim Betreten alle Körper). near
+  // blendet die Teile der Leuchte selbst aus, sonst legt ihr Messingknauf einen Fleck auf den Boden.
+  shadows(light, { size = 1024, near = 0.3 } = {}) {
+    light.castShadow = true;
+    light.shadow.mapSize.set(size, size);
+    // Die Projektion muss neu gerechnet werden, sonst vergleicht der Shader mit dem neuen near,
+    // die Karte entsteht aber mit dem alten, und es fällt gar kein Schatten.
+    light.shadow.camera.near = near;
+    light.shadow.camera.updateProjectionMatrix();
+    light.shadow.bias = -0.002;
+    light.shadow.normalBias = 0.02;
+    light.shadow.radius = 3;
+    this.scene.userData.shadows = true;
+  }
+
   finish() {
     const woodTex = wood([190, 150, 110], 62);
     if (this.woodBag.parts.length) addMesh(this.scene, this.woodBag.build(), std({ ...woodTex, vertexColors: true, roughness: 0.62 }));

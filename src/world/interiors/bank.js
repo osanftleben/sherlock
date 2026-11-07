@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { addMesh, box, cyl, std } from '../kit.js';
-import { portrait, rng, stockList, signTexture, wallpaper, wood } from '../textures.js';
+import { marble, portrait, rng, softDisc, stockList, signTexture, wallpaper, wood } from '../textures.js';
 import { Room } from './room.js';
 import { gasolier, rug, streetGlow, wainscot } from './fittings.js';
 
@@ -11,9 +11,11 @@ export function buildBank() {
     w: 9,
     d: 7,
     h: 3.8,
-    wall: wallpaper('#2c2a26', 'rgba(170,150,100,0.1)', 75),
+    // Helle, warm-graue Tapete über der dunklen Eichenvertäfelung, Stuckdecke: ein Kontor,
+    // das Vertrauen erwecken soll, kein Hinterzimmer.
+    wall: wallpaper('#8a7c62', 'rgba(235,215,165,0.16)', 75, 0.035),
     floor: wood([86, 50, 30], 66),
-    ceiling: 0x3a3428,
+    ceiling: 0xa0967f,
     ambient: 0.5,
   });
   const { loc } = room;
@@ -25,10 +27,7 @@ export function buildBank() {
   wainscot(room, 'east', -3.5, 3.5, 1.3);
   wainscot(room, 'south', -4.5, -0.7, 1.3);
   wainscot(room, 'south', 0.7, 4.5, 1.3);
-  for (const s of [-1, 1]) {
-    room.plainBag.box(0x8a8270, 9, 0.16, 0.14, 0, 3.72, s * 3.43);
-    room.plainBag.box(0x8a8270, 0.14, 0.16, 7, s * 4.43, 3.72, 0);
-  }
+  stuccoCeiling(room, 0, 0.9);
   rug(room, 0, 1.6, 1.4, 3.4, 0x3a1a18, 0x6a5a3a);
 
   // Wendts Schreibtisch: Doppelpult mit Schubladen zur Besucherseite, grünes Leder
@@ -77,7 +76,7 @@ export function buildBank() {
   // Hauptbücher für die Revision auf dem Beistelltisch
   room.table(1.9, -2.7, 1.1, 0.8, 0.78, 0x4a2a16);
   revisionLedgers(room, 1.9, 0.81, -2.7, r);
-  greenLamp(room, 2.36, 0.81, -2.46, 1.2);
+  greenLamp(room, 2.36, 0.81, -2.46, 0.9);
   loc.anchor('buecher', 1.9, 0.95, -2.7);
 
   // Kassenschalter mit Messinggitter, dahinter der Kassierer am Stehpult
@@ -94,7 +93,8 @@ export function buildBank() {
   room.window('west', 0.8, 2.1, 1.3, 1.9);
 
   // Strenges Licht: Gaskrone, grüne Pultlampen, kaltes Laternenlicht
-  gasolier(room, 0, 0.9);
+  // Die Gaskrone wirft Schatten: Vor der hellen Tapete schwebten Möbel und Figuren sonst im Licht.
+  room.shadows(gasolier(room, 0, 0.9, 0.6));
   streetGlow(room, [5.0, 2.8, 0.8], [2.0, 0, 0.2]);
   streetGlow(room, [-5.0, 2.8, 0.8], [-3.0, 0.8, 1.0]);
 
@@ -107,15 +107,79 @@ export function buildBank() {
 
 // --- Ausstattung des Bankhauses --------------------------------------------------
 
+// Stuck: getrepptes Kranzgesims mit Perlstab und Fries rundum, zwei Rahmenleisten als
+// Deckenspiegel und eine Rosette über der Gaskrone (gx, gz).
+function stuccoCeiling(room, gx, gz) {
+  const { w, d, h } = room;
+  const hw = w / 2;
+  const hd = d / 2;
+  const steps = [
+    // [Ausladung, Höhe, Unterkante unter der Decke, Farbe]
+    [0.22, 0.07, 0.07, 0xd6cdb6],
+    [0.17, 0.05, 0.12, 0xcec5ae],
+    [0.12, 0.05, 0.17, 0xd2c9b2],
+    [0.08, 0.04, 0.21, 0xc8bfa8],
+    [0.1, 0.03, 0.24, 0xdad1ba],
+    [0.035, 0.18, 0.42, 0xcac1aa],
+    [0.06, 0.025, 0.445, 0xd4cbb4],
+  ];
+  for (const [out, hh, under, color] of steps) {
+    const y = h - under + hh / 2;
+    for (const s of [-1, 1]) {
+      room.plainBag.box(color, w, hh, out, 0, y, s * (hd - out / 2));
+      room.plainBag.box(color, out, hh, d, s * (hw - out / 2), y, 0);
+    }
+  }
+  // Deckenspiegel: äußere breite und innere schmale Leiste.
+  for (const [inset, bw, bh] of [[0.75, 0.1, 0.04], [0.95, 0.05, 0.025]]) {
+    const x = hw - inset;
+    const z = hd - inset;
+    for (const s of [-1, 1]) {
+      room.plainBag.box(0xd8cfb8, 2 * x + bw, bh, bw, 0, h - bh / 2, s * z);
+      room.plainBag.box(0xd8cfb8, bw, bh, 2 * z, s * x, h - bh / 2, 0);
+    }
+  }
+  // Rosette: flache Kuppel mit Blattkranz, nach unten aufsteigende Punkte für Normalen nach außen.
+  const prof = [[0, h - 0.06], [0.06, h - 0.058], [0.11, h - 0.045], [0.15, h - 0.05], [0.2, h - 0.035], [0.25, h - 0.04], [0.3, h - 0.022], [0.34, h - 0.012], [0.36, h]];
+  room.plainBag.add(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 24).translate(gx, 0, gz), 0xdcd3bc);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const leaf = new THREE.SphereGeometry(1, 6, 4).scale(0.07, 0.02, 0.03).rotateY(-a).translate(gx + Math.cos(a) * 0.24, h - 0.045, gz + Math.sin(a) * 0.24);
+    room.plainBag.add(leaf, 0xd2c9b2);
+  }
+  // Rußhof der Gasflammen um die Rosette, sonst überstrahlt die Decke über der Krone.
+  const soot = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 2.4).rotateX(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ map: softDisc('glow'), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false }),
+  );
+  soot.position.set(gx, h - 0.004, gz);
+  room.scene.add(soot);
+}
+
+// Petroleum-Pultlampe, wie sie 1892 in einem Kontor stand (die elektrische grüne Bankerlampe
+// kam erst 1909): Messingfuß, gläserner Ölbehälter, Brenner, Glaszylinder mit Flamme und
+// eine Kappe aus grünem Glas, innen weiß. Das Licht sitzt in der Flamme an der Schirmkante.
+const SHADE = [[0.13, 0], [0.11, 0.025], [0.07, 0.07], [0.045, 0.1]];
+let shadeMat = null;
 function greenLamp(room, x, y, z, intensity) {
-  room.metalBag.add(cyl(0.06, 0.09, 0.02, x, y + 0.01, z, 12), 0xb59a55);
-  room.metalBag.add(cyl(0.012, 0.012, 0.32, x, y + 0.16, z, 8), 0xb59a55);
-  const shade = cyl(0.05, 0.13, 0.12, 0, 0, 0, 14);
-  shade.translate(x, y + 0.35, z);
-  addMesh(room.scene, shade, new THREE.MeshStandardMaterial({ color: 0x1a5a32, emissive: 0x0e3a1c, roughness: 0.3, side: THREE.DoubleSide }));
-  addMesh(room.scene, new THREE.SphereGeometry(0.03, 8, 6), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 1.7, 1.0) }), x, y + 0.3, z);
-  const l = new THREE.PointLight(0xffd090, intensity, 6, 2);
-  l.position.set(x, y + 0.25, z);
+  const brass = 0xb59a55;
+  const turn = (pts, seg = 16) => new THREE.LatheGeometry(pts.map(([pr, py]) => new THREE.Vector2(pr, py)), seg).translate(x, y, z);
+  room.metalBag.add(turn([[0, 0], [0.075, 0], [0.075, 0.012], [0.05, 0.03], [0.018, 0.05], [0.013, 0.2], [0.022, 0.21], [0, 0.215]]), brass);
+  room.glassBag.add(new THREE.SphereGeometry(0.06, 14, 10).scale(1, 0.72, 1).translate(x, y + 0.255, z), 0xd8c89a);
+  room.metalBag.add(cyl(0.028, 0.033, 0.035, x, y + 0.31, z, 12), brass);
+  room.metalBag.add(new THREE.TorusGeometry(0.055, 0.004, 4, 16).rotateX(Math.PI / 2).translate(x, y + 0.355, z), brass);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    room.metalBag.add(cyl(0.003, 0.003, 0.03, x + Math.cos(a) * 0.04, y + 0.34, z + Math.sin(a) * 0.04, 4), brass);
+  }
+  // Zylinder und Flamme leuchten selbst, die Kappe sitzt knapp über dem Brenner.
+  room.glowBag.add(cyl(0.022, 0.024, 0.16, x, y + 0.41, z, 12), new THREE.Color(0.75, 0.5, 0.26));
+  room.glowBag.add(new THREE.SphereGeometry(0.011, 8, 6).scale(1, 2.2, 1).translate(x, y + 0.37, z), new THREE.Color(2.4, 1.5, 0.6));
+  shadeMat ??= new THREE.MeshStandardMaterial({ color: 0x1a5a32, emissive: 0x0e3a1c, roughness: 0.25 });
+  addMesh(room.scene, turn(SHADE, 24).translate(0, 0.36, 0), shadeMat);
+  room.glowBag.add(turn(SHADE.map(([pr, py]) => [pr * 0.96, py - 0.003]).reverse(), 24).translate(0, 0.36, 0), new THREE.Color(0.62, 0.5, 0.34));
+  const l = new THREE.PointLight(0xffc880, intensity, 6, 2);
+  l.position.set(x, y + 0.37, z);
   room.scene.add(l);
 }
 
@@ -161,7 +225,7 @@ function deskSet(room, y) {
   list.rotation.set(-Math.PI / 2, 0, 0.35);
   list.position.set(-0.95, y + 0.004, -0.95);
   room.scene.add(list);
-  greenLamp(room, -0.1, y, -1.7, 6);
+  greenLamp(room, -0.1, y, -1.7, 3.6);
 }
 
 function binders(room, x, r) {
@@ -220,7 +284,9 @@ function tellerCounter(room, x, z0, z1) {
   const mid = (z0 + z1) / 2;
   const top = 1.05;
   room.woodBag.box(0x3a2010, 0.6, top, len, x, top / 2, mid);
-  room.plainBag.box(0x5a5650, 0.7, 0.04, len + 0.06, x, top + 0.02, mid);
+  // Marmorplatte mit leicht vorstehender Kante, darunter ein Profil aus Eiche.
+  addMesh(room.scene, box(0.74, 0.045, len + 0.08, x, top + 0.0225, mid), std({ ...marble(), roughness: 0.5 }));
+  room.woodBag.box(0x2e1a0c, 0.66, 0.03, len + 0.02, x, top - 0.015, mid);
   for (let i = 0; i < 4; i++) room.woodBag.box(0x4a2a16, 0.02, 0.7, len / 4 - 0.14, x + 0.31, 0.5, z0 + len / 8 + (i * len) / 4);
   room.solid(x, mid, 0.6, len);
   // Gitter
@@ -265,7 +331,7 @@ function standingDesk(room, x, z) {
   book.translate(x - 0.01, 1.15, z);
   room.plainBag.add(book, 0xe4dcc6);
   room.woodBag.box(0x3a2010, 0.12, 0.03, 0.76, x + 0.22, 1.2, z);
-  greenLamp(room, x + 0.22, 1.215, z + 0.28, 2.2);
+  greenLamp(room, x + 0.22, 1.215, z + 0.28, 1.4);
   room.solid(x, z, 0.5, 0.76);
 }
 

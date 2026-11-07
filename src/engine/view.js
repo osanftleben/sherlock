@@ -257,6 +257,17 @@ export const STAGES = ['Szene', 'Leuchten', 'Schluss'];
 // für Browser und Bildschirmausgabe. Auf einem Rundgang durch Fall 1 (Iris Xe, 1080p) waren bei 13,5,
 // 14,5 und 15,5 ms gleich wenige Bilder verspätet (0,5 %); mit 15,5 ms bleibt die Auflösung bei 95–100 %.
 const BUDGET = 15.5;
+
+// Alles Feste wirft und empfängt Schatten; Leuchtendes und Glas nicht. Erst beim Betreten,
+// damit auch die Figuren erfasst sind, die der Fall an die Anker stellt.
+function castShadows(scene) {
+  scene.traverse((o) => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    o.receiveShadow = true;
+    o.castShadow = !mats.some((m) => m.isMeshBasicMaterial || m.transparent);
+  });
+}
 const MIN_SCALE = 0.6;
 
 export class View {
@@ -264,7 +275,12 @@ export class View {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     // Tonwerte erst im Schlussbild; die Szene landet linear in einem Fließkomma-Puffer.
     this.renderer.toneMapping = THREE.NoToneMapping;
-    this.renderer.shadowMap.enabled = false;
+    // Schatten nur von Lichtern, die ein Ort ausdrücklich dafür vorsieht (Room.shadows). Die Karte
+    // entsteht einmal beim Betreten des Ortes statt in jedem Bild: Möbel und Figuren stehen still.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.shadowScene = null;
     this.camera = new THREE.PerspectiveCamera(68, 1, 0.08, 700);
     this.scene = new THREE.Scene();
     this.exposure = 1.15;
@@ -380,6 +396,11 @@ export class View {
 
     this.clock.begin('Szene');
     r.setRenderTarget(this.target);
+    if (this.shadowScene !== this.scene) {
+      this.shadowScene = this.scene;
+      if (this.scene.userData.shadows) castShadows(this.scene);
+      r.shadowMap.needsUpdate = true;
+    }
     r.render(this.scene, this.camera);
     this.clock.end();
     this.sceneInfo.calls = r.info.render.calls;

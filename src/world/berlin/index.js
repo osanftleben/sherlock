@@ -16,6 +16,7 @@ import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
 import { DRY, buildWeather, dryRects } from './weather.js';
 import { DRIP_GLSL, dripUniforms } from './drips.js';
+import { TRAM_GLSL } from './tramway.js';
 import { buildSmoke } from './smoke.js';
 import { MIRROR_LAYER, RIPPLES, RIPPLE_GLINT, rainTime } from './ripples.js';
 
@@ -435,7 +436,7 @@ function wetStreet(material, loc) {
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}\n${DRIP_GLSL}
+      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}\n${DRIP_GLSL}\n${TRAM_GLSL}
         uniform vec4 roofs[${DRY}];
         float underRoof(vec2 xz) {
           for (int i = 0; i < ${DRY}; i++) {
@@ -451,13 +452,31 @@ function wetStreet(material, loc) {
         if (nearDrips(vGroundXZ)) wet.r += 0.9 * dripWet(vGroundXZ);
         // Das Wasser füllt zuerst die Fugen; am Rand ragen die Steine heraus.
         float puddle = smoothstep(0.35, 0.6, wet.r + 0.1 - 3.0 * sampledDiffuseColor.g);
-        diffuseColor.rgb *= (0.7 + 0.6 * wet.g) * mix(1.0, 0.35, puddle);`,
+        diffuseColor.rgb *= (0.7 + 0.6 * wet.g) * mix(1.0, 0.35, puddle);
+        // Pferdebahngleise (tramway.js): x Fahrkopf, y Rille, z Leitlippe, w Schmutz daneben.
+        // Auf dem glatten Stahl steht das Wasser nicht in Fugen, sondern nur in den tiefsten Pfützen.
+        vec4 tram = tramRails(vGroundXZ, dFdx(vGroundXZ), dFdy(vGroundXZ));
+        float tramAll = min(1.0, tram.x + tram.y + tram.z);
+        puddle = mix(puddle, smoothstep(0.35, 0.6, wet.r - 0.2), tramAll);
+        diffuseColor.rgb *= 1.0 - 0.3 * tram.w;
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.012, 0.011, 0.01), tram.y);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.16, 0.09, 0.06) * (0.7 + 0.6 * wet.g), tram.z);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.52, 0.52, 0.54), tram.x);`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
         `#include <roughnessmap_fragment>
         roughnessFactor *= 1.25 - 0.5 * wet.g;
-        roughnessFactor = mix(roughnessFactor, 0.06, puddle);`,
+        roughnessFactor = mix(roughnessFactor, 0.06, puddle);
+        roughnessFactor = mix(roughnessFactor, mix(0.22, 0.08, puddle), tram.x);
+        roughnessFactor = mix(roughnessFactor, 0.5, tram.z);
+        roughnessFactor = mix(roughnessFactor, 0.05, tram.y);`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+        metalnessFactor = mix(metalnessFactor, 0.9, tram.x);
+        metalnessFactor = mix(metalnessFactor, 0.35, tram.z);`,
       )
       .replace(
         '#include <lights_fragment_end>',
@@ -470,7 +489,7 @@ function wetStreet(material, loc) {
       .replace(
         '#include <normal_fragment_maps>',
         `#include <normal_fragment_maps>
-        normal = normalize(mix(normal, nonPerturbedNormal, puddle));
+        normal = normalize(mix(normal, nonPerturbedNormal, max(puddle, tramAll)));
         // Tropfenringe; in der Ferne, wo ein Pixel mehr als ein paar Zentimeter deckt, flimmerten sie nur.
         float rippleNear = 1.0 - smoothstep(0.025, 0.07, length(fwidth(vGroundXZ)));
         rippleGlint = 0.0;

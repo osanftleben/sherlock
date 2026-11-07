@@ -163,6 +163,8 @@ export function buildBerlin() {
   row({ x: -171.4, z: -2, face: 'north', bays: 5, rand: rb });
 
   buildCourt(loc, facades, { brickMat, ironMat });
+  // Die hellen Auslagen von Apotheke und Destille werfen ihr Licht auf den Gehweg.
+  for (const bld of [apotheke, destille]) for (const bay of [0, 2]) bld.spill(bay);
   facades.finish();
 
   // Fahrbahn: von z = -430 bis unter die Quaikante (44.6), damit sie nicht über der Spree liegt.

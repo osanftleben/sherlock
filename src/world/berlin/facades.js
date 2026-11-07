@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
 import { grimy } from './grime.js';
+import { lightPool } from './lamps.js';
 import {
   SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
@@ -349,6 +350,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const signRand = rng(1898);
   const signs = { boards: [], litBoards: [], emblems: [] };
   const masses = [];
+  // Lichtschein erleuchteter Erdgeschossfenster auf dem Gehweg: { matrix (Achse), k (Stärke), y }.
+  const spills = [];
   const slabs = [];
   const roofs = [];
   const curbs = [];
@@ -620,6 +623,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       if (tg) {
         const on = courtRand() < lit;
         batcher.place(tg, gx, color, on, true, null, tg === 'ground' ? cell(on) : null);
+        if (on && tg === 'ground') spills.push({ matrix: gx, k: 0.45, y: 0 });
         loc.collide(...toWorld(i * BAY_W, (i + 1) * BAY_W, -0.34, 0.05));
       }
       for (let f = 0; f < floors; f++) {
@@ -731,6 +735,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         batcher.place('gate', back, col, false, false);
       } else {
         batcher.place(tGround, gx, col, lit, !ownGlass.includes(i), kind, tGround === 'ground' ? (lit ? room(0) : shade(0)) : null);
+        const y = sidewalk ? 0.13 : 0;
+        if (lit && kind) spills.push({ matrix: gx, k: 1, y });
+        else if (lit && tGround === 'ground' && !ownGlass.includes(i)) spills.push({ matrix: gx, k: 0.45, y });
       }
       if (tGround === 'shop' && shopMix && i !== gate) {
         // Dunkle Läden haben noch keine Sorte: aus eigenem Zufall, damit kindRand bleibt.
@@ -843,7 +850,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     // frame(bay): Lage der Achse in der Welt; lokal x quer zur Achse (0 = Mitte),
     // y nach oben, z aus der Fassade heraus zur Straße (0 = Fassadenebene).
     const frame = (bay) => new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation((bay + 0.5) * BAY_W, 0, 0));
-    return { at, rot, W, H, face, frame };
+    // spill(bay, k): Lichtschein vor einer Auslage, die der Aufrufer selbst baut (ownGlass).
+    const spill = (bay, k = 1) => spills.push({ matrix: new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().makeTranslation(bay * BAY_W, 0, 0)), k, y: sidewalk ? 0.13 : 0 });
+    return { at, rot, W, H, face, frame, spill };
   };
 
   // Reihe zusammenhängender Häuser mit wechselnder Breite und Höhe.
@@ -868,6 +877,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
   const finish = () => {
     batcher.build(scene, wallMat, darkGlass, litGlass);
+    buildSpills(scene, spills);
     trimMasses(masses, slabs);
     for (const m of masses) {
       const w = m.maxX - m.minX;
@@ -920,6 +930,27 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   };
 
   return { block, row, courtWall, cornerTower, finish };
+}
+
+// Licht aus erleuchteten Schaufenstern und Erdgeschossfenstern fällt auf den nassen Gehweg davor:
+// ein weicher Fleck, der wie der Laternenschein (lightPool) die Steine darunter aufhellt.
+// Er beginnt an der Wand und reicht gut zwei Meter hinaus; k gibt die Stärke (Schaufenster 1,
+// Wohnungsfenster mit Gardine weniger).
+function buildSpills(scene, spills) {
+  if (!spills.length) return;
+  const geo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  const mesh = new THREE.InstancedMesh(geo, lightPool(0xffb060, 0.6), spills.length);
+  const local = new THREE.Matrix4().compose(new THREE.Vector3(BAY_W / 2, 0, 1.15), new THREE.Quaternion(), new THREE.Vector3(3.4, 1, 2.8));
+  const m = new THREE.Matrix4();
+  const c = new THREE.Color();
+  spills.forEach((s, i) => {
+    m.multiplyMatrices(s.matrix, local);
+    m.elements[13] = s.y + 0.02;
+    mesh.setMatrixAt(i, m);
+    mesh.setColorAt(i, c.setScalar(s.k));
+  });
+  mesh.computeBoundingSphere();
+  scene.add(mesh);
 }
 
 // Kehrt Dreiecke und Normalen um, damit man eine Fläche von innen sieht (Gewölbe).

@@ -15,6 +15,8 @@ const TAU = Math.PI * 2;
 
 // Beidseitig, weil Rockschöße und Mäntel vorn offen sind und man hineinsieht.
 const cloth = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.8, side: THREE.DoubleSide });
+// Neigung des Schirmstocks nach hinten, zum Kopf hin.
+const UMBRELLA_TILT = -0.15;
 const glow = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 1.9, 0.8) });
 
 const color = (c) => (c instanceof THREE.Color ? c.clone() : new THREE.Color(c));
@@ -114,6 +116,7 @@ function normalize(look) {
     cape: look.cape ?? false,
     cane: look.cane ?? false,
     lantern: look.lantern ?? false,
+    umbrella: look.umbrella ?? null,
     glass: look.glass ?? false,
     sabre: look.sabre ?? false,
     chain: look.chain ?? false,
@@ -489,6 +492,23 @@ function buildArm(L, w, s) {
     gesture = false;
   }
   fore.add(F.mesh());
+  if (s > 0 && L.umbrella && !L.cane) {
+    // Aufgespannter Schirm in der rechten Hand, vor der Brust gehalten. Das Gelenk hold hält den
+    // Stock, wie der Arm auch steht, leicht nach hinten geneigt, damit das Dach über dem Kopf
+    // sitzt (walkFigure, idleFigure).
+    rest = -1.25;
+    const U = new Parts();
+    U.add(cyl(0.008, 0.008, 1.05, 0, 0.52, 0, 6), 0x1a1410);
+    U.add(cyl(0.013, 0.011, 0.12, 0, 0.0, 0, 6), 0x2a1a10);
+    U.add(new THREE.ConeGeometry(0.55, 0.24, 8, 1, true).translate(0, 1.05 - 0.12 + 0.02, 0), L.umbrella);
+    U.add(cyl(0.006, 0.003, 0.08, 0, 1.11, 0, 5), 0x1a1410);
+    const hold = new THREE.Group();
+    hold.position.set(0, -0.3, 0.02);
+    hold.add(U.mesh());
+    fore.add(hold);
+    fore.userData.hold = hold;
+    gesture = false;
+  }
   if (s < 0 && L.lantern) {
     rest = -0.35;
     // Die Laterne hängt am Henkel in der Hand; das Gelenk gleicht die Armbeugung aus,
@@ -536,7 +556,7 @@ function buildLeg(L, w, s) {
 // neck (tie, cravat, scarf, none), tie, collar, skin, hair, hairStyle (short, parted,
 // receding, bald, bun), beard (full, mutton, goatee, stubble), moustache (kaiser, walrus,
 // brush), eyewear (monocle, pincenez, spectacles), hat (top, bowler, cap, peaked,
-// pickelhaube, bonnet, bandage), hatColor, apron, shawl, cape, cane, lantern, glass, sabre,
+// pickelhaube, bonnet, bandage), hatColor, apron, shawl, cape, cane, lantern, umbrella (Farbe), glass, sabre,
 // chain, piping, buttons, build (slim, normal, stout), height, pose (stand, sit).
 // Ältere Angaben wie skirt: true oder beard: true werden weiter verstanden.
 export function makeFigure(look = {}) {
@@ -583,6 +603,7 @@ export function makeFigure(look = {}) {
     armR: armR.group,
     foreL: armL.fore,
     foreR: armR.fore,
+    umbrella: armR.fore.userData.hold ?? null,
     restL: armL.rest,
     restR: armR.rest,
     gesture: gestureArm === armR ? 'R' : gestureArm === armL ? 'L' : null,
@@ -637,7 +658,7 @@ export function idleFigure(figure, time, lookAt) {
   approach(f.head.rotation, 'z', talking ? Math.sin(time * 1.7) * 0.03 : 0, 0.05);
 
   const sway = (t) => Math.sin(time * t + phase) * 0.025;
-  let armRx = sway(1.1);
+  let armRx = f.umbrella ? 0.1 : sway(1.1);
   let foreR = f.restR;
   let armLx = sway(0.9);
   let foreL = f.restL;
@@ -652,6 +673,7 @@ export function idleFigure(figure, time, lookAt) {
   approach(f.armL.rotation, 'x', armLx, 0.08);
   approach(f.foreR.rotation, 'x', foreR, 0.08);
   approach(f.foreL.rotation, 'x', foreL, 0.08);
+  if (f.umbrella) f.umbrella.rotation.x = UMBRELLA_TILT - (f.armR.rotation.x + f.foreR.rotation.x);
 }
 
 // Schritt mit Kniebeugung im Schwungbein; die Arme pendeln gegengleich.
@@ -667,6 +689,12 @@ export function walkFigure(figure, phase) {
   f.armR.rotation.x = -Math.sin(phase) * 0.35;
   f.foreL.rotation.x = f.restL - 0.15 - Math.max(0, -Math.sin(phase)) * 0.3;
   f.foreR.rotation.x = f.restR - 0.15 - Math.max(0, Math.sin(phase)) * 0.3;
+  if (f.umbrella) {
+    // Der Schirmarm schwingt nicht mit, der Schirm wippt nur mit dem Schritt.
+    f.armR.rotation.x = 0.1;
+    f.foreR.rotation.x = f.restR;
+    f.umbrella.rotation.x = UMBRELLA_TILT - (f.armR.rotation.x + f.foreR.rotation.x) + Math.sin(phase * 2) * 0.02;
+  }
   f.body.position.y = Math.abs(Math.cos(phase)) * 0.025;
   f.body.rotation.y = Math.sin(phase) * 0.04;
   if (f.female) f.body.rotation.z = Math.sin(phase) * 0.015;

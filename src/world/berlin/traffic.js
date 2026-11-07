@@ -205,16 +205,21 @@ export function buildTraffic(loc, r) {
     light.copy(p);
   });
 
-  // Passanten auf den Gehwegen
+  // Passanten auf den Gehwegen. Es nieselt: Wer keinen Zylinder und keinen Stock trägt, hat
+  // oft einen Schirm aufgespannt.
   const looks = [
     { outfit: 'overcoat', coat: 0x1f2228, hat: 'top', moustache: 'kaiser', cane: true, height: 1.8 },
-    { outfit: 'frock', coat: 0x2a2620, vest: 0x3a3226, hat: 'bowler', beard: 'full', hair: 0x4a4038, chain: true, build: 'stout' },
+    { outfit: 'frock', coat: 0x2a2620, vest: 0x3a3226, hat: 'bowler', beard: 'full', hair: 0x4a4038, chain: true, build: 'stout', umbrella: 0x121214 },
     { coat: 0x30261e, neck: 'scarf', tie: 0x5a3020, hat: 'cap', trousers: 0x24201a, beard: 'stubble' },
     { outfit: 'overcoat', coat: 0x262a2e, hat: 'cap', moustache: 'walrus', hair: 0x6a6258 },
-    { outfit: 'dress', coat: 0x38242a, hat: 'bonnet', hatColor: 0x22161a, shawl: 0x4a3a30, height: 1.62 },
-    { outfit: 'dress', coat: 0x2a2c38, hat: 'bonnet', hatColor: 0x1c1c26, collar: 0xe0dacb, build: 'slim', height: 1.6 },
+    { outfit: 'dress', coat: 0x38242a, hat: 'bonnet', hatColor: 0x22161a, shawl: 0x4a3a30, height: 1.62, umbrella: 0x2a161c },
+    { outfit: 'dress', coat: 0x2a2c38, hat: 'bonnet', hatColor: 0x1c1c26, collar: 0xe0dacb, build: 'slim', height: 1.6, umbrella: 0x16181e },
     { outfit: 'frock', coat: 0x1c1f24, hat: 'bowler', cane: true, beard: 'mutton', eyewear: 'spectacles' },
     { coat: 0x322a22, neck: 'none', hat: 'cap', apron: 0x8a8272, moustache: 'brush', build: 'stout' },
+    { outfit: 'overcoat', coat: 0x2c2a26, hat: 'bowler', moustache: 'brush', neck: 'scarf', tie: 0x3a2a24, build: 'slim', umbrella: 0x141416 },
+    { outfit: 'dress', coat: 0x2c2420, hat: 'bonnet', hatColor: 0x1a1612, shawl: 0x5a4a3a, build: 'stout', height: 1.58 },
+    { coat: 0x26221e, hat: 'cap', trousers: 0x1e1c1a, neck: 'scarf', tie: 0x2a3a4a, beard: 'stubble', height: 1.72 },
+    { outfit: 'dress', coat: 0x1e1a22, hat: 'bonnet', hatColor: 0x2a1a24, collar: 0xd8d2c4, height: 1.66, umbrella: 0x22121a },
   ];
   const routes = [
     [[-7.5, -28], [-7.5, -180]],
@@ -233,6 +238,14 @@ export function buildTraffic(loc, r) {
     // Quer über den Platz, am Brunnen vorbei, und an der Urania-Säule entlang.
     [[-20, -9], [20, -12]],
     [[10, -20], [10, 4]],
+    // Später dazugekommen (aus rw): mehr Leben auf dem Platz und in den Straßen.
+    [[-27.5, -20], [-27.5, 12]],
+    [[27.5, 12], [27.5, -20]],
+    [[-18, -21], [4, 12]],
+    [[7.5, -36], [7.5, -120]],
+    [[-7.5, -160], [-7.5, -60]],
+    [[60, -96.4], [16, -96.4]],
+    [[-60, -3.4], [-120, -3.4]],
   ];
   // Die Passanten nach den ersten zwölf ziehen aus eigenem Zufall, damit r für das Wetter
   // danach bleibt, wie es war.

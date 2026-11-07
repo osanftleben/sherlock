@@ -10,6 +10,7 @@ import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { grimy } from './grime.js';
 import { buildLamps } from './lamps.js';
+import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
 import { buildWeather } from './weather.js';
@@ -396,6 +397,7 @@ export function buildBerlin() {
 
   buildTraffic(loc, r);
   buildWeather(loc, r);
+  buildLife(loc);
 
   return loc;
 }

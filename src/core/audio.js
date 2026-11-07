@@ -868,8 +868,9 @@ export class Audio {
     return out;
   }
 
-  // Ruf der Bahnsteigaufsicht, aus festen Lautfolgen zusammengesetzt. Eine gerufene Stimme:
-  // höher und heller als im Gespräch, die betonte Silbe gedehnt. Je Laut: Art ('v' Vokal,
+  // Ruf der Bahnsteigaufsicht, aus festen Lautfolgen zusammengesetzt. Kommandoton wie bei
+  // Bahn und Militär der Kaiserzeit: kurze Silben mit hartem Einsatz, eine gepresste Bruststimme,
+  // die betonte Silbe obenauf, danach fällt der Ton und wird knapp abgeschnitten. Je Laut: Art ('v' Vokal,
   // 'n' Nasal, 'f' Reibelaut, 's' Verschluss mit Knall), Dauer, dann für Vokale die Formanten,
   // Stärke und Tonhöhe, für Reibelaute Mittenfrequenz, Güte und Stärke, für Verschlüsse die
   // Frequenz des Knalls. Berlinisch heißt es „Fertich!“.
@@ -877,33 +878,33 @@ export class Audio {
     const ctx = this.ctx;
     const CALLS = {
       einsteigen: [
-        ['v', 0.15, [720, 1150, 2500], 0.8, 195],
-        ['v', 0.08, [390, 1950, 2600], 0.7, 200],
-        ['n', 0.05],
-        ['f', 0.11, 2600, 1.6, 0.45],
-        ['s', 0.05, 3800],
-        ['v', 0.3, [790, 1220, 2500], 1, 238],
-        ['v', 0.12, [400, 2050, 2700], 0.85, 228],
-        ['s', 0.045, 1700],
-        ['v', 0.07, [500, 1500, 2500], 0.45, 175],
-        ['n', 0.13],
+        ['v', 0.09, [700, 1150, 2500], 0.75, 168],
+        ['v', 0.05, [400, 1950, 2600], 0.65, 166],
+        ['n', 0.035],
+        ['f', 0.07, 2600, 1.6, 0.45],
+        ['s', 0.035, 3800],
+        ['v', 0.17, [780, 1220, 2500], 1, 208],
+        ['v', 0.07, [410, 2050, 2700], 0.85, 182],
+        ['s', 0.03, 1700],
+        ['v', 0.05, [500, 1500, 2500], 0.4, 138],
+        ['n', 0.07],
       ],
       fertig: [
-        ['f', 0.08, 5000, 0.7, 0.3],
-        ['v', 0.24, [620, 1750, 2550], 1, 232],
-        ['v', 0.07, [600, 1300, 2400], 0.75, 218],
-        ['s', 0.05, 3600],
-        ['v', 0.22, [380, 2050, 2700], 0.85, 200],
-        ['f', 0.17, 3400, 2.2, 0.5],
+        ['f', 0.06, 5000, 0.7, 0.3],
+        ['v', 0.16, [620, 1750, 2550], 1, 210],
+        ['v', 0.05, [600, 1300, 2400], 0.7, 188],
+        ['s', 0.04, 3600],
+        ['v', 0.09, [380, 2050, 2700], 0.7, 148],
+        ['f', 0.12, 3400, 2.2, 0.5],
       ],
     };
     const phones = CALLS[text];
     if (!phones) return;
     if (this.shoutCtx !== ctx) {
-      // Gerufene Stimme: Obertöne fallen langsamer ab als beim Sprechen, das macht sie hell.
+      // Gepresste Stimme: Obertöne fallen kaum ab, das macht sie hart und durchdringend.
       const N = 40;
       const imag = new Float32Array(N);
-      for (let k = 1; k < N; k++) imag[k] = 1 / k ** 1.15;
+      for (let k = 1; k < N; k++) imag[k] = 1 / k ** 0.95;
       this.shout = ctx.createPeriodicWave(new Float32Array(N), imag);
       this.shoutCtx = ctx;
     }
@@ -915,7 +916,7 @@ export class Audio {
     const breath = ctx.createBufferSource();
     breath.buffer = this.noise;
     const breathGain = ctx.createGain();
-    breathGain.gain.value = 0.08;
+    breathGain.gain.value = 0.05;
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, t0);
     osc.connect(env);
@@ -942,20 +943,30 @@ export class Audio {
     const jitterDepth = ctx.createGain();
     jitterDepth.gain.value = 3;
     jitter.connect(jitterDepth).connect(osc.frequency);
+    // Etwas Rauheit im Ton: das Knarren einer kräftig gebrauchten Stimme.
+    const rasp = ctx.createOscillator();
+    rasp.frequency.value = 31;
+    const raspDepth = ctx.createGain();
+    raspDepth.gain.value = 0.25;
+    const rough = ctx.createGain();
+    rough.gain.value = 1;
+    rasp.connect(raspDepth).connect(rough.gain);
+    osc.disconnect();
+    osc.connect(rough).connect(env);
     const level = 0.24;
     let t = t0;
-    osc.frequency.setValueAtTime(190, t0);
+    osc.frequency.setValueAtTime(165, t0);
     for (const [kind, dur, a, b, c] of phones) {
       const g = env.gain;
       if (kind === 'v') {
-        osc.frequency.setTargetAtTime(c, t, 0.04);
-        a.forEach((f, i) => formants[i].setTargetAtTime(f, t, i === 0 ? 0.025 : 0.035));
-        g.setTargetAtTime(level * b, t, 0.02);
+        osc.frequency.setTargetAtTime(c, t, 0.018);
+        a.forEach((f, i) => formants[i].setTargetAtTime(f, t, i === 0 ? 0.015 : 0.02));
+        g.setTargetAtTime(level * b, t, 0.007);
       } else if (kind === 'n') {
         formants[0].setTargetAtTime(260, t, 0.015);
         formants[1].setTargetAtTime(1600, t, 0.02);
-        g.setTargetAtTime(level * 0.28, t, 0.015);
-        g.setTargetAtTime(0, t + dur * 0.7, 0.03);
+        g.setTargetAtTime(level * 0.28, t, 0.01);
+        g.setTargetAtTime(0, t + dur * 0.6, 0.015);
       } else if (kind === 'f') {
         g.setTargetAtTime(0, t, 0.015);
         this.burst({ freq: a, q: b, dur, gain: c * 2, attack: 0.02, when: t - ctx.currentTime, out });
@@ -965,8 +976,8 @@ export class Audio {
       }
       t += dur;
     }
-    env.gain.setTargetAtTime(0, t, 0.04);
-    for (const o of [osc, breath, jitter]) {
+    env.gain.setTargetAtTime(0, t, 0.015);
+    for (const o of [osc, breath, jitter, rasp]) {
       o.start(t0);
       o.stop(t + 0.3);
     }

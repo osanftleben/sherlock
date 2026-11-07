@@ -143,12 +143,9 @@ export function buildDestille() {
   peak.translate(3.3, 0.494, 2.52);
   room.plainBag.add(peak, 0x121010);
 
-  // Ofen
-  room.metalBag.add(cyl(0.35, 0.38, 1.6, 4.9, 0.8, -3.2, 14), 0x1a1a1c);
+  // Ofen in der Ecke, die Feuertür zum Stammtisch
+  const ember = ironStove(room, 4.9, -3.2, -0.9);
   room.solid(4.9, -3.2, 0.74, 0.74);
-  const ember = new THREE.PointLight(0xff5a1a, 1.8, 5, 2);
-  ember.position.set(4.7, 0.5, -2.9);
-  scene.add(ember);
   loc.onUpdate((dt, t) => { ember.intensity = 1.5 + Math.sin(t * 5) * Math.sin(t * 2.3) * 0.5; });
 
   // Garderobe und Spucknapf
@@ -190,6 +187,97 @@ export function buildDestille() {
 }
 
 // --- Ausstattung der Destille ----------------------------------------------------
+
+// Gusseiserner Kanonenofen bei (x, z), die Feuertür in Richtung yaw: auf vier geschweiften Füßen,
+// unten der Aschkasten mit Zugschlitzen, darüber der bauchige Feuerraum mit Nickelringen und der
+// Feuertür, deren Glimmerfenster glüht. Das Rohr steigt auf und knickt in die Nordwand. Davor das
+// Ofenblech, daneben Kohleneimer und Schürhaken. Gibt das flackernde Glutlicht zurück.
+function ironStove(room, x, z, yaw) {
+  const iron = 0x1c1c1e;
+  const nickel = 0x8e8a80;
+  const place = (g) => g.rotateY(yaw).translate(x, 0, z);
+  const turn = (pts, seg = 28) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
+  const fire = new THREE.Color(2.2, 0.85, 0.22);
+  const slit = new THREE.Color(1.3, 0.38, 0.08);
+
+  const BODY = [
+    [0, 0.17], [0.2, 0.17], [0.235, 0.18], [0.24, 0.2], [0.24, 0.36], [0.27, 0.37], [0.275, 0.395], [0.255, 0.41],
+    [0.262, 0.5], [0.278, 0.62], [0.288, 0.75], [0.288, 0.88], [0.278, 1.0], [0.262, 1.1], [0.25, 1.17],
+    [0.275, 1.18], [0.28, 1.21], [0.26, 1.225], [0.205, 1.25], [0.19, 1.3], [0.2, 1.34], [0.205, 1.37],
+    [0.17, 1.4], [0.11, 1.43], [0.08, 1.45], [0.075, 1.5],
+  ];
+  room.metalBag.add(place(turn(BODY)), iron);
+  for (const [r, y, t] of [[0.267, 0.54, 0.007], [0.283, 0.96, 0.007], [0.281, 1.195, 0.01]]) {
+    room.metalBag.add(place(new THREE.TorusGeometry(r, t, 5, 36).rotateX(Math.PI / 2).translate(0, y, 0)), nickel);
+  }
+  room.metalBag.add(place(cyl(0.078, 0.078, 0.05, 0, 1.5, 0, 14)), iron);
+
+  // Füße zwischen den Türen, damit beide frei bleiben
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + (k * Math.PI) / 2;
+    const leg = rod([[0.2, 0.18, 0], [0.26, 0.09, 0], [0.3, 0.025, 0]], 0.027);
+    const ball = new THREE.SphereGeometry(0.03, 8, 6).scale(1, 0.6, 1).translate(0.3, 0.018, 0);
+    for (const g of [leg, ball]) room.metalBag.add(place(g.rotateY(a)), iron);
+  }
+
+  // Feuertür mit Glimmerfenster, Gitter, Scharnieren und Riegelknopf
+  room.metalBag.add(place(box(0.26, 0.29, 0.07, 0, 0.74, 0.255)), iron);
+  room.metalBag.add(place(box(0.22, 0.25, 0.02, 0, 0.74, 0.3)), iron);
+  room.glowBag.add(place(box(0.13, 0.12, 0.004, 0, 0.75, 0.312)), fire);
+  for (const [w, h, bx, by] of [[0.17, 0.02, 0, 0.82], [0.17, 0.02, 0, 0.68], [0.02, 0.16, -0.075, 0.75], [0.02, 0.16, 0.075, 0.75]]) {
+    room.metalBag.add(place(box(w, h, 0.012, bx, by, 0.316)), iron);
+  }
+  for (const bx of [-0.022, 0.022]) room.metalBag.add(place(box(0.008, 0.12, 0.008, bx, 0.75, 0.316)), iron);
+  for (const by of [0.67, 0.81]) room.metalBag.add(place(cyl(0.012, 0.012, 0.04, -0.112, by, 0.3, 8)), iron);
+  room.metalBag.add(place(cyl(0.007, 0.007, 0.05, 0, 0, 0, 6).rotateX(Math.PI / 2).translate(0.08, 0.74, 0.335)), nickel);
+  room.metalBag.add(place(new THREE.SphereGeometry(0.016, 8, 6).translate(0.08, 0.74, 0.36)), nickel);
+
+  // Aschkasten: Tür mit drei glimmenden Zugschlitzen
+  room.metalBag.add(place(box(0.2, 0.14, 0.06, 0, 0.27, 0.22)), iron);
+  room.metalBag.add(place(box(0.17, 0.11, 0.02, 0, 0.27, 0.26)), iron);
+  for (const bx of [-0.04, 0, 0.04]) room.glowBag.add(place(box(0.022, 0.05, 0.004, bx, 0.27, 0.272)), slit);
+  room.metalBag.add(place(new THREE.SphereGeometry(0.012, 8, 6).translate(0.065, 0.27, 0.28)), nickel);
+
+  // Ofenblech, vorn länger gegen herausfallende Glut
+  room.metalBag.add(place(box(0.9, 0.006, 1.05, 0, 0.003, 0.12)), 0x5a564e);
+
+  // Kohleneimer mit Henkel und einem Haufen Briketts und Kohle
+  const pail = (g) => place(g.translate(0.42, 0, -0.05));
+  room.metalBag.add(pail(turn([[0, 0], [0.11, 0], [0.12, 0.02], [0.135, 0.26], [0.142, 0.275]], 18)), 0x2a2826);
+  room.metalBag.add(pail(turn([[0.136, 0.275], [0.129, 0.26], [0.114, 0.03], [0, 0.03]], 18)), 0x1e1c1a);
+  room.metalBag.add(pail(new THREE.TorusGeometry(0.142, 0.006, 5, 16, Math.PI).translate(0, 0.275, 0)), 0x2a2826);
+  const r = rng(91);
+  for (let i = 0; i < 14; i++) {
+    const a = r() * Math.PI * 2;
+    const d = Math.sqrt(r()) * 0.1;
+    const g = new THREE.DodecahedronGeometry(0.022 + r() * 0.016, 0);
+    g.rotateX(r() * 3).rotateY(r() * 3).scale(1, 0.7, 1).translate(Math.cos(a) * d, 0.24 + (0.1 - d) * 0.35, Math.sin(a) * d);
+    room.plainBag.add(pail(g), 0x101012);
+  }
+
+  // Schürhaken an die Ofenflanke gelehnt
+  room.metalBag.add(place(rod([[-0.42, 0.01, 0.1], [-0.34, 0.55, 0.06], [-0.3, 0.86, 0.04]], 0.007)), 0x2a2a2c);
+  room.metalBag.add(place(new THREE.TorusGeometry(0.025, 0.006, 5, 12).translate(-0.29, 0.9, 0.04)), 0x2a2a2c);
+
+  // Rohr: senkrecht hoch, im Bogen nach Norden, durch eine Rosette in die Wand
+  const pipe = 0x262422;
+  const wallZ = -room.d / 2;
+  room.metalBag.add(cyl(0.065, 0.065, 0.83, x, 1.885, z, 14), pipe);
+  room.metalBag.add(new THREE.TorusGeometry(0.15, 0.065, 12, 10, Math.PI / 2).rotateY(-Math.PI / 2).translate(x, 2.3, z - 0.15), pipe);
+  const run = z - 0.15 - wallZ;
+  room.metalBag.add(cyl(0.065, 0.065, run, 0, 0, 0, 14).rotateX(Math.PI / 2).translate(x, 2.45, wallZ + run / 2), pipe);
+  for (const y of [1.75, 2.08]) room.metalBag.add(new THREE.TorusGeometry(0.067, 0.006, 5, 18).rotateX(Math.PI / 2).translate(x, y, z), pipe);
+  room.metalBag.add(cyl(0.13, 0.13, 0.012, 0, 0, 0, 20).rotateX(Math.PI / 2).translate(x, 2.45, wallZ + 0.006), pipe);
+  // Drosselklappe: Griff seitlich am Rohr
+  room.metalBag.add(cyl(0.006, 0.006, 0.08, 0, 0, 0, 6).rotateZ(Math.PI / 2).translate(x + 0.1, 1.95, z), 0x2a2a2c);
+  room.metalBag.add(box(0.05, 0.012, 0.025, x + 0.15, 1.95, z), 0x2a2a2c);
+
+  // Glutlicht vor der Feuertür
+  const ember = new THREE.PointLight(0xff5a1a, 1.8, 5, 2);
+  ember.position.set(x + Math.sin(yaw) * 0.55, 0.55, z + Math.cos(yaw) * 0.55);
+  room.scene.add(ember);
+  return ember;
+}
 
 // Was eine Kneipe bewohnt aussehen lässt: Hakenleiste mit Mänteln, Hüten und Zeitung neben der
 // Tür, ein Mantel am Ständer, Geweih und Bilder an den Wänden, Bierkästen, Besen und ein Stehfass.

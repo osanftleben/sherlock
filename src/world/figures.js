@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { box, cyl, merge, tint } from './kit.js';
 
 // Figuren in Zeitkostüm, ohne Skelett: Gruppen für Kopf, Oberarm, Unterarm, Oberschenkel
@@ -1084,8 +1084,9 @@ export function walkFigure(figure, phase) {
 }
 
 // Droschkenpferd mit Geschirr. Es läuft in +Z, die Hufe stehen auf y = 0.
-// Rumpf aus Brust, Bauch und Kruppe; Hals und Kopf hängen an einem Gelenk am Widerrist, damit
-// sie nicken können; der Schweif pendelt. Beine mit Knie, Sprunggelenk, Fessel und Huf.
+// Ein Mesh mit Skelett: Rumpf aus Brust, Bauch und Kruppe; Hals und Kopf hängen an einem Knochen
+// am Widerrist, damit sie nicken können; der Schweif pendelt. Die Beine beugen sich an Knie bzw.
+// Sprunggelenk und Fesselkopf.
 const HORSE_UP = new THREE.Vector3(0, 1, 0);
 const LEATHER = 0x17120e;
 const BRASS = 0x9a7c3c;
@@ -1106,30 +1107,128 @@ function ell(rx, ry, rz, x, y, z, w = 14, h = 9) {
 }
 
 const horseLegs = new Map();
+// Ein Bein in drei Teilen, jeweils um sein eigenes Gelenk gelegt: Oberbein (Unterarm bzw.
+// Unterschenkel) ab dem Rumpf, Röhre ab Knie bzw. Sprunggelenk, Fessel mit Huf ab dem Fesselkopf.
 function horseLeg(color, hind) {
   const key = `${color}-${hind}`;
   if (!horseLegs.has(key)) {
     const hoof = 0x141110;
-    const z = hind ? -0.12 : 0.02;
-    const parts = [
-      tint(hind ? strut(V3(0, 0.04, 0.03), V3(0, -0.42, z), 0.12, 0.06, 8, 0.7) : strut(V3(0, 0.05, 0), V3(0, -0.43, z), 0.09, 0.055, 8, 0.8), color),
-      tint(ell(0.05, 0.065, hind ? 0.07 : 0.055, 0, -0.45, z), color),
-      tint(strut(V3(0, -0.45, z), V3(0, -0.85, hind ? -0.05 : 0), 0.042, 0.036, 6), color),
-      tint(ell(0.046, 0.05, 0.05, 0, -0.87, hind ? -0.045 : 0.005, 8, 6), color),
-      tint(strut(V3(0, -0.87, hind ? -0.045 : 0.005), V3(0, -0.95, hind ? -0.01 : 0.04), 0.036, 0.042, 6), color),
-      tint(strut(V3(0, -1.02, hind ? 0 : 0.05), V3(0, -0.94, hind ? -0.01 : 0.04), 0.062, 0.046, 8), hoof),
+    const kz = hind ? -0.12 : 0.02;
+    const fz = hind ? -0.045 : 0.005;
+    const upper = [
+      tint(hind ? strut(V3(0, 0.04, 0.03), V3(0, -0.42, kz), 0.12, 0.06, 8, 0.7) : strut(V3(0, 0.05, 0), V3(0, -0.43, kz), 0.09, 0.055, 8, 0.8), color),
+      tint(ell(0.05, 0.065, hind ? 0.07 : 0.055, 0, -0.45, kz), color),
     ];
-    horseLegs.set(key, merge(parts));
+    // Fersenhöcker hinten am Sprunggelenk.
+    if (hind) upper.push(tint(ell(0.032, 0.06, 0.04, 0, -0.4, kz - 0.06, 8, 6), color));
+    const cannon = [
+      tint(strut(V3(0, -0.45, kz), V3(0, -0.85, hind ? -0.05 : 0), 0.042, 0.036, 6), color),
+      tint(ell(0.046, 0.05, 0.05, 0, -0.87, fz, 8, 6), color),
+    ].map((g) => g.translate(0, 0.45, -kz));
+    const pastern = [
+      tint(strut(V3(0, -0.87, fz), V3(0, -0.95, hind ? -0.01 : 0.04), 0.036, 0.042, 6), color),
+      tint(strut(V3(0, -1.02, hind ? 0 : 0.05), V3(0, -0.94, hind ? -0.01 : 0.04), 0.062, 0.046, 8), hoof),
+    ].map((g) => g.translate(0, 0.87, -fz));
+    horseLegs.set(key, { upper: merge(upper), cannon: merge(cannon), pastern: merge(pastern), knee: V3(0, -0.45, kz), fetlock: V3(0, -0.42, fz - kz) });
   }
   return horseLegs.get(key);
+}
+
+// Mähne als Haarband, das vom Widerrist bis zum Genick über den Kamm und an der rechten Halsseite
+// herabfällt, mit ausgefranstem Saum. Im Raum des Kopfknochens: Die Halsachse läuft von
+// (y −0,05 | z 0) nach (0,5 | 0,4), Radius 0,25 bis 0,13, seitlich auf 0,62 gestaucht; oben trägt
+// sie den Kamm (Achse (0,06 | −0,1) nach (0,54 | 0,33), Radius 0,13 bis 0,07). Für jeden Schnitt quer
+// zum Hals wird gesucht, wie hoch der Kamm über die Achse ragt, und das Band auf eine Ellipse
+// durch Kammhöhe und Halsbreite gelegt, knapp über der Haut.
+function maneSheet(rand) {
+  const cols = 22;
+  const rows = [1.75, 1.25, 0.8, 0.45];
+  const dir = V3(0, 0.55, 0.4).normalize();
+  const dorsal = V3(0, dir.z, -dir.y);
+  const ridgeN = V3(0, 0.43, -0.48).normalize();
+  const cAxis = V3(0, 0.48, 0.43);
+  const pos = [];
+  for (let i = 0; i <= cols; i++) {
+    const t = 0.06 + (i / cols) * 0.86;
+    const c = V3(0, -0.05 + 0.55 * t, 0.4 * t);
+    const r = 0.25 - 0.12 * t;
+    // Kammpunkt im selben Querschnitt: (Q(s) + n·rc(s) − c) · dir = 0, linear in s.
+    const q0 = V3(0, 0.06, -0.1).addScaledVector(ridgeN, 0.13).sub(c);
+    const q1 = cAxis.clone().addScaledVector(ridgeN, -0.06);
+    const s = Math.min(1, Math.max(0, -q0.dot(dir) / q1.dot(dir)));
+    const height = Math.max(r, q0.addScaledVector(q1, s).dot(dorsal));
+    // Zackiger Saum: jeder zweite Schnitt endet höher, dazu etwas Zufall.
+    const fray = (i % 2) * 0.3 + 0.1 * rand();
+    rows.forEach((a, j) => {
+      const ang = j === rows.length - 1 ? a - fray : a;
+      // Unten dünner Saum, oben dicker Schopf über dem Kamm.
+      const lift = 0.025 - j * 0.005;
+      const x = Math.cos(ang) * (0.62 * r + lift);
+      const p = c.clone().addScaledVector(dorsal, Math.sin(ang) * (height + lift));
+      pos.push(x, p.y, p.z + (j === rows.length - 1 ? 0.02 : 0));
+    });
+  }
+  // Vorder- und Rückseite mit eigenen Punkten, damit jede ihre eigene Normale bekommt.
+  const n = rows.length;
+  const back = pos.length / 3;
+  const index = [];
+  for (let i = 0; i < cols; i++) {
+    for (let j = 0; j < n - 1; j++) {
+      const a = i * n + j;
+      const b = a + n;
+      index.push(a, b, a + 1, b, b + 1, a + 1);
+      index.push(back + a, back + a + 1, back + b, back + b, back + a + 1, back + b + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([...pos, ...pos], 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  return g;
+}
+
+// Teile verschiedener Knochen zu einem Mesh: Jeder Eintrag [Geometrie, Knochen] hängt ganz an
+// seinem Knochen. Die Geometrie liegt in der Ruhelage im Raum des Pferdes.
+function skinnedParts(entries) {
+  return mergeGeometries(
+    entries.map(([geo, bone]) => {
+      const n = geo.attributes.position.count;
+      const index = new Uint16Array(n * 4);
+      const weight = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        index[i * 4] = bone;
+        weight[i * 4] = 1;
+      }
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(index, 4));
+      geo.setAttribute('skinWeight', new THREE.BufferAttribute(weight, 4));
+      return geo;
+    }),
+    false,
+  );
 }
 
 let horseMat = null;
 
 export function makeHorse(color = 0x2e2018, { blanket = false, nosebag = false } = {}) {
-  horseMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 });
+  horseMat ??= new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62 });
   const mane = 0x14100c;
-  const root = new THREE.Group();
+  let seed = (color % 9973) + (blanket ? 7 : 1);
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  // Knochen: Rumpf, Kopf (am Widerrist, mit dem Hals), Schweif, je Bein Oberbein, Röhre, Fessel.
+  const bones = [];
+  const bone = (parent, x, y, z) => {
+    const b = new THREE.Bone();
+    b.position.set(x, y, z);
+    parent?.add(b);
+    bones.push(b);
+    return b;
+  };
+  const rootBone = bone(null, 0, 0, 0);
+  const head = bone(rootBone, 0, 1.45, 0.62);
+  const tail = bone(rootBone, 0, 1.47, -0.88);
+  const parts = [];
+  const add = (b, geo) => parts.push([geo, bones.indexOf(b)]);
+
   const body = [
     tint(ell(0.33, 0.36, 0.72, 0, 1.17, -0.02), color),
     tint(ell(0.3, 0.38, 0.34, 0, 1.2, 0.5), color),
@@ -1170,49 +1269,71 @@ export function makeHorse(color = 0x2e2018, { blanket = false, nosebag = false }
     body.push(tint(cloth.translate(0, 1.22, -0.08), 0x4a2622));
     for (const s of [-1, 1]) body.push(tint(new THREE.BoxGeometry(0.02, 0.06, 1.3).translate(s * 0.49, 0.85, -0.08), 0x9a7a48));
   }
-  root.add(new THREE.Mesh(merge(body), horseMat));
+  add(rootBone, merge(body));
 
-  // Hals und Kopf am Widerrist.
-  const head = new THREE.Group();
-  head.position.set(0, 1.45, 0.62);
+  // Hals und Kopf, im Raum des Kopfknochens gebaut und dann an seine Stelle gerückt.
   const h = [
     tint(strut(V3(0, -0.05, 0), V3(0, 0.3, 0.2), 0.25, 0.18, 12, 0.62), color),
     tint(strut(V3(0, 0.3, 0.2), V3(0, 0.5, 0.4), 0.18, 0.13, 12, 0.62), color),
-    tint(strut(V3(0, 0.2, -0.1), V3(0, 0.62, 0.36), 0.05, 0.035, 4, 0.45), mane),
-    tint(strut(V3(0, 0.64, 0.38), V3(0, 0.55, 0.56), 0.04, 0.02, 4, 0.5), mane),
+    // Mähnenkamm: Der Hals ist oben kräftiger als an der Kehle.
+    tint(strut(V3(0, 0.06, -0.1), V3(0, 0.54, 0.33), 0.13, 0.07, 10, 0.52), color),
     tint(ell(0.1, 0.13, 0.15, 0, 0.42, 0.47), color),
     tint(strut(V3(0, 0.5, 0.45), V3(0, 0.02, 0.75), 0.11, 0.075, 10, 0.75), color),
-    tint(ell(0.075, 0.08, 0.09, 0, 0.02, 0.77), color),
+    tint(ell(0.062, 0.075, 0.085, 0, 0.02, 0.77), color),
+    // Stirn über den Augen und Kinngrube unter dem Maul.
+    tint(ell(0.085, 0.07, 0.06, 0, 0.43, 0.56, 10, 7), color),
+    tint(ell(0.045, 0.035, 0.05, 0, -0.04, 0.72, 8, 6), color),
+    // Schopf über die Stirn.
+    tint(strut(V3(0, 0.62, 0.41), V3(0, 0.48, 0.56), 0.045, 0.02, 4, 0.7), mane),
   ];
-  const headDir = V3(0, -0.48, 0.3).normalize();
   for (const s of [-1, 1]) {
+    // Ganaschen: die runden Backen hinten am Unterkiefer.
+    h.push(tint(ell(0.045, 0.1, 0.085, s * 0.055, 0.33, 0.46, 10, 7), color));
+    // Nüstern: dunkle Öffnungen vorn am Maul.
+    h.push(tint(ell(0.018, 0.028, 0.012, s * 0.035, 0.03, 0.855, 6, 4), 0x0a0807));
     h.push(tint(strut(V3(s * 0.05, 0.6, 0.42), V3(s * 0.07, 0.75, 0.4), 0.03, 0.006, 5), color));
     h.push(tint(new THREE.BoxGeometry(0.02, 0.09, 0.11).translate(s * 0.11, 0.42, 0.55), LEATHER));
     h.push(tint(strut(V3(s * 0.09, 0.52, 0.46), V3(s * 0.075, 0.08, 0.71), 0.011, 0.011, 4), LEATHER));
     h.push(tint(strut(V3(s * 0.08, 0.06, 0.71), V3(s * 0.1, 0.11, -0.5), 0.008, 0.008, 3), LEATHER));
   }
+  h.push(tint(maneSheet(rand), mane));
+  const headDir = V3(0, -0.48, 0.3).normalize();
   h.push(tint(new THREE.TorusGeometry(0.088, 0.013, 4, 14).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), headDir)).translate(0, 0.16, 0.67), LEATHER));
   h.push(tint(new THREE.TorusGeometry(0.115, 0.012, 4, 14).applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V3(0, 0, 1), headDir)).translate(0, 0.5, 0.47), LEATHER));
   if (nosebag) {
     h.push(tint(strut(V3(0, 0.15, 0.68), V3(0, -0.12, 0.85), 0.11, 0.1, 10), 0x6e6048));
     for (const s of [-1, 1]) h.push(tint(strut(V3(s * 0.1, 0.12, 0.69), V3(s * 0.085, 0.58, 0.42), 0.009, 0.009, 3), 0x6e6048));
   }
-  head.add(new THREE.Mesh(merge(h), horseMat));
-  root.add(head);
+  add(head, merge(h).translate(0, 1.45, 0.62));
 
-  const tail = new THREE.Group();
-  tail.position.set(0, 1.47, -0.88);
-  tail.add(new THREE.Mesh(merge([tint(strut(V3(0, 0, 0), V3(0, -0.28, -0.12), 0.05, 0.06, 6), mane), tint(strut(V3(0, -0.26, -0.11), V3(0, -0.72, -0.16), 0.065, 0.1, 6, 0.7), mane)]), horseMat));
-  root.add(tail);
+  // Schweif: kurze Rübe, darunter ein Bündel langer Haare, das sich nach unten auffächert.
+  const tl = [tint(strut(V3(0, 0, 0), V3(0, -0.28, -0.12), 0.05, 0.06, 6), mane)];
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2;
+    const end = V3(Math.cos(a) * 0.07, -0.82 - rand() * 0.12, -0.17 + Math.sin(a) * 0.05);
+    tl.push(tint(strut(V3(Math.cos(a) * 0.025, -0.2, -0.1 + Math.sin(a) * 0.02), end, 0.045, 0.016, 5), mane));
+  }
+  add(tail, merge(tl).translate(0, 1.47, -0.88));
 
   const legs = [];
   for (const [x, z, hind] of [[-0.17, 0.55, false], [0.17, 0.55, false], [-0.17, -0.6, true], [0.17, -0.6, true]]) {
-    const pivot = new THREE.Group();
-    pivot.position.set(x, 1.02, z);
-    pivot.add(new THREE.Mesh(horseLeg(color, hind), horseMat));
-    root.add(pivot);
-    legs.push(pivot);
+    const leg = horseLeg(color, hind);
+    const upper = bone(rootBone, x, 1.02, z);
+    const lower = bone(upper, leg.knee.x, leg.knee.y, leg.knee.z);
+    const foot = bone(lower, leg.fetlock.x, leg.fetlock.y, leg.fetlock.z);
+    rootBone.updateMatrixWorld(true);
+    add(upper, leg.upper.clone().applyMatrix4(upper.matrixWorld));
+    add(lower, leg.cannon.clone().applyMatrix4(lower.matrixWorld));
+    add(foot, leg.pastern.clone().applyMatrix4(foot.matrixWorld));
+    legs.push({ upper, lower, foot, hind });
   }
+
+  const mesh = new THREE.SkinnedMesh(skinnedParts(parts), horseMat);
+  mesh.add(rootBone);
+  rootBone.updateMatrixWorld(true);
+  mesh.bind(new THREE.Skeleton(bones));
+  const root = new THREE.Group();
+  root.add(mesh);
   // Mit Futtersack hängt der Kopf tiefer.
   const tilt = nosebag ? 0.35 : 0;
   head.rotation.x = tilt;
@@ -1220,20 +1341,47 @@ export function makeHorse(color = 0x2e2018, { blanket = false, nosebag = false }
   return root;
 }
 
+// Ein Bein stellen: swing schwingt das ganze Bein (positiv: Huf nach hinten), flex beugt es
+// (0 gestreckt, 1 voll gebeugt). Vorn klappt die Röhre am Knie nach hinten; hinten bleibt das
+// Sprunggelenk fast in Höhe, und die Röhre schwingt nach hinten hoch. In beiden Fällen kippt der Huf.
+function poseLeg(leg, swing, flex) {
+  if (leg.hind) {
+    leg.upper.rotation.x = swing - 0.2 * flex;
+    leg.lower.rotation.x = 1.1 * flex;
+    leg.foot.rotation.x = 0.5 * flex;
+  } else {
+    leg.upper.rotation.x = swing - 0.25 * flex;
+    leg.lower.rotation.x = 1.0 * flex;
+    leg.foot.rotation.x = 0.6 * flex;
+  }
+}
+
+// Trab: diagonale Beinpaare (links vorn mit rechts hinten) wechseln sich ab. Ein Bein stützt,
+// solange es nach hinten schwingt, und wird beim Vorschwingen gebeugt angehoben. Es löst sich
+// schon kurz vor dem hintersten Punkt vom Boden, so dass beide Paare einen Augenblick schweben.
 export function trotHorse(horse, phase) {
   const { legs, head, tail, tilt } = horse.userData;
   legs.forEach((leg, i) => {
-    leg.rotation.x = Math.sin(phase + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.45;
+    const q = phase + (i === 0 || i === 3 ? 0 : Math.PI);
+    const flex = Math.max(0, -Math.cos(q + 0.15));
+    poseLeg(leg, Math.sin(q) * 0.42, flex * flex * (3 - 2 * flex));
   });
-  head.rotation.x = tilt + Math.sin(phase * 2) * 0.05;
+  head.rotation.x = tilt + Math.sin(phase * 2) * 0.03;
   tail.rotation.x = 0.15 + Math.sin(phase * 2 + 1) * 0.04;
 }
 
-// Stehendes Pferd: Kopf und Schweif bewegen sich ein wenig, ab und zu stampft ein Huf.
+// Stehendes Pferd: Kopf und Schweif bewegen sich ein wenig, ab und zu stampft ein Huf
+// (plaza.js hört ihn aufsetzen, wenn sin(t / 2) wieder unter 0,97 fällt).
 export function idleHorse(horse, t) {
   const { legs, head, tail, tilt } = horse.userData;
   head.rotation.x = tilt + Math.sin(t * 0.6) * 0.03 + Math.max(0, Math.sin(t * 2.3)) * 0.02;
   head.rotation.y = Math.sin(t * 0.23) * 0.08;
   tail.rotation.z = Math.sin(t * 1.1) * Math.max(0, Math.sin(t * 0.17)) * 0.25;
-  legs[0].rotation.x = Math.max(0, Math.sin(t * 0.5) - 0.97) * 8;
+  const lift = Math.min(1, Math.max(0, Math.sin(t * 0.5) - 0.97) / 0.02);
+  poseLeg(legs[0], -0.05 * lift, 0.8 * lift);
+  // Ein Hinterbein ruht: Die Röhre steht etwas vor, der Huf nur auf der Spitze.
+  const rest = legs[3];
+  rest.upper.rotation.x = 0.05;
+  rest.lower.rotation.x = -0.12;
+  rest.foot.rotation.x = 0.5;
 }

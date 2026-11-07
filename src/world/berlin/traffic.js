@@ -225,7 +225,6 @@ export function buildTraffic(loc, r) {
   let u = 0.1;
   let phase = 0;
   let lastBeat = 0;
-  let nextNeigh = 30 + Math.random() * 60;
   const ahead = new THREE.Vector3();
   loc.onUpdate((dt, t, { camera }) => {
     const p = curve.getPointAt(u);
@@ -247,11 +246,6 @@ export function buildTraffic(loc, r) {
       if (beat !== lastBeat) {
         lastBeat = beat;
         (loc.sounds ??= []).push({ type: 'hoof', vol: ear.vol, pan: ear.pan });
-      }
-      nextNeigh -= dt;
-      if (nextNeigh < 0) {
-        nextNeigh = 60 + Math.random() * 90;
-        (loc.sounds ??= []).push({ type: 'neigh', ...hearing(camera, p.x, p.z, 60) });
       }
     }
     light.copy(p);

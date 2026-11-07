@@ -1507,6 +1507,58 @@ export function tileFloor() {
   });
 }
 
+// Grauer Granit, Lausitzer Art, gestockt: dicht gesprenkelt aus grauem Quarz, weißem Feldspat,
+// schwarzem Glimmer und vereinzelt rötlichen Körnern, die Körner etwas gröber als in Wirklichkeit,
+// damit man sie auf ein paar Meter noch erkennt. Hell angelegt; den Ton gibt die Vertexfarbe.
+// Eine Kachel je Meter bei worldUV(geo, 1). Die Körner laufen über den Rand, die Kachel ist nahtlos.
+export function granite() {
+  return cached('granite', () => {
+    const size = 512;
+    const color = canvas(size);
+    const height = canvas(size);
+    const c = color.getContext('2d');
+    const h = height.getContext('2d');
+    const r = rng(733);
+    c.fillStyle = '#b4b2ac';
+    c.fillRect(0, 0, size, size);
+    h.fillStyle = '#808080';
+    h.fillRect(0, 0, size, size);
+    const grains = (n, minR, maxR, colors, lift) => {
+      for (let i = 0; i < n; i++) {
+        const x = r() * size;
+        const y = r() * size;
+        const rad = minR + r() * (maxR - minR);
+        const pts = [];
+        for (let j = 0; j < 5; j++) {
+          const a = (j / 5) * Math.PI * 2 + r() * 0.8;
+          const rr = rad * (0.55 + r() * 0.6);
+          pts.push([Math.cos(a) * rr, Math.sin(a) * rr]);
+        }
+        c.fillStyle = colors[Math.floor(r() * colors.length)];
+        h.fillStyle = `rgb(${lift},${lift},${lift})`;
+        for (const ox of [-size, 0, size]) {
+          for (const oy of [-size, 0, size]) {
+            if (x + ox < -maxR || x + ox > size + maxR || y + oy < -maxR || y + oy > size + maxR) continue;
+            for (const ctx of [c, h]) {
+              ctx.beginPath();
+              pts.forEach(([px, py], j) => (j ? ctx.lineTo(x + ox + px, y + oy + py) : ctx.moveTo(x + ox + px, y + oy + py)));
+              ctx.fill();
+            }
+          }
+        }
+      }
+    };
+    grains(5500, 1.5, 4, ['#9a9894', '#a6a49e', '#8c8a86', '#b0aea8'], 120);
+    grains(3200, 1.5, 4.8, ['#e4e2dc', '#eeece6', '#d8d4cc'], 170);
+    grains(260, 1.5, 4, ['#d4c0b2', '#c8b0a2'], 150);
+    grains(2600, 0.8, 2.6, ['#2a2a2c', '#1c1c1e', '#3a3836'], 60);
+    grain(c, size, 16, 734);
+    grain(h, size, 60, 735);
+    blotches(c, size, 12, 30, 110, 'rgba(40,40,34,0.1)', 736);
+    return { map: tex(color), normalMap: tex(normalFromHeight(height, 1.6), { srgb: false }) };
+  });
+}
+
 // Heller, grau geäderter Marmor (Carrara-Art), 1 Kachel je 2 m bei box()-UVs.
 export function marble() {
   return cached('marble', () => {

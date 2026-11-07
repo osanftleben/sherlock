@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { Bag, addMesh, cyl, merge, std } from '../kit.js';
-import { clockFace, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
+import { Bag, addMesh, cyl, merge, std, worldUV } from '../kit.js';
+import { clockFace, granite as graniteTex, posterWall, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
@@ -171,40 +171,103 @@ export function buildPlaza(loc, r, ironMat) {
   buildKiosk(loc);
 }
 
-// Achteckiges Granitbecken, in der Mitte ein gusseiserner Schalenbrunnen. Im November
-// abgestellt: Im Becken steht still das Regenwasser.
+// Schmuckbrunnen, wie ihn die Stadt in den achtziger Jahren auf ihre Plätze stellte:
+// achteckiges Granitbecken mit Sockelstufe, Eckpfeilern, gerahmten Feldern und vorkragender
+// Deckplatte; in der Mitte ein Steinpfeiler mit vier bronzenen Löwenköpfen als Wasserspeier,
+// darauf ein gusseiserner Schalenbrunnen (gedrehter Schaft, große Schale auf Konsolen, kleine
+// Schale, Pinienzapfen). Im November abgestellt: In Becken und Schale steht das Regenwasser.
 function buildFountain(loc) {
   const { scene } = loc;
   const { x, z, r: R } = FOUNTAIN;
-  const granite = 0x6a6a66;
+  // Heller als der Stein wirkt, weil die Granittextur ihn noch abdunkelt.
+  const granite = 0x989894;
+  const graniteLight = 0xaaa9a2;
+  const graniteDark = 0x7a7a74;
   const iron = 0x1f2a24;
-  const b = new Bag();
-  b.add(cyl(R - 0.2, R - 0.2, 0.3, 0, 0.15, 0, 8).rotateY(Math.PI / 8).translate(x, 0, z), 0x3a3a38);
+  const bronze = 0x8a6a3c;
+  // Je Werkstoff ein eigener Beutel mit eigener Oberfläche; welcher, folgt aus der Farbe.
+  const bags = { stone: new Bag(), iron: new Bag(), bronze: new Bag() };
+  // Stein bekommt weltbezogene UVs (1 m je Kachel), damit die Körnung über alle Teile gleich groß ist.
+  const b = {
+    add: (g, color) => {
+      if (color === iron) bags.iron.add(g, color);
+      else if (color === bronze) bags.bronze.add(g, color);
+      else bags.stone.add(worldUV(g, 1), color);
+    },
+  };
+  // Teil in örtlichen Koordinaten (+z zeigt nach außen) in Richtung a um die Mitte drehen.
+  const place = (g, a, color) => b.add(g.rotateY(a).translate(x, 0, z), color);
+  const oct = (r, h, y, color) => b.add(cyl(r, r, h, 0, y, 0, 8).rotateY(Math.PI / 8).translate(x, 0, z), color);
+  const lathe = (prof, y, color, seg = 24) => b.add(new THREE.LatheGeometry(prof.map(([r, h]) => new THREE.Vector2(r, h)), seg).translate(x, y, z), color);
+
+  // Becken: Boden, Sockelstufe, Wand, zweistufige Deckplatte
+  oct(R - 0.2, 0.3, 0.15, 0x3a3a38);
+  const apothem = R * Math.cos(Math.PI / 8);
+  const face = 2 * R * Math.sin(Math.PI / 8);
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    b.add(octagonSide(R, a, 0.55, 0.3, 0.275, x, z), granite);
-    b.add(octagonSide(R + 0.05, a, 0.08, 0.42, 0.59, x, z), 0x76766f);
+    b.add(octagonSide(R + 0.1, a, 0.14, 0.42, 0.07, x, z), graniteDark);
+    b.add(octagonSide(R, a, 0.44, 0.3, 0.36, x, z), granite);
+    b.add(octagonSide(R + 0.04, a, 0.04, 0.38, 0.6, x, z), granite);
+    b.add(octagonSide(R + 0.09, a, 0.09, 0.46, 0.665, x, z), graniteLight);
+    // gerahmtes Feld auf jeder Seite
+    const fw = face * 0.62;
+    const out = apothem + 0.015;
+    for (const y of [0.24, 0.5]) place(new THREE.BoxGeometry(fw, 0.035, 0.04).translate(0, y, out), a, graniteLight);
+    for (const s of [-1, 1]) place(new THREE.BoxGeometry(0.035, 0.26, 0.04).translate((s * fw) / 2, 0.37, out), a, graniteLight);
+    // Eckpfeiler mit Fußplatte
+    const c = a + Math.PI / 8;
+    place(new THREE.BoxGeometry(0.34, 0.5, 0.34).rotateY(Math.PI / 4).translate(0, 0.39, R - 0.08), c, granite);
+    place(new THREE.BoxGeometry(0.4, 0.06, 0.4).rotateY(Math.PI / 4).translate(0, 0.17, R - 0.06), c, graniteDark);
   }
-  // Sockel, Säule, große Schale, kleine Schale, Knauf.
-  b.add(cyl(0.5, 0.62, 0.8, x, 0.7, z, 8), granite);
-  b.add(cyl(0.13, 0.2, 1.5, x, 1.85, z, 12), iron);
-  b.add(cyl(1.0, 0.28, 0.3, x, 2.15, z, 20), iron);
-  b.add(cyl(1.04, 1.04, 0.05, x, 2.32, z, 20), iron);
-  b.add(cyl(0.08, 0.12, 0.7, x, 2.65, z, 10), iron);
-  b.add(cyl(0.48, 0.14, 0.2, x, 3.05, z, 16), iron);
-  b.add(cyl(0.03, 0.08, 0.45, x, 3.35, z, 8), iron);
-  addMesh(scene, b.build(), std({ vertexColors: true, roughness: 0.6, metalness: 0.25 }));
+
+  // Steinpfeiler im Becken mit Fuß und Gesims
+  oct(0.74, 0.22, 0.41, graniteDark);
+  oct(0.64, 0.08, 0.56, granite);
+  oct(0.55, 0.9, 1.05, granite);
+  oct(0.62, 0.06, 1.51, granite);
+  oct(0.7, 0.1, 1.59, graniteLight);
+  // Löwenköpfe als Wasserspeier an vier Seiten
+  const shaft = 0.55 * Math.cos(Math.PI / 8);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    place(new THREE.TorusGeometry(0.14, 0.055, 6, 14).translate(0, 1.08, shaft + 0.03), a, bronze);
+    place(new THREE.SphereGeometry(0.12, 12, 8).scale(1, 1.05, 0.7).translate(0, 1.08, shaft + 0.06), a, bronze);
+    place(new THREE.SphereGeometry(0.065, 10, 6).scale(1, 0.8, 1).translate(0, 1.03, shaft + 0.15), a, bronze);
+    for (const s of [-1, 1]) place(new THREE.SphereGeometry(0.035, 6, 4).translate(s * 0.08, 1.2, shaft + 0.08), a, bronze);
+    place(new THREE.CylinderGeometry(0.022, 0.026, 0.2, 8).rotateX(Math.PI / 2).translate(0, 0.98, shaft + 0.2), a, bronze);
+  }
+
+  // Gusseiserner Schaft mit Wulst und Ringen
+  lathe([[0, 0], [0.32, 0], [0.32, 0.06], [0.25, 0.1], [0.23, 0.17], [0.17, 0.24], [0.2, 0.38], [0.21, 0.48], [0.16, 0.62], [0.11, 0.76], [0.13, 0.8], [0.17, 0.84], [0.17, 0.9], [0.12, 0.95], [0.12, 1.0], [0, 1.0]], 1.64, iron, 20);
+  // Große Schale auf acht Konsolen
+  lathe([[0, 0], [0.16, 0], [0.24, 0.05], [0.5, 0.15], [0.82, 0.26], [1.06, 0.34], [1.14, 0.36], [1.16, 0.42], [1.12, 0.45], [1.04, 0.43], [0.98, 0.34], [0, 0.34]], 2.6, iron, 32);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    place(new THREE.BoxGeometry(0.04, 0.3, 0.06).rotateX(0.85).translate(0, 2.6, 0.3), a, iron);
+    place(new THREE.SphereGeometry(0.045, 6, 4).translate(0, 2.42, 0.2), a, iron);
+  }
+  // Oberer Schaft, kleine Schale, Pinienzapfen
+  lathe([[0, 0], [0.11, 0], [0.09, 0.07], [0.06, 0.24], [0.09, 0.38], [0.07, 0.43], [0.1, 0.48], [0, 0.5]], 2.92, iron, 16);
+  lathe([[0, 0], [0.09, 0], [0.3, 0.09], [0.5, 0.17], [0.55, 0.2], [0.55, 0.24], [0.5, 0.24], [0.46, 0.2], [0, 0.2]], 3.38, iron, 24);
+  lathe([[0, 0], [0.05, 0], [0.04, 0.08], [0.1, 0.1], [0.11, 0.16], [0.1, 0.24], [0.08, 0.3], [0.05, 0.36], [0.02, 0.4], [0, 0.42]], 3.58, bronze, 9);
+
+  // Granit matt und stumpf, Eisen mit halbmattem Anstrich, Bronze metallisch mit warmem Glanz.
+  addMesh(scene, bags.stone.build(), std({ ...graniteTex(), vertexColors: true, roughness: 0.92, metalness: 0 }));
+  addMesh(scene, bags.iron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.15 }));
+  addMesh(scene, bags.bronze.build(), std({ vertexColors: true, roughness: 0.38, metalness: 0.85 }));
   // Stehendes Wasser: dunkel und glatt, damit es die Laternen spiegelt.
-  const water = cyl(R - 0.28, R - 0.28, 0.02, 0, 0.46, 0, 8).rotateY(Math.PI / 8).translate(x, 0, z);
-  addMesh(scene, water, std({ color: 0x0a0e14, roughness: 0.06, metalness: 0.6, envMapIntensity: 1.4 }));
-  const w = R * Math.cos(Math.PI / 8);
+  const waterMat = std({ color: 0x0a0e14, roughness: 0.06, metalness: 0.6, envMapIntensity: 1.4 });
+  addMesh(scene, cyl(R - 0.28, R - 0.28, 0.02, 0, 0.46, 0, 8).rotateY(Math.PI / 8).translate(x, 0, z), waterMat);
+  addMesh(scene, cyl(0.99, 0.99, 0.01, x, 2.97, z, 32), waterMat);
+  const w = apothem + 0.1;
   loc.collide(x - w, x + w, z - w, z + w);
   loc.addHotspot({
     pos: [x, 1.4, z],
     radius: R,
     range: 3.6,
     label: 'Brunnen',
-    action: { say: 'Granit und Gusseisen. Im November dreht die Stadt das Wasser ab, damit der Frost die Schalen nicht sprengt; im Becken steht nur, was der Regen bringt. Die Droschken wenden um ihn herum wie Planeten um eine Sonne, die ausgegangen ist.' },
+    action: { say: 'Granit und Gusseisen, an den Seiten vier bronzene Löwen, die im Sommer Wasser speien. Im November dreht die Stadt das Wasser ab, damit der Frost die Schalen nicht sprengt; im Becken steht nur, was der Regen bringt. Die Droschken wenden um ihn herum wie Planeten um eine Sonne, die ausgegangen ist.' },
   });
 }
 

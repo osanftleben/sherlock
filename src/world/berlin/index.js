@@ -8,6 +8,7 @@ import { buildHorizon } from './horizon.js';
 import { buildRiver } from './river.js';
 import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
+import { buildClutter } from './clutter.js';
 import { grimy } from './grime.js';
 import { LANTERN_GLASS, buildLamps, lampWash, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
@@ -400,6 +401,9 @@ export function buildBerlin() {
       { name: 'Bankhaus Lindner', at: bank.at(2, 0) },
     ],
   };
+
+  // Kram vor den Läden, erst jetzt: Er hält Abstand zu allen Ankern, Türen und Fundstellen.
+  buildClutter(loc, facades.shopFronts);
 
   buildTraffic(loc, r);
   buildWeather(loc, r);

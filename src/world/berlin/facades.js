@@ -550,6 +550,9 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
   const pipes = [];
   // Mündungen der Schornsteine in Weltkoordinaten, für den Rauch (smoke.js).
   const chimneys = [];
+  // Läden mit Achse (frame wie in block().frame), Sorte und ob erleuchtet, für den Kram davor
+  // auf dem Gehweg (clutter.js).
+  const shopFronts = [];
 
   // Erker, Balkone und Gauben eines Hauses, aus eigenem Zufall (reliefRand), damit Häuser,
   // Fenster und Läden bleiben, wie sie sind. Erker und Balkone halten eine Achse Abstand
@@ -948,6 +951,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
         const sort = kind ?? mix[Math.floor(signRand() * mix.length)];
         // Unter einem Erker sitzen dessen Konsolen, dort kein Schild.
         if (!inErker(i, 0)) shopSign(gx, sort, lit, i > 0 && i < bays - 1);
+        if (sidewalk) shopFronts.push({ matrix: gx.clone(), kind: sort, lit });
       }
       let y = FLOOR.ground;
       types.forEach((type, f) => {
@@ -1158,7 +1162,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     }
   };
 
-  return { block, row, courtWall, cornerTower, finish, chimneys };
+  return { block, row, courtWall, cornerTower, finish, chimneys, shopFronts };
 }
 
 // Licht aus erleuchteten Schaufenstern und Erdgeschossfenstern fällt auf den nassen Gehweg davor:

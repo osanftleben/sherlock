@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
+import { grimy } from './grime.js';
 import {
   SHOP_KINDS, SIGN_ATLAS, SIGN_NAMES, WINDOW_ATLAS, nightReflection, pavement, railing, rng, shopDisplay, shopShutter, shopSigns, windowAtlas,
 } from '../textures.js';
@@ -897,7 +898,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     if (towerCopper.length) addMesh(scene, merge(towerCopper), std({ color: 0x5a8070, roughness: 0.55, metalness: 0.35 }));
     if (towerLit.length) addMesh(scene, merge(towerLit), litGlass);
     if (towerDark.length) addMesh(scene, merge(towerDark), darkGlass);
-    const massMat = matte({ vertexColors: true, ...plasterTex });
+    const massMat = grimy(matte({ vertexColors: true, ...plasterTex }));
     addMesh(scene, massing.build(), massMat);
     // Erker und Balkone in eigenen Meshes, damit die übrigen Häuser unverändert bleiben.
     if (reliefBag.parts.length) addMesh(scene, reliefBag.build(), massMat);

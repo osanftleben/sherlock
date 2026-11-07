@@ -3073,3 +3073,52 @@ export function hallWindow() {
     return t;
   });
 }
+
+// Verwitterung für Putz und Ziegel, 8 m breit und 16 m hoch je Kachel (32 px/m), nur der
+// Rotkanal zählt, 160 ist neutral: Ruß und Regen ziehen dunkle Streifen von oben nach unten,
+// dazu fleckige Stellen. Siehe grime.js.
+export function facadeGrime() {
+  return cached('facadeGrime', () => {
+    const w = 256;
+    const h = 512;
+    const cv = canvas(w, h);
+    const c = cv.getContext('2d');
+    const r = rng(1887);
+    c.fillStyle = 'rgb(160,160,160)';
+    c.fillRect(0, 0, w, h);
+    const wrapped = (draw) => {
+      for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) draw(ox, oy);
+    };
+    // Flecken: dunkler Ruß, hellere, ausgewaschene Stellen.
+    for (let i = 0; i < 50; i++) {
+      const x = r() * w;
+      const y = r() * h;
+      const rad = 15 + r() * 60;
+      const dark = r() < 0.65;
+      const col = dark ? `rgba(60,60,60,${0.12 + r() * 0.18})` : `rgba(230,230,230,${0.06 + r() * 0.1})`;
+      wrapped((ox, oy) => {
+        const g = c.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad);
+        g.addColorStop(0, col);
+        g.addColorStop(1, 'rgba(128,128,128,0)');
+        c.fillStyle = g;
+        c.fillRect(x + ox - rad, y + oy - rad, rad * 2, rad * 2);
+      });
+    }
+    // Laufspuren: oben am dunkelsten, nach unten auslaufend, einzelne gebündelt.
+    for (let i = 0; i < 170; i++) {
+      const x = r() * w;
+      const y = r() * h;
+      const len = 30 + r() * 200;
+      const sw = 1 + r() * 5;
+      const a = 0.1 + r() * 0.3;
+      wrapped((ox, oy) => {
+        const g = c.createLinearGradient(0, y + oy, 0, y + oy + len);
+        g.addColorStop(0, `rgba(40,40,40,${a})`);
+        g.addColorStop(1, 'rgba(40,40,40,0)');
+        c.fillStyle = g;
+        c.fillRect(x + ox, y + oy, sw, len);
+      });
+    }
+    return tex(cv, { srgb: false });
+  });
+}

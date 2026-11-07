@@ -223,8 +223,8 @@ export class Audio {
     for (let i = 0; i < 9; i++) this.burst({ freq: 260 + Math.random() * 80, q: 1.2, dur: 0.035, gain: 0.4 * vol * (1 - i / 10), when: 0.08 + i * 0.032, out });
   }
 
-  // Wiehern: ein heller Ruf, der hoch einsetzt und mit immer stärkerem Tremolo abfällt
-  // („i-hi-hi-hi“), durch zwei Formantfilter geformt; darunter Atem, am Ende ein Brummeln.
+  // Wiehern: ein kehliger Ruf, der hoch einsetzt und mit immer stärkerem Tremolo abfällt
+  // („i-hi-hi-hi“), durch Formantfilter geformt und oben gedämpft; darunter Atem, am Ende ein Brummeln.
   neigh(vol, pan) {
     const ctx = this.ctx;
     const out = this.panned(pan * 0.85, 2.6);
@@ -233,15 +233,15 @@ export class Audio {
     const dur = 1.25 + Math.random() * 0.35;
     const osc = ctx.createOscillator();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(620 * f, t);
-    osc.frequency.exponentialRampToValueAtTime(1150 * f, t + 0.14);
-    osc.frequency.exponentialRampToValueAtTime(980 * f, t + dur * 0.5);
-    osc.frequency.exponentialRampToValueAtTime(430 * f, t + dur);
+    osc.frequency.setValueAtTime(400 * f, t);
+    osc.frequency.exponentialRampToValueAtTime(740 * f, t + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(640 * f, t + dur * 0.5);
+    osc.frequency.exponentialRampToValueAtTime(290 * f, t + dur);
     const trill = ctx.createOscillator();
     trill.frequency.setValueAtTime(19 + Math.random() * 5, t);
     const pitchDepth = ctx.createGain();
     pitchDepth.gain.setValueAtTime(15, t);
-    pitchDepth.gain.linearRampToValueAtTime(110 * f, t + dur);
+    pitchDepth.gain.linearRampToValueAtTime(70 * f, t + dur);
     trill.connect(pitchDepth).connect(osc.frequency);
     const env = ctx.createGain();
     env.gain.setValueAtTime(0.0001, t);
@@ -257,7 +257,7 @@ export class Audio {
     pulseDepth.gain.linearRampToValueAtTime(0.6, t + dur);
     trill.connect(pulseDepth).connect(pulse.gain);
     const mix = ctx.createGain();
-    for (const [freq, q, g] of [[1100, 3, 1], [2600, 4, 0.5], [600, 2, 0.35]]) {
+    for (const [freq, q, g] of [[780, 2.5, 1], [1600, 3, 0.3], [430, 1.6, 0.6]]) {
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass';
       bp.frequency.value = freq * f;
@@ -266,13 +266,16 @@ export class Audio {
       gg.gain.value = g;
       osc.connect(bp).connect(gg).connect(mix);
     }
-    mix.connect(env).connect(pulse).connect(out);
+    const soft = ctx.createBiquadFilter();
+    soft.type = 'lowpass';
+    soft.frequency.value = 2000;
+    mix.connect(soft).connect(env).connect(pulse).connect(out);
     osc.start(t);
     trill.start(t);
     osc.stop(t + dur + 0.05);
     trill.stop(t + dur + 0.05);
-    this.burst({ freq: 1600, q: 0.7, dur: dur * 0.9, gain: 0.12 * vol, attack: 0.1, out });
-    for (let i = 0; i < 6; i++) this.burst({ freq: 180 + Math.random() * 60, q: 1.4, dur: 0.05, gain: 0.5 * vol * (1 - i / 7), when: dur + 0.05 + i * 0.07, out });
+    this.burst({ freq: 1000, q: 0.7, dur: dur * 0.9, gain: 0.14 * vol, attack: 0.1, out });
+    for (let i = 0; i < 6; i++) this.burst({ freq: 140 + Math.random() * 50, q: 1.4, dur: 0.05, gain: 0.5 * vol * (1 - i / 7), when: dur + 0.05 + i * 0.07, out });
   }
 
   hooves() {

@@ -9,6 +9,13 @@ export const POINTS = [
   ['Start', 0, 10, 0],
   ['Platz', 0, -10, 0.6],
   ['Markt', -12, -4, Math.PI / 2],
+  // Rund um den Markt, wo die Auflösung zuerst nachgibt: vom selben Platz in die anderen drei
+  // Richtungen, dazu aus der Nordwestecke über den Platz und von der Ostseite zurück.
+  ['Markt N', -12, -4, 0],
+  ['Markt O', -12, -4, -Math.PI / 2],
+  ['Markt S', -12, -4, Math.PI],
+  ['Markt Ecke', -18, -16, -Math.PI * 0.75],
+  ['Markt Gegen', 12, -4, Math.PI / 2],
   ['Rosenthaler', 0, -60, 0],
   ['Kessler', 3.5, -70, -Math.PI / 2 + 0.55],
   ['Durchfahrt', 7.5, -79.7, -Math.PI / 2],

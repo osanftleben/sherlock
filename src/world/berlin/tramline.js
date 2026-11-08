@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { idleFigure, idleHorse, trotHorse, walkFigure, walkHorse } from '../figures.js';
-import { CAR_HALF, CAR_NOSE, Cords, HORSE_Z, PFLOOR, SPOTS, SWINGLE, TRACE, ZP, holdReins, makeCrew, makeHorseCar, makeLink, makeTeam } from './horsecar.js';
+import { CAR_HALF, CAR_LIGHTS, CAR_NOSE, Cords, HORSE_Z, PFLOOR, SPOTS, SWINGLE, TRACE, ZP, holdReins, makeCrew, makeHorseCar, makeLink, makeTeam } from './horsecar.js';
 import { addShadeCaster } from './lamps.js';
 import { hearing } from './traffic.js';
 import { TRAM, TRAM_HIDE_X, TramPath, tramPaths } from './tramway.js';
@@ -484,6 +484,11 @@ export function buildTramLine(loc) {
   const blockers = (loc.tramBlockers = []);
   // Der Wagenkasten hält das Licht der Laternen ab (lamps.js): drei Zylinder hintereinander.
   const shade = [-1.3, 0, 1.3].map((o) => ({ o, c: addShadeCaster(loc) }));
+  // Innenlampe und Signallaternen fahren als bewegliche Zusatzlampen mit (lamps.js). Den mittleren
+  // Zylinder, in dem die Innenlampe steht, lässt lamps.js für ihr Licht aus; die beiden äußeren
+  // halten es nach vorn und hinten ab, sodass es vor allem seitlich wie durch die Fenster fällt.
+  const carLamps = CAR_LIGHTS.map((l) => ({ ...l, x: 1e6, z: 1e6, moving: true }));
+  (loc.extraLamps ??= []).push(...carLamps);
   const block = (x, z, r) => {
     const b = pool[blockers.length];
     b.x = x;
@@ -556,6 +561,10 @@ export function buildTramLine(loc) {
       block(team.position.x + hx * ahead, team.position.z + hz * ahead, 1.1 + st.v * 0.4);
     }
     for (const { o, c } of shade) c.set(car.position.x + ax * o, car.position.z + az * o, 1.05, 2.9);
+    for (const l of carLamps) {
+      l.x = car.position.x + ax * l.o;
+      l.z = car.position.z + az * l.o;
+    }
     spot.pos.set(car.position.x, 1.7, car.position.z);
     spot.action.say = st.mode === 'turn' ? SAY.turn : st.mode === 'run' ? (st.leg === IN ? SAY.in : SAY.out) : SAY.layover;
   };
@@ -598,6 +607,7 @@ export function buildTramLine(loc) {
       spot.pos.set(0, -1000, 0);
       blockers.length = 0;
       for (const { c } of shade) c.z = 0;
+      for (const l of carLamps) l.x = l.z = 1e6;
       loc.tram = { vol: 0, pan: 0, speed: 0, moving: false };
       return;
     }

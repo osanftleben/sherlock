@@ -134,7 +134,8 @@ const STILL_RES = 512;
 export function bakeStillShade(loc) {
   const casters = loc.stillCasters ?? [];
   // Straßenlaternen und die Laternen anderer Bauteile (loc.extraLamps), die echtes Licht bekommen können.
-  const spots = [...(loc.lampSpots ?? []), ...(loc.extraLamps ?? []).map((e) => ({ x: e.x, y: e.y, z: e.z, pool: -1 }))];
+  // Bewegliche (moving) bekommen keine vorab gerechnete Schicht.
+  const spots = [...(loc.lampSpots ?? []), ...(loc.extraLamps ?? []).filter((e) => !e.moving).map((e) => ({ x: e.x, y: e.y, z: e.z, pool: -1 }))];
   const tiles = [];
   for (const s of spots) {
     // Ein Werfer, in dem die Lampe selbst steht (die Uhrensäule mit ihren Reflektoren), zählt nicht.
@@ -240,7 +241,8 @@ export function shadeSlots(loc) {
         for (let k = 0; k < count; k++) {
           const c = casters[k];
           const dist = Math.hypot(c.x - x, c.y - z);
-          if (c.z <= 0 || dist - c.z >= SHADE_REACH) continue;
+          // Steht die Lampe im Werfer selbst (die im Pferdebahnwagen), hält er ihr Licht nicht ab.
+          if (c.z <= 0 || dist - c.z >= SHADE_REACH || dist < c.z) continue;
           mask |= 1 << k;
           // Der Schatten liegt im Keil hinter dem Werfer, so breit wie er selbst samt Halbschatten.
           // Steht er dicht an der Laterne, kann er in alle Richtungen fallen.
@@ -455,14 +457,16 @@ export function buildLamps(loc, positions, ironMat) {
 
   // Nur die nächsten Laternen werfen echtes Licht. Die Anzahl bleibt fest, damit nichts neu kompiliert.
   const lights = [];
+  const gas = new THREE.Color(0xffa35a);
   for (let i = 0; i < LIT_LAMPS; i++) {
-    const l = new THREE.PointLight(0xffa35a, 0, 22, 1.7);
+    const l = new THREE.PointLight(gas, 0, 22, 1.7);
     scene.add(l);
     lights.push(l);
   }
   // Wer Schatten wirft, fragt hier, welche Laternen gerade leuchten (groundshade.js).
   loc.lampLights = lights;
-  // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight). weight < 1
+  // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight, wahlweise
+  // color und moving, wenn ihr Bauteil x, y, z in jedem Bild nachführt). weight < 1
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
   // weiter weg sieht als ihre Entfernung vermuten lässt; weight > 1 lässt den Straßenlaternen den
   // Vortritt. Die Liste entsteht erst im ersten Bild, damit auch Laternen zählen, die nach
@@ -470,23 +474,27 @@ export function buildLamps(loc, positions, ironMat) {
   let ranked = null;
   let timer = 0;
   loc.onUpdate((dt, t, { camera }) => {
+    // p: Lage der Flamme. Bei Zusatzlampen der Eintrag selbst, damit bewegliche (moving, etwa im
+    // Pferdebahnwagen) ihn in jedem Bild nachführen können.
+    // color: eigene Lichtfarbe (die grünen Signallaternen der Pferdebahn), sonst Gaslicht.
     ranked ??= [
-      ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.ground + FLAME, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
-      ...(loc.extraLamps ?? []).map((e, i) => ({ x: e.x, z: e.z, ly: e.y, seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
+      ...glows.map((g) => ({ p: { x: g.x, y: g.ground + FLAME, z: g.z }, color: gas, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
+      ...(loc.extraLamps ?? []).map((e, i) => ({ p: e, color: e.color === undefined ? gas : new THREE.Color(e.color), seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
     ];
     timer -= dt;
     if (timer <= 0) {
       timer = 0.25;
       for (const e of ranked) {
-        const dx = e.x - camera.position.x;
-        const dz = e.z - camera.position.z;
+        const dx = e.p.x - camera.position.x;
+        const dz = e.p.z - camera.position.z;
         e.d = (dx * dx + dz * dz) * e.weight;
       }
       ranked.sort((a, b) => a.d - b.d);
     }
     lights.forEach((l, i) => {
       const e = ranked[i];
-      l.position.set(e.x, e.ly, e.z);
+      l.position.set(e.p.x, e.p.y, e.p.z);
+      l.color.copy(e.color);
       const flicker = 0.93 + 0.07 * Math.sin(t * 9 + e.seed) * Math.sin(t * 3.7 + e.seed * 2);
       // Die letzte Lampe der Rangliste blendet aus, damit das Umspringen nicht auffällt.
       const fade = i < 4 ? 1 : 0.6;

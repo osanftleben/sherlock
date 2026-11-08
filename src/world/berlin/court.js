@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, box, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 import { BAY_W } from './facades.js';
-import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, lampWash, lightPool, wallLamp, wallLantern } from './lamps.js';
 
 // Hinterhof hinter der Tordurchfahrt neben Kesslers Werkstatt (Rosenthaler Straße, Ostseite).
 // Der Hof reicht von der Rückseite der Straßenhäuser (x = 23) bis zum Quergebäude und von
@@ -28,15 +28,17 @@ export function buildCourt(loc, facades, { brickMat, ironMat }) {
 
   const { px, pz } = courtProps(loc);
 
-  // Laterne neben dem Eingang zum Quergebäude: ein warmer Fleck im Hof, ohne eigenes Licht.
-  // Ihr Schein liegt auf dem Pflaster bis zur Pumpe; die Erdgeschossfenster (glow) hellen die
+  // Laterne neben dem Eingang zum Quergebäude: ein warmer Fleck im Hof. Echtes Licht bekommt sie
+  // nur, wenn sie zu den nächsten Laternen gehört (wallLamp). Ihr Schein liegt auf dem Pflaster bis zur Pumpe; die Erdgeschossfenster (glow) hellen die
   // Ecken bei Teppichstange und Handwagen auf, damit beide sich gegen die Steine abzeichnen.
   const at = (lx, y, lz) => new THREE.Vector3(lx, y, lz).applyMatrix4(quer.base);
   const wall = at(1.5 * BAY_W + 1.2, 3.07, 0);
   const lanternIron = new Bag();
   const glass = [];
   const wash = [];
-  const door = wallLantern(lanternIron, glass, wall, at(1.5 * BAY_W + 1.2, 3.07, 1).sub(wall), 0.4, wash);
+  const lanternOut = at(1.5 * BAY_W + 1.2, 3.07, 1).sub(wall);
+  const door = wallLantern(lanternIron, glass, wall, lanternOut, 0.4, wash);
+  (loc.extraLamps ??= []).push(wallLamp(door, lanternOut.x, lanternOut.z));
   addMesh(scene, lanternIron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(glass), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
   addMesh(scene, merge(wash), lampWash());

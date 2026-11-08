@@ -137,7 +137,11 @@ export function bakeStillShade(loc) {
   const spots = [...(loc.lampSpots ?? []), ...(loc.extraLamps ?? []).map((e) => ({ x: e.x, y: e.y, z: e.z, pool: -1 }))];
   const tiles = [];
   for (const s of spots) {
-    const near = casters.filter((c) => Math.hypot(c.x - s.x, c.z - s.z) - c.r < SHADE_REACH);
+    // Ein Werfer, in dem die Lampe selbst steht (die Uhrensäule mit ihren Reflektoren), zählt nicht.
+    const near = casters.filter((c) => {
+      const d = Math.hypot(c.x - s.x, c.z - s.z);
+      return d - c.r < SHADE_REACH && d > c.r;
+    });
     if (near.length) tiles.push({ s, near });
   }
   if (!tiles.length) return;

@@ -544,6 +544,10 @@ function buildUrania(loc, ux, uz) {
     lampGlow.push(s);
   }
   addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 2.6, 1.1) }));
+  // Gehört die Säule zu den nächsten Laternen, bekommen die vier Reflektoren ein gemeinsames echtes
+  // Licht in der Mitte, und wer davor steht, wirft Schatten. Die Säule selbst schattet es nicht ab
+  // (bakeStillShade lässt Werfer aus, in denen die Lampe steht): Ringsum hängt ja ein Reflektor.
+  (loc.extraLamps ??= []).push({ x: ux, y: 4.18, z: uz, intensity: 20, weight: 1.5 });
   iron.add(cyl(0.24, 0.36, 0.26, ux, 4.53, uz, 24), IRON);
 
   // Kuppel als Himmelsglobus, mit Gradringen. Drei Uhren (Süd, West, Nord) und der Mond (Ost)

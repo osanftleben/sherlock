@@ -416,6 +416,11 @@ function buildEntrance(loc, x, z0) {
   glow.position.set(x, lampY, lampZ);
   glow.scale.setScalar(1.6);
   scene.add(glow);
+  // Echtes Licht, wenn der Eingang zu den nächsten Laternen gehört. Die Lampe selbst hängt tief im
+  // Treppenhaus; ein Licht dort schiene durch die Mauern auf den Platz (draußen gibt es keine
+  // Schattenkarten). Darum sitzt es schwach in der Türöffnung, und die Bogenlaterne daneben hat
+  // Vortritt: So fällt Licht aus der Tür, und wer davor steht, wirft Schatten aufs Pflaster.
+  (loc.extraLamps ??= []).push({ x, y: dh - 0.4, z: z0 - 0.2, intensity: 5, weight: 2 });
   // Durch die offene Tür fällt warmes Licht auf das Pflaster vor der Nische.
   addMesh(scene, new THREE.PlaneGeometry(3.2, 3.4).rotateX(-Math.PI / 2).translate(x, 0.031, z0 - 2.2), lightPool(0xd09050, 0.35));
 

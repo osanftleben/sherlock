@@ -504,7 +504,8 @@ export function buildBerlin() {
   buildWeather(loc, r);
   buildLife(loc);
   buildSmoke(loc, { chimneys: facades.chimneys });
-  // Zuletzt: sammelt Leute, Pferde und Wagen aus der Szene, auch die Figuren des Falls.
+  // Zuletzt: sammelt Leute, Pferde und Wagen aus der Szene, auch die Figuren des Falls, und gibt
+  // ihnen Bodenschatten und die übrigen Plätze der Laternenschatten.
   buildGroundShades(loc);
   loc.onUpdate((dt, t) => {
     rainTime.value = t % 1000;

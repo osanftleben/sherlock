@@ -30,7 +30,18 @@ export function lightPool(color, opacity) {
 // Hinter dem Kiosk glänzte das nasse Pflaster, als stünde er nicht da. Hohe Dinge bei Laternen
 // melden sich deshalb als senkrechte Zylinder an, und das Pflaster (wetStreet in index.js) und die
 // Lichtflecken prüfen für jede Laterne, ob der Weg zu ihr hindurchführt.
-export const SHADE_MAX = 10;
+// Die ersten Plätze nehmen die festen Werfer und die Pferdebahn (addShadeCaster), den Rest teilen sich
+// Leute, Pferde und Droschken nahe der Kamera (shadeSlots, groundshade.js).
+export const SHADE_MAX = 22;
+// So viele Laternen leuchten wirklich, als Punktlichter (die nächsten an der Kamera); die übrigen
+// haben nur Schein und Lichtfleck.
+const LIT_LAMPS = 6;
+// Ein Werfer zählt für eine Laterne, wenn er ihr so nahe steht, und ein Punkt wird nur bis SHADE_FAR
+// von ihr geprüft (ab SHADE_FAR0 blasst der Schatten aus). Weiter weg ist ihr Licht so schwach, dass
+// man keinen Schatten mehr sähe; das spart den größten Teil der Rechnung.
+const SHADE_REACH = 10;
+const SHADE_FAR0 = 11;
+const SHADE_FAR = 14;
 // Höhe der Flamme über dem Boden und halbe Breite dessen, was in der Laterne leuchtet (Flamme und
 // das von ihr erhellte Glas); daraus folgt, wie weich die Schattenränder werden.
 const FLAME = 3.7;
@@ -39,34 +50,86 @@ const FLAME_R = 0.2;
 export function shadeUniforms(loc) {
   return (loc.shadeUniforms ??= {
     shadeCasters: { value: Array.from({ length: SHADE_MAX }, () => new THREE.Vector4()) },
-    shadeFloors: { value: new Array(SHADE_MAX).fill(0) },
+    // Unterkante (0: steht auf dem Boden) und Stärke (1: hält das Licht ganz ab).
+    shadeParams: { value: Array.from({ length: SHADE_MAX }, () => new THREE.Vector2(0, 1)) },
+    // So viele Plätze sind belegt; dahinter rechnet lampShade nicht weiter.
+    shadeCount: { value: 0 },
+    // Bitmaske der festen Werfer, dazu je leuchtender Laterne x, z und die Bitmaske der Werfer in
+    // ihrer Nähe (shadeSlots().use). Nur diese prüft lampShade; das spart die meiste Arbeit.
+    shadeFixed: { value: 0 },
+    shadeLamps: { value: Array.from({ length: LIT_LAMPS }, () => new THREE.Vector4(1e6, 1e6, 0, 0)) },
   });
 }
 // Ein Zylinder als Vector4 (x, z, Radius, Oberkante), dazu seine Unterkante: Liegt sie über 0,
 // schwebt er wie die Schale des Brunnens. Wer sich bewegt, setzt den Vector4 selbst neu; Radius 0
 // heißt: gerade nicht da.
 export function addShadeCaster(loc, x = 0, z = 0, r = 0, h = 0, floor = 0) {
-  const { shadeCasters, shadeFloors } = shadeUniforms(loc);
+  const u = shadeUniforms(loc);
   const i = loc.shadeCount ?? 0;
   if (i >= SHADE_MAX) throw new Error(`Mehr als ${SHADE_MAX} Schattenwerfer`);
-  loc.shadeCount = i + 1;
-  shadeFloors.value[i] = floor;
-  return shadeCasters.value[i].set(x, z, r, h);
+  loc.shadeCount = u.shadeCount.value = i + 1;
+  u.shadeFixed.value |= 1 << i;
+  u.shadeParams.value[i].set(floor, 1);
+  return u.shadeCasters.value[i].set(x, z, r, h);
+}
+// Alle noch freien Plätze für Werfer, die in jedem Bild andere sein können: set(j, ...) beschreibt
+// den j-ten, use(n) sagt, wie viele davon gerade gelten, und ordnet alle Werfer den leuchtenden
+// Laternen zu. Aufrufen, nachdem alle Werfer dieses Bildes stehen; danach nimmt addShadeCaster keine
+// mehr an.
+export function shadeSlots(loc) {
+  const u = shadeUniforms(loc);
+  const first = loc.shadeCount ?? 0;
+  loc.shadeCount = SHADE_MAX;
+  const casters = u.shadeCasters.value;
+  return {
+    size: SHADE_MAX - first,
+    set(j, x, z, r, top, floor, strength) {
+      casters[first + j].set(x, z, r, top);
+      u.shadeParams.value[first + j].set(floor, strength);
+    },
+    use(n) {
+      const count = (u.shadeCount.value = first + n);
+      const lights = loc.lampLights ?? [];
+      for (let i = 0; i < lights.length; i++) {
+        const { x, z } = lights[i].position;
+        let mask = 0;
+        for (let k = 0; k < count; k++) {
+          const c = casters[k];
+          if (c.z > 0 && Math.hypot(c.x - x, c.y - z) - c.z < SHADE_REACH) mask |= 1 << k;
+        }
+        u.shadeLamps.value[i].set(x, z, mask, 0);
+      }
+    },
+  };
 }
 // GLSL: lampShade(p, lamp) sagt, wie viel vom Licht der Laterne bei lamp am Punkt p ankommt (beides
 // in Weltkoordinaten); lampWorld holt die Lage eines Punktlichts aus der Kamerasicht zurück.
 export const SHADE_GLSL = `
 uniform vec4 shadeCasters[${SHADE_MAX}];
-uniform float shadeFloors[${SHADE_MAX}];
+uniform vec2 shadeParams[${SHADE_MAX}];
+uniform int shadeCount;
+uniform int shadeFixed;
+uniform vec4 shadeLamps[${LIT_LAMPS}];
 vec3 lampWorld(vec3 viewPos) {
   return transpose(mat3(viewMatrix)) * (viewPos - viewMatrix[3].xyz);
 }
-float lampShade(vec3 p, vec3 lamp) {
+// Geprüft werden nur die Werfer, deren Bit in mask gesetzt ist. Die Schleife läuft nur so oft, wie
+// Bits gesetzt sind: Sie löst jedes Mal das niedrigste heraus und holt seine Nummer über log2. Ein
+// Durchlauf je Werfer mit Sprung über die ungesetzten wäre kürzer zu schreiben, aber der Übersetzer
+// unter Windows (ANGLE) glättet solche Sprünge, und dann rechnet doch jeder Durchlauf alles.
+float lampShadeMasked(vec3 p, vec3 lamp, int mask) {
   vec2 d = lamp.xz - p.xz;
-  float inv = inversesqrt(max(dot(d, d), 1e-4));
+  float dist2 = dot(d, d);
+  mask &= (1 << shadeCount) - 1;
+  if (mask == 0 || dist2 > ${(SHADE_FAR * SHADE_FAR).toFixed(1)}) return 1.0;
+  float inv = inversesqrt(max(dist2, 1e-4));
   float inv2 = inv * inv;
   float lit = 1.0;
-  for (int k = 0; k < ${SHADE_MAX}; k++) {
+  for (int n = 0; n < ${SHADE_MAX}; n++) {
+    if (mask == 0) break;
+    int bit = mask & -mask;
+    mask ^= bit;
+    int k = int(log2(float(bit)) + 0.5);
     vec4 c = shadeCasters[k];
     if (c.z <= 0.0) continue;
     // Wo der Weg zur Laterne der Achse am nächsten kommt: 0 am Punkt, 1 an der Laterne. Steht der
@@ -90,22 +153,57 @@ float lampShade(vec3 p, vec3 lamp) {
     float yOut = mix(p.y, lamp.y, tOut);
     float wIn = ${FLAME_R.toFixed(2)} * tIn + 0.01;
     float wOut = ${FLAME_R.toFixed(2)} * tOut + 0.01;
-    float under = shadeFloors[k];
+    vec2 q = shadeParams[k];
+    float under = q.x;
     float hit = (1.0 - smoothstep(c.z - w, c.z + w, sqrt(dd)))
       * (1.0 - smoothstep(c.w - wIn, c.w + wIn, yIn))
       * max(step(under, 0.0), smoothstep(under - wOut, under + wOut, yOut));
-    lit *= 1.0 - hit;
+    lit *= 1.0 - q.y * hit;
   }
-  return lit;
+  return mix(lit, 1.0, smoothstep(${SHADE_FAR0.toFixed(1)}, ${SHADE_FAR.toFixed(1)}, dist2 * inv));
+}
+// Punktlicht mit seinem Eintrag in shadeLamps (gleicher Index wie in loc.lampLights). Passt die Lage
+// nicht, etwa weil ein anderes Punktlicht dazwischengekommen ist, werden alle Werfer geprüft.
+float lampShadeLit(vec3 p, vec3 lamp, vec4 e) {
+  bool known = abs(e.x - lamp.x) + abs(e.y - lamp.z) < 0.1;
+  return lampShadeMasked(p, lamp, known ? int(e.z) : -1);
+}
+// Beliebige Laterne (Lichtflecken): Maske über die Lage suchen. Laternen ohne Punktlicht prüfen nur
+// die festen Werfer; die beweglichen stehen ohnehin bei den leuchtenden.
+float lampShade(vec3 p, vec3 lamp) {
+  int mask = shadeFixed;
+  for (int i = 0; i < ${LIT_LAMPS}; i++) {
+    vec4 e = shadeLamps[i];
+    if (abs(e.x - lamp.x) + abs(e.y - lamp.z) < 0.1) mask = int(e.z);
+  }
+  return lampShadeMasked(p, lamp, mask);
 }`;
 
 // Beleuchtungsteil von three.js mit Schatten für die Punktlichter: Die Farbe jedes Lichts wird
 // gleich nach getPointLightInfo mit lampShade verrechnet. p: GLSL-Ausdruck für den Punkt (Welt).
+// three.js rollt die Schleife über die Punktlichter aus und setzt dabei für [ i ] die Nummer ein;
+// die Punktlichter liegen in der Reihenfolge von loc.lampLights vor (die einzigen der Szene).
 const POINT_HOOK = 'getPointLightInfo( pointLight, geometryPosition, directLight );';
 export function shadedLightsChunk(p) {
   const chunk = THREE.ShaderChunk.lights_fragment_begin;
   if (!chunk.includes(POINT_HOOK)) reportError('Laternenschatten', new Error('Beleuchtungsteil von three.js hat sich geändert, die Laternen werfen keine Schatten'));
-  return chunk.replace(POINT_HOOK, `${POINT_HOOK}\n\t\tif ( directLight.visible ) directLight.color *= lampShade( ${p}, lampWorld( pointLight.position ) );`);
+  return chunk.replace(POINT_HOOK, `${POINT_HOOK}\n\t\tif ( directLight.visible ) directLight.color *= lampShadeLit( ${p}, lampWorld( pointLight.position ), shadeLamps[ i ] );`);
+}
+
+// Dasselbe für ein gewöhnliches Material ohne eigene Weltlage, etwa die Gehwege (facades.js): Auch
+// dort sollen die Schatten der Passanten im Licht der Laternen liegen.
+export function shadedByLamps(material, loc) {
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, shadeUniforms(loc));
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vShadeW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvShadeW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vShadeW;\n${SHADE_GLSL}`)
+      .replace('#include <lights_fragment_begin>', shadedLightsChunk('vShadeW'));
+  };
+  material.customProgramCacheKey = () => 'shadedByLamps';
+  return material;
 }
 
 // Lichtfleck der Laternen mit Schatten: Wo der Weg zur Flamme durch einen Schattenwerfer führt,
@@ -179,11 +277,13 @@ export function buildLamps(loc, positions, ironMat) {
 
   // Nur die nächsten Laternen werfen echtes Licht. Die Anzahl bleibt fest, damit nichts neu kompiliert.
   const lights = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < LIT_LAMPS; i++) {
     const l = new THREE.PointLight(0xffa35a, 0, 22, 1.7);
     scene.add(l);
     lights.push(l);
   }
+  // Wer Schatten wirft, fragt hier, welche Laternen gerade leuchten (groundshade.js).
+  loc.lampLights = lights;
   // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight). weight < 1
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
   // weiter weg sieht als ihre Entfernung vermuten lässt.

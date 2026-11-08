@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, box, matte, merge, pediment, roofPrism, std, worldUV } from '../kit.js';
 import { bakeBayShade, bayShaded } from './bayshade.js';
 import { grimy } from './grime.js';
-import { lightPool } from './lamps.js';
+import { lightPool, shadedByLamps } from './lamps.js';
 import { buildDownpipes } from './gutters.js';
 import { hearing } from './traffic.js';
 import {
@@ -1142,7 +1142,8 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
 
     // Gehwege, Bordkanten
     const pave = pavement();
-    const walkMat = std({ ...pave, roughness: 0.62, normalScale: new THREE.Vector2(0.6, 0.6) });
+    // Mit den Schatten der Laternen (lamps.js), sonst fiele der Schatten eines Passanten nur in den Lichtfleck.
+    const walkMat = shadedByLamps(std({ ...pave, roughness: 0.62, normalScale: new THREE.Vector2(0.6, 0.6) }), loc);
     pave.map.repeat.set(1, 1);
     const walkBag = [];
     const curbBag = [];

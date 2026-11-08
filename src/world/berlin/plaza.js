@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, addMesh, cyl, merge, std, worldUV } from '../kit.js';
 import { clockFace, granite as graniteTex, posterWall, rng, signTexture, softDisc, uraniaAds, uraniaCases, uraniaGlobe, uraniaMoon } from '../textures.js';
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
-import { hearing, makeDroschke } from './traffic.js';
+import { cabLamps, hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
 import { addStillCaster, lightPool } from './lamps.js';
 import { coughs } from './life.js';
@@ -125,6 +125,8 @@ export function buildPlaza(loc, r, ironMat) {
   cab2.position.set(24, 0, -12);
   cab2.rotation.y = Math.PI;
   scene.add(cab2);
+  cabLamps(loc, cab);
+  cabLamps(loc, cab2);
   // Die wartenden Pferde schnauben ab und zu und stampfen, wenn sie den Huf wieder aufsetzen
   // (idleHorse hebt ihn, solange sin(t / 2) über 0,97 liegt).
   const waiting = [[cab, 0], [cab2, 7.3]].map(([c, off]) => ({ horse: c.userData.horse, off, lifted: false, snort: 4 + Math.random() * 15 }));

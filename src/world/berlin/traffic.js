@@ -137,6 +137,8 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
     wheels.push({ pivot, r });
   }
   g.userData.wheels = wheels;
+  // Mitte der beiden Laternen in Wagenkoordinaten, für ihr Licht (cabLamps).
+  g.userData.lanterns = [-1, 1].map((s) => new THREE.Vector3(s * 0.76, 1.49, -0.3));
   // Kutscher sitzt auf dem Bock (Oberkante 1.07).
   if (withDriver) {
     const driver = makeFigure({ outfit: 'overcoat', cape: true, coat: 0x24201a, hat: 'top', hatColor: 0x18140f, moustache: 'walrus', pose: 'sit' });
@@ -152,6 +154,28 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
 }
 
 // Stab von a nach b, Querschnitt r.
+// Die beiden Laternen einer Droschke als Lichter (loc.extraLamps): klein und schwach wie die
+// Signallaternen der Pferdebahn. Sie stehen außerhalb der Schattenzylinder des Wagens
+// (groundshade.js), so hält der Kasten das Licht der einen Laterne von der anderen Seite ab.
+// Zurück kommt place(), das die Lichter der Lage des Wagens nachführt; wer fährt (moving), ruft es
+// nach jeder Bewegung auf, wer steht, bekommt beim Laden eine vorab gerechnete Schattenschicht.
+export function cabLamps(loc, cab, moving = false) {
+  const lamps = cab.userData.lanterns.map((v) => ({ v, x: 0, y: 0, z: 0, intensity: 3, weight: 2.5, moving }));
+  const place = () => {
+    const { x, y, z } = cab.position;
+    const sin = Math.sin(cab.rotation.y);
+    const cos = Math.cos(cab.rotation.y);
+    for (const l of lamps) {
+      l.x = x + cos * l.v.x + sin * l.v.z;
+      l.y = y + l.v.y;
+      l.z = z - sin * l.v.x + cos * l.v.z;
+    }
+  };
+  place();
+  (loc.extraLamps ??= []).push(...lamps);
+  return place;
+}
+
 export function rod(a, b, r, sides = 6) {
   const d = new THREE.Vector3().subVectors(b, a);
   const geo = new THREE.CylinderGeometry(r, r, d.length(), sides);
@@ -219,6 +243,7 @@ export function buildTraffic(loc, r) {
   ].map(([x, z]) => new THREE.Vector3(x, 0, z)), true);
   const cab = makeDroschke({ color: 0x24121a, horse: 0x4a2c1a, number: '2215' });
   scene.add(cab);
+  const placeLamps = cabLamps(loc, cab, true);
   const light = new THREE.Vector3();
   const pathLen = curve.getLength();
   let u = 0.1;
@@ -247,6 +272,7 @@ export function buildTraffic(loc, r) {
     u = (u + (speed * dt) / pathLen) % 1;
     cab.position.set(p.x, 0, p.z);
     cab.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z);
+    placeLamps();
     // Rattern der Räder (audio.js) und je halbem Schritt ein Hufpaar, so wie die Beine schwingen.
     const ear = hearing(camera, p.x, p.z, 45);
     loc.cab = { vol: ear.vol, pan: ear.pan, moving: speed > 0, turning };

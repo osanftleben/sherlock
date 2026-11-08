@@ -40,8 +40,13 @@ export function cyl(rt, rb, h, x = 0, y = 0, z = 0, seg = 12) {
   return g;
 }
 
+// Teile mit Index behalten ihn, die übrigen bekommen einen schlichten (0, 1, 2, …), denn
+// mergeGeometries verlangt alle mit oder alle ohne. Ohne Index rechnete die Grafikkarte jede Ecke
+// für jedes Dreieck neu, ein Kasten 36 statt 24 Eckpunkte ohne jede Wiederverwendung: Die Fassaden
+// kosteten so unabhängig von der Auflösung fast 4 ms.
 export function merge(list) {
-  const flat = list.map((g) => (g.index ? g.toNonIndexed() : g));
+  // Kopie wie zuvor bei toNonIndexed: Unten werden Attribute ergänzt und gelöscht.
+  const flat = list.map((g) => (g.index ? g.clone() : g.setIndex(Array.from({ length: g.attributes.position.count }, (_, i) => i))));
   const hasColor = flat.some((g) => g.attributes.color);
   for (const g of flat) {
     if (hasColor && !g.attributes.color) tint(g);

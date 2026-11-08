@@ -487,7 +487,12 @@ export class View {
       if (this.scene.userData.shadows) castShadows(this.scene);
       r.shadowMap.needsUpdate = true;
     }
+    // Zähler von Hand zurücksetzen: Spiegelbilder (waterMirror) rendern mitten in diesem Aufruf, und
+    // jedes render() setzte sie sonst auf null, sodass nur zählte, was danach noch kam.
+    r.info.autoReset = false;
+    r.info.reset();
     r.render(this.scene, this.camera);
+    r.info.autoReset = true;
     this.clock.end();
     this.sceneInfo.calls = r.info.render.calls;
     this.sceneInfo.triangles = r.info.render.triangles;

@@ -42,10 +42,14 @@ function heightMap(geo, W, H, P, sx, sy, context, padWall) {
     hm.fill(inside || !padWall ? EMPTY : 0, j * NX, (j + 1) * NX);
   }
   const pos = geo.attributes.position.array;
-  for (let t = 0; t < pos.length; t += 9) {
-    const ax = pos[t], ay = pos[t + 1], az = pos[t + 2];
-    const bx = pos[t + 3], by = pos[t + 4], bz = pos[t + 5];
-    const cx = pos[t + 6], cy = pos[t + 7], cz = pos[t + 8];
+  // Mit oder ohne Index (merge in kit.js behält ihn).
+  const idx = geo.index?.array;
+  const corners = idx ? idx.length : pos.length / 3;
+  for (let t = 0; t < corners; t += 3) {
+    const a = 3 * (idx ? idx[t] : t), b = 3 * (idx ? idx[t + 1] : t + 1), c = 3 * (idx ? idx[t + 2] : t + 2);
+    const ax = pos[a], ay = pos[a + 1], az = pos[a + 2];
+    const bx = pos[b], by = pos[b + 1], bz = pos[b + 2];
+    const cx = pos[c], cy = pos[c + 1], cz = pos[c + 2];
     const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
     // Nur Flächen, die nach vorn zeigen; Seiten, Ober- und Unterseiten sind von vorn Linien.
     if (area <= 1e-7) continue;

@@ -225,13 +225,24 @@ export function buildTraffic(loc, r) {
   let phase = 0;
   let lastBeat = 0;
   const ahead = new THREE.Vector3();
+  // Steht Holmes auf ihrem Weg (die nächsten Meter ihrer Bahn, so breit wie Kasten und Pferd), hält
+  // die Droschke an; wer daneben oder auf dem Gehweg steht, an dem fährt sie vorbei. So bleibt sie
+  // auch nicht mitten in der Wende über den Gleisen stehen, wenn er nur in der Nähe wartet.
+  const look = new THREE.Vector3();
+  const inPath = (cam) => {
+    for (let k = 0; k <= 10; k++) {
+      curve.getPointAt((u + (k * 0.75) / pathLen) % 1, look);
+      if ((look.x - cam.x) ** 2 + (look.z - cam.z) ** 2 < 1.25 * 1.25) return true;
+    }
+    return false;
+  };
   loc.onUpdate((dt, t, { camera }) => {
     const p = curve.getPointAt(u);
     curve.getPointAt((u + 0.002) % 1, ahead);
     const dist = Math.hypot(p.x - camera.position.x, p.z - camera.position.z);
     const turning = p.z < -174;
     const enteringTurn = !turning && p.z < -166 && ahead.z < p.z;
-    const blocked = (dist < 7 && (camera.position.x - p.x) * (ahead.x - p.x) + (camera.position.z - p.z) * (ahead.z - p.z) > 0) || (enteringTurn && loc.tramZone);
+    const blocked = (dist < 9 && inPath(camera.position)) || (enteringTurn && loc.tramZone);
     const speed = blocked ? 0 : 4.2;
     u = (u + (speed * dt) / pathLen) % 1;
     cab.position.set(p.x, 0, p.z);
@@ -312,11 +323,14 @@ export function buildTraffic(loc, r) {
     return w;
   });
   loc.walkers = walkers;
-  // Vor dem Pferdebahnwagen bleibt man stehen (loc.tramBlockers, tramline.js); dauert es, kehrt man um.
-  const tramAhead = (w, x, z) => {
+  // Vor dem Pferdebahnwagen (loc.tramBlockers, tramline.js) und vor Holmes bleibt man stehen;
+  // dauert es, kehrt man um, sonst stünde man womöglich ewig im Gleis und die Bahn davor. Wer nur
+  // neben einem steht, an dem geht man vorbei.
+  const blockedAhead = (w, x, z, cam) => {
     const k = (0.6 * w.dir) / w.len;
     const nx = x + (w.to.x - w.from.x) * k;
     const nz = z + (w.to.y - w.from.y) * k;
+    if ((nx - cam.x) ** 2 + (nz - cam.z) ** 2 < 0.85 * 0.85) return true;
     for (const b of loc.tramBlockers ?? []) if ((nx - b.x) ** 2 + (nz - b.z) ** 2 < b.r * b.r) return true;
     return false;
   };
@@ -365,7 +379,7 @@ export function buildTraffic(loc, r) {
         w.fig.visible = true;
       }
       let [x, z] = at(w, w.s);
-      if (w.state === 'walk' && tramAhead(w, x, z)) {
+      if (w.state === 'walk' && blockedAhead(w, x, z, camera.position)) {
         idleFigure(w.fig, t, camera.position);
         w.waited = (w.waited ?? 0) + dt;
         if (w.waited > 3) {
@@ -376,25 +390,21 @@ export function buildTraffic(loc, r) {
         }
       } else if (w.state === 'walk') {
         w.waited = 0;
-        const dx = camera.position.x - x;
-        const dz = camera.position.z - z;
-        if (dx * dx + dz * dz > 1.3) {
-          w.s += w.dir * w.speed * dt;
-          const step = Math.floor(w.phase / Math.PI);
-          w.phase += dt * w.speed * 5.2;
-          w.untilStop -= w.speed * dt;
-          walkFigure(w.fig, w.phase);
-          if (Math.floor(w.phase / Math.PI) !== step) {
-            const ear = hearing(camera, x, z, 25);
-            if (ear.vol > 0.01) {
-              // Der Stock setzt nur bei jedem zweiten Schritt auf.
-              (loc.sounds ??= []).push({ type: 'footstep', vol: ear.vol * 0.9, pan: ear.pan, kind: w.kind, cane: w.cane && step % 2 === 0 });
-            }
+        w.s += w.dir * w.speed * dt;
+        const step = Math.floor(w.phase / Math.PI);
+        w.phase += dt * w.speed * 5.2;
+        w.untilStop -= w.speed * dt;
+        walkFigure(w.fig, w.phase);
+        if (Math.floor(w.phase / Math.PI) !== step) {
+          const ear = hearing(camera, x, z, 25);
+          if (ear.vol > 0.01) {
+            // Der Stock setzt nur bei jedem zweiten Schritt auf.
+            (loc.sounds ??= []).push({ type: 'footstep', vol: ear.vol * 0.9, pan: ear.pan, kind: w.kind, cane: w.cane && step % 2 === 0 });
           }
-          // Selten hustet jemand im Vorbeigehen.
-          if (Math.random() < dt / 240) {
-            (loc.sounds ??= []).push({ type: 'cough', ...hearing(camera, x, z, 30) });
-          }
+        }
+        // Selten hustet jemand im Vorbeigehen.
+        if (Math.random() < dt / 240) {
+          (loc.sounds ??= []).push({ type: 'cough', ...hearing(camera, x, z, 30) });
         }
         if (w.s >= w.len || w.s <= 0) {
           w.s = THREE.MathUtils.clamp(w.s, 0, w.len);

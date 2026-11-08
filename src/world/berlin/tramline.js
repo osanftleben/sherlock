@@ -115,6 +115,9 @@ export function buildTramLine(loc) {
   OUT.limits.push([OUT.turnouts[0] - 3, OUT.turnouts[1] + 3, 1.9]);
   OUT.limits.push([outbound.cross('z', TRAM.turn.z) - 2, outbound.cross('x', TRAM.turn.x) + 2, 1.7]);
   for (const L of [IN, OUT]) L.limits.push([L.gate - CAR_NOSE - 3, L.gate + CAR_HALF + 2, 1.5]);
+  // Wo der Kasten ausschwenkt: in den Bögen und im Gleiswechsel.
+  IN.curves = [[inbound.cross('x', TRAM.turn.x), inbound.cross('z', TRAM.turn.z)]];
+  OUT.curves = [[OUT.turnouts[0], OUT.turnouts[1]], [outbound.cross('z', TRAM.turn.z), outbound.cross('x', TRAM.turn.x)]];
   const lead = leadPath();
 
   const st = {
@@ -252,7 +255,8 @@ export function buildTramLine(loc) {
       const dx = target.x - a.pos.x;
       const dz = target.z - a.pos.z;
       const flat = Math.hypot(dx, dz);
-      const ahead = flat > 1e-3 ? 0.5 / flat : 0;
+      // Einen halben Schritt voraus, aber nicht über die nächste Ecke des Wegs hinaus.
+      const ahead = flat > 1e-3 ? Math.min(0.5, flat) / flat : 0;
       const blocked = (a.pos.x + dx * ahead - cam.x) ** 2 + (a.pos.z + dz * ahead - cam.z) ** 2 < 0.7 * 0.7;
       if (!blocked) {
         const step = Math.min(flat, CREW * dt);
@@ -312,8 +316,10 @@ export function buildTramLine(loc) {
     const w = st.walk;
     let target;
     if (!w.back) {
-      lead.at(w.s + 1.9, P);
-      const blocked = (P.x - cam.x) ** 2 + (P.z - cam.z) ** 2 < 1.4 * 1.4;
+      // Vor dem Pferd und vor dem Kutscher an seinem Kopf muss frei sein; daneben darf man stehen.
+      lead.at(w.s + 1.7, P);
+      team.localToWorld(V.set(LEAD_SPOT.x, 0, LEAD_SPOT.z + 0.6));
+      const blocked = (P.x - cam.x) ** 2 + (P.z - cam.z) ** 2 < 0.95 * 0.95 || (V.x - cam.x) ** 2 + (V.z - cam.z) ** 2 < 0.7 * 0.7;
       target = blocked ? 0 : LEAD;
       w.v += THREE.MathUtils.clamp(target - w.v, -dt * 1.5, dt * 0.8);
       w.s = Math.min(lead.length, w.s + w.v * dt);
@@ -329,7 +335,7 @@ export function buildTramLine(loc) {
     } else {
       // Hinter dem Ortscheit muss frei sein.
       const zEnd = ZC - HORSE_Z;
-      const blocked = (X0 - cam.x) ** 2 + (w.z + TRACE + 0.5 - cam.z) ** 2 < 1.3 * 1.3;
+      const blocked = (X0 - cam.x) ** 2 + (w.z + TRACE + 0.5 - cam.z) ** 2 < 0.95 * 0.95;
       target = blocked ? 0 : -BACK;
       w.v += THREE.MathUtils.clamp(target - w.v, -dt * 1.2, dt * 1.2);
       w.z = Math.min(zEnd, w.z - w.v * dt);
@@ -343,18 +349,55 @@ export function buildTramLine(loc) {
   };
 
   // --- Fahren ----------------------------------------------------------------------------
-  // Wie weit neben der Gleismitte jemand noch vom Wagen erfasst würde: halbe Kastenbreite, das
-  // Ausschwenken der Wagenenden im Gleiswechsel und gut eine Schulterbreite.
-  const CLEAR = 1.75;
-  const near = (x, z) => (P.x - x) ** 2 + (P.z - z) ** 2 < CLEAR * CLEAR;
-  // Erste Stelle im Gleis vor dem Pferd, an der jemand steht (Holmes oder ein Passant).
-  const scan = (path, from, len, cam) => {
-    for (let d = 0; d <= len; d += 0.5) {
-      path.at(from + d, P);
-      if (near(cam.x, cam.z)) return from + d;
-      for (const w of loc.walkers ?? []) if (w.fig.visible && near(w.fig.position.x, w.fig.position.z)) return from + d;
+  // Wer steht im Weg (Holmes oder ein Passant)? Gesucht wird auf der Strecke vor dem Wagen in
+  // Scheiben quer zum Gleis. Im Weg ist, wer der Gleismitte näher steht als die halbe Breite dessen,
+  // was dort noch vorbeikommt, und eine Schulter dazu: neben dem Pferd wenig, neben dem Kasten mehr,
+  // in Bögen und im Gleiswechsel, wo die Wagenenden ausschwenken, noch etwas mehr. An der Endstelle
+  // sucht man nur, so weit Pferd und Kasten vorziehen; wer dahinter oder daneben steht, ist nicht im
+  // Weg, sonst stünde der Wagen dort ewig.
+  const HORSE_CLEAR = 0.9;
+  const CAR_CLEAR = 1.6;
+  const CURVE_CLEAR = 1.75;
+  const carClear = (L, q) => {
+    for (const [a, b] of L.curves) if (q > a - CAR_HALF - 0.5 && q < b + CAR_HALF + 0.5) return CURVE_CLEAR;
+    return CAR_CLEAR;
+  };
+  // Ergebnis: bis wohin die Wagenmitte vorfahren darf (die Pferdenase bleibt gut einen Meter vor
+  // dem, der im Weg steht, der Kasten einen halben) und wie weit vor der Nase das ist.
+  const way = { stop: Infinity, ahead: Infinity };
+  const probe = (q, nose, clear, reach, x, z) => {
+    const dx = x - P.x;
+    const dz = z - P.z;
+    const along = dx * D.x + dz * D.z;
+    if (along < -0.3 || along > reach) return;
+    const side = Math.abs(dx * D.z - dz * D.x);
+    let s;
+    if (q > nose - 0.5 && side < HORSE_CLEAR) s = q + along - CAR_NOSE - 1.2;
+    else if (side < clear) s = q + along - CAR_HALF - 0.6;
+    else return;
+    if (s < way.stop) {
+      way.stop = s;
+      way.ahead = q + along - nose;
     }
-    return null;
+  };
+  const scan = (L, cam) => {
+    way.stop = way.ahead = Infinity;
+    const nose = st.s + CAR_NOSE;
+    const endNose = L === IN ? IN.end + CAR_NOSE : Infinity;
+    const horseTo = Math.min(nose + 14, endNose);
+    const carTo = Math.min(horseTo, L === IN ? IN.end + CAR_HALF : Infinity);
+    const from = st.s + CAR_HALF - 0.2;
+    const n = Math.ceil((horseTo - from) / 0.5);
+    for (let i = 0; i <= n; i++) {
+      const q = Math.min(from + i * 0.5, horseTo);
+      L.path.at(q, P);
+      L.path.dir(q, D);
+      const clear = q <= carTo ? carClear(L, q) : 0;
+      // Vor der Nase, wo das Pferd an der Endstelle stehen bleibt, braucht es noch etwas Luft.
+      const reach = i === n && horseTo === endNose ? 0.6 : 0.3;
+      probe(q, nose, clear, reach, cam.x, cam.z);
+      for (const w of loc.walkers ?? []) if (w.fig.visible) probe(q, nose, clear, reach, w.fig.position.x, w.fig.position.z);
+    }
   };
   // Glocke: Steht der Wagen schon, tritt der Kutscher sie seltener.
   const ring = (rings = 2) => {
@@ -370,10 +413,10 @@ export function buildTramLine(loc) {
       if (st.s <= b) vmax = Math.min(vmax, st.s >= a ? lim : Math.sqrt(lim * lim + 2 * BRAKE * (a - st.s)));
     }
     let stop = L === IN ? L.end : Infinity;
-    const hit = scan(L.path, st.s + CAR_NOSE - 0.4, 14, cam);
-    if (hit !== null) {
-      stop = Math.min(stop, hit - CAR_NOSE - 1.4);
-      if (hit - st.s - CAR_NOSE < 10) ring();
+    scan(L, cam);
+    if (way.stop < Infinity) {
+      stop = Math.min(stop, way.stop);
+      if (way.ahead < 10) ring();
     }
     const nose = st.s + CAR_NOSE;
     const tail = st.s - CAR_HALF;
@@ -397,8 +440,9 @@ export function buildTramLine(loc) {
     if (stop < Infinity) vmax = Math.min(vmax, stop - st.s > 0.01 ? Math.sqrt(2 * BRAKE * (stop - st.s)) : 0);
     st.v = st.v < vmax ? Math.min(vmax, st.v + ACCEL * dt) : Math.max(vmax, st.v - 2.5 * BRAKE * dt);
     // Nie über den Haltepunkt hinaus; wer plötzlich ins Gleis tritt, vor dem steht der Wagen sofort.
+    // Den letzten Zentimeter rollt er aus, sonst bliebe er womöglich knapp vor der Endstelle stehen.
     const next = st.s + st.v * dt;
-    if (next > stop) {
+    if (next > stop - 0.01) {
       st.s = Math.max(st.s, stop);
       st.v = 0;
     } else {

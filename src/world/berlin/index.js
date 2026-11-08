@@ -214,6 +214,11 @@ export function buildBerlin() {
   // Zwei Laternen links und rechts vom Brunnen, damit die Mitte des Platzes nicht im Dunkeln liegt.
   lampAt(FOUNTAIN.x - FOUNTAIN.r - 0.9, FOUNTAIN.z);
   lampAt(FOUNTAIN.x + FOUNTAIN.r + 0.9, FOUNTAIN.z);
+  // Zwei an der Einmündung der Rosenthaler Straße, wo die Pferdebahn endet und umspannt
+  // (tramline.js); von Brunnen und Platzrand träfe den Wagen dort nur schwaches, streifendes Licht.
+  // Weit genug außen, dass die Droschke auf dem Weg in ihre Wende (dort bei x ±6) vorbeikommt.
+  lampAt(-8, -17.5);
+  lampAt(8, -17.5);
   for (let x = -130; x <= 130; x += 20) lampAt(x, 43);
   // Hinter den Sperren: Die Laternen gehen weiter, bis der Nebel sie schluckt.
   for (const [x, z] of [[6.6, -208], [-6.6, -220], [-18, -240.6], [18, -240.6]]) lampAt(x, z);

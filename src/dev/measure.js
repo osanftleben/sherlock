@@ -40,6 +40,9 @@ async function frames(seconds) {
 
 export async function measure(game, { seconds = 2, warmup = 0.8, points = POINTS } = {}) {
   const { view } = game;
+  // Gleich nach dem Laden übersetzt der Treiber noch die Shader der Räume (main.js); das kostet
+  // jedes Bild 0,5–1 ms und verfälschte die ersten Punkte.
+  await game.roomsReady;
   view.lockScale(1);
   let record = null;
   view.onTiming = ({ label, ms }) => {

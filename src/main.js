@@ -110,6 +110,10 @@ class Game {
     this.lastFrame = performance.now();
     lap('Betreten');
     renderer.setAnimationLoop(() => this.frame());
+    // Erfüllt, sobald auch die Shader aller Räume übersetzt sind (measure.js wartet darauf, sonst
+    // misst es, während der Treiber noch arbeitet).
+    let roomsDone;
+    this.roomsReady = new Promise((resolve) => (roomsDone = resolve));
     // Läuft nach dem ersten Bild der Schleife: Darin legt der Grafikprozess Texturen, Puffer und
     // Shader der Stadt erst endgültig an.
     requestAnimationFrame(() => {
@@ -123,9 +127,11 @@ class Game {
       for (const loc of Object.values(this.locations)) {
         if (loc !== berlin) rooms = rooms.then(() => this.view.compile([loc.scene]));
       }
-      rooms.then(() => {
-        this.loadTimes['Räume übersetzt'] = Math.round(performance.now());
-      });
+      rooms
+        .then(() => {
+          this.loadTimes['Räume übersetzt'] = Math.round(performance.now());
+        })
+        .finally(roomsDone);
     });
   }
 

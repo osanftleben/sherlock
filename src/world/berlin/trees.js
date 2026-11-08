@@ -157,12 +157,12 @@ export function buildTrees(loc, spots, ironMat) {
   const barkTex = bark();
   const woodMat = std({ map: barkTex, color: 0x9c9890, roughness: 0.8 });
   // Das Reisig wird ausgestanzt statt überblendet: Es schreibt die Tiefe, sodass verdeckte Karten
-  // gar nicht erst gerechnet werden, und die Kanten glättet Alpha-to-Coverage im 4×-MSAA-Puffer.
+  // gar nicht erst gerechnet werden; die Kanten glättet FXAA im Schlussbild (view.js).
   // Lambert statt PBR, denn nasses Reisig glänzt bei Rauheit 0,9 ohnehin nicht. Zusammen mit den
   // zugeschnittenen Karten (twigOutline) halbiert das die Kosten der Linden ungefähr.
   const twigTex = twigs();
   const outline = twigOutline(twigTex);
-  const twigMat = matte({ map: twigTex, color: 0x4a3f36, alphaTest: 0.25, alphaToCoverage: true, side: THREE.DoubleSide });
+  const twigMat = matte({ map: twigTex, color: 0x4a3f36, alphaTest: 0.25, side: THREE.DoubleSide });
   const irons = [];
   spots.forEach(([x, z], i) => {
     const r = rng(4100 + i * 17);

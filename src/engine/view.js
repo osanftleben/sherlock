@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 
-// Schlussbild in einem Durchgang: Szene plus Leuchten, Tonwerte (ACES), sRGB und etwas Fotografie
-// von 1892 – leichte Tonung, Vignette, Korn, Überblendung.
+// Schlussbild in einem Durchgang: Kantenglättung (FXAA), Szene plus Leuchten, Tonwerte (ACES), sRGB
+// und etwas Fotografie von 1892 – leichte Tonung, Vignette, Korn, Überblendung.
 const FinalShader = {
   uniforms: {
     tScene: { value: null },
@@ -35,8 +35,80 @@ const FinalShader = {
     #include <tonemapping_pars_fragment>
     #include <colorspace_pars_fragment>
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+
+    // Helligkeit, wie sie das Auge im fertigen Bild sieht: belichtet, weich begrenzt, etwa gammakorrigiert.
+    // In linearen Werten fände die Kantensuche in der dunklen Nacht kaum Kanten.
+    float luma(vec2 uv) {
+      float l = dot(texture2D(tScene, uv).rgb, vec3(0.2126, 0.7152, 0.0722)) * toneMappingExposure;
+      return sqrt(l / (1.0 + l));
+    }
+
+    // FXAA 3.11 (Lottes): findet Kanten über die Helligkeit der Nachbarn, sucht ihre Enden ab und
+    // liefert die Stelle, an der die Szene gelesen wird, um die Kante zu glätten. Gelesen wird die
+    // lineare Szene, die Tonwerte rechnet das Schlussbild danach wie sonst.
+    vec2 fxaa(vec2 uv) {
+      float lM = luma(uv);
+      float lN = luma(uv + vec2(0.0, texel.y));
+      float lS = luma(uv - vec2(0.0, texel.y));
+      float lE = luma(uv + vec2(texel.x, 0.0));
+      float lW = luma(uv - vec2(texel.x, 0.0));
+      float lo = min(lM, min(min(lN, lS), min(lE, lW)));
+      float hi = max(lM, max(max(lN, lS), max(lE, lW)));
+      float range = hi - lo;
+      if (range < max(0.0312, hi * 0.125)) return uv;
+      float lNE = luma(uv + texel);
+      float lSW = luma(uv - texel);
+      float lNW = luma(uv + vec2(-texel.x, texel.y));
+      float lSE = luma(uv + vec2(texel.x, -texel.y));
+      float lNS = lN + lS;
+      float lWE = lW + lE;
+      float lNWSW = lNW + lSW;
+      float lNESE = lNE + lSE;
+      float edgeH = abs(lNWSW - 2.0 * lW) + 2.0 * abs(lNS - 2.0 * lM) + abs(lNESE - 2.0 * lE);
+      float edgeV = abs(lSW + lSE - 2.0 * lS) + 2.0 * abs(lWE - 2.0 * lM) + abs(lNW + lNE - 2.0 * lN);
+      bool horizontal = edgeH >= edgeV;
+      float stepLen = horizontal ? texel.y : texel.x;
+      float l1 = horizontal ? lS : lW;
+      float l2 = horizontal ? lN : lE;
+      float g1 = abs(l1 - lM);
+      float g2 = abs(l2 - lM);
+      float lLocal;
+      if (g1 >= g2) {
+        stepLen = -stepLen;
+        lLocal = 0.5 * (l1 + lM);
+      } else {
+        lLocal = 0.5 * (l2 + lM);
+      }
+      float gradient = 0.25 * max(g1, g2);
+      vec2 edge = uv + (horizontal ? vec2(0.0, 0.5 * stepLen) : vec2(0.5 * stepLen, 0.0));
+      vec2 off = horizontal ? vec2(texel.x, 0.0) : vec2(0.0, texel.y);
+      vec2 p1 = edge - off;
+      vec2 p2 = edge + off;
+      float e1 = luma(p1) - lLocal;
+      float e2 = luma(p2) - lLocal;
+      bool done1 = abs(e1) >= gradient;
+      bool done2 = abs(e2) >= gradient;
+      for (int i = 0; i < 8; i++) {
+        if (done1 && done2) break;
+        float q = i < 1 ? 1.5 : i < 5 ? 2.0 : i < 6 ? 4.0 : 8.0;
+        if (!done1) { p1 -= off * q; e1 = luma(p1) - lLocal; done1 = abs(e1) >= gradient; }
+        if (!done2) { p2 += off * q; e2 = luma(p2) - lLocal; done2 = abs(e2) >= gradient; }
+      }
+      float d1 = horizontal ? uv.x - p1.x : uv.y - p1.y;
+      float d2 = horizontal ? p2.x - uv.x : p2.y - uv.y;
+      bool nearer1 = d1 < d2;
+      float shift = 0.5 - min(d1, d2) / (d1 + d2);
+      if (((nearer1 ? e1 : e2) < 0.0) == (lM < lLocal)) shift = 0.0;
+      // Kanten unter einem Bildpunkt (Reisig, Gitter, Schienen in der Ferne): sanft, damit das Pflaster scharf bleibt.
+      float avg = (2.0 * (lNS + lWE) + lNWSW + lNESE) / 12.0;
+      float sub = clamp(abs(avg - lM) / range, 0.0, 1.0);
+      sub = (3.0 - 2.0 * sub) * sub * sub;
+      shift = max(shift, sub * sub * 0.5);
+      return uv + (horizontal ? vec2(0.0, shift * stepLen) : vec2(shift * stepLen, 0.0));
+    }
+
     void main() {
-      vec3 c = texture2D(tScene, vUv).rgb;
+      vec3 c = texture2D(tScene, fxaa(vUv)).rgb;
       if (sharpen > 0.0) {
         // Szene in verringerter Auflösung: beim Hochskalieren leicht nachschärfen.
         vec3 n = texture2D(tScene, vUv + vec2(texel.x, 0.0)).rgb + texture2D(tScene, vUv - vec2(texel.x, 0.0)).rgb
@@ -279,20 +351,20 @@ export class View {
     // entsteht einmal beim Betreten des Ortes statt in jedem Bild: Möbel und Figuren stehen still.
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.autoUpdate = false;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.shadowScene = null;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;    this.shadowScene = null;
     this.camera = new THREE.PerspectiveCamera(68, 1, 0.08, 700);
     this.scene = new THREE.Scene();
     this.exposure = 1.15;
 
     this.pixelRatio = Math.min(devicePixelRatio, 1.5);
-    // Nur die Szene wird geglättet (MSAA); alle Nachbearbeitung läuft ohne. Der Puffer ist
-    // R11G11B10F: Fließkomma für das Leuchten der Laternen, aber halb so breit wie RGBA16F. Löschen
-    // und Auflösen des 4×-Puffers kosten in 1080p sonst allein mehrere Millisekunden.
+    // Ohne MSAA: Die Kanten glättet FXAA im Schlussbild. 4× MSAA kostete in 1080p 3,5–7 ms je
+    // Bild, am Platz am meisten (Regen, Nebel, Rauch und Lichtschein vierfach in den Puffer), FXAA
+    // nur einen Bruchteil davon. Der Puffer ist R11G11B10F: Fließkomma für das Leuchten der Laternen,
+    // aber halb so breit wie RGBA16F.
     const compact = this.renderer.extensions.has('EXT_color_buffer_float');
     this.target = new THREE.WebGLRenderTarget(4, 4, compact
-      ? { format: THREE.RGBFormat, type: THREE.UnsignedInt101111Type, samples: 4 }
-      : { type: THREE.HalfFloatType, samples: 4 });
+      ? { format: THREE.RGBFormat, type: THREE.UnsignedInt101111Type }
+      : { type: THREE.HalfFloatType });
     this.glow = new Glow(new THREE.Vector2(4, 4), 0.32, 0.5, 1.0);
     this.final = new THREE.RawShaderMaterial({ ...FinalShader, uniforms: THREE.UniformsUtils.clone(FinalShader.uniforms), depthTest: false, depthWrite: false });
     this.final.uniforms.tScene.value = this.target.texture;

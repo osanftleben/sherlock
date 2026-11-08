@@ -4,7 +4,7 @@ import { clockFace, granite as graniteTex, posterWall, rng, signTexture, softDis
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
-import { addShadeCaster, lightPool } from './lamps.js';
+import { addStillCaster, lightPool } from './lamps.js';
 import { coughs } from './life.js';
 import { MIRROR_LAYER, rainOnWater, waterMirror } from './ripples.js';
 
@@ -61,7 +61,7 @@ export function buildPlaza(loc, r, ironMat) {
   capBag.add(cyl(0.01, 0.03, 0.32, lx, 5.04, lz, 6), IRON);
   addMesh(scene, capBag.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }));
   // Säule, Gesims und Kuppel halten das Licht der Laternen ab (lamps.js).
-  addShadeCaster(loc, lx, lz, 0.95, 4.4);
+  addStillCaster(loc, lx, lz, 0.95, 4.4);
   loc.collide(lx - 0.7, lx + 0.7, lz - 0.7, lz + 0.7);
   loc.anchor('litfass', lx, 1.7, lz);
   loc.addHotspot({
@@ -84,7 +84,7 @@ export function buildPlaza(loc, r, ironMat) {
   octo.add(cyl(0.3, 1.5, 0.6, cx, 2.5, cz, 8), 0x162a1e);
   addMesh(scene, octo.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.3 }));
   // Das Häuschen samt Dachrand hält das Licht der Laternen ab (lamps.js).
-  addShadeCaster(loc, cx, cz, 1.5, 2.5);
+  addStillCaster(loc, cx, cz, 1.5, 2.5);
   loc.collide(cx - 1.25, cx + 1.25, cz - 1.25, cz + 1.25);
   loc.addHotspot({
     pos: [cx, 1.5, cz],
@@ -255,9 +255,9 @@ function buildFountain(loc) {
   // Becken, Pfeiler mit Schaft und große Schale halten das Licht der Laternen ab (lamps.js). Die
   // Schale schwebt: Unter ihr kommt das Licht bis an den Schaft heran. Was darüber liegt, streift
   // ein Weg vom Pflaster zur Flamme erst weit außerhalb der Reichweite der Laternen.
-  addShadeCaster(loc, x, z, R - 0.05, 0.71);
-  addShadeCaster(loc, x, z, 0.35, 2.62);
-  addShadeCaster(loc, x, z, 1.16, 3.04, 2.7);
+  addStillCaster(loc, x, z, R - 0.05, 0.71);
+  addStillCaster(loc, x, z, 0.35, 2.62);
+  addStillCaster(loc, x, z, 1.16, 3.04, 2.7);
 
   // Granit matt und stumpf, Eisen mit halbmattem Anstrich, Bronze metallisch mit warmem Glanz.
   // Alle drei spiegeln sich im Becken (MIRROR_LAYER).
@@ -350,7 +350,7 @@ function buildKiosk(loc) {
   b.add(roof, 0x141c18);
   b.add(cyl(0.03, 0.07, 0.5, x, 3.55, z, 8), 0x141c18);
   // Das Häuschen hält das Licht der Laternen ab (lamps.js): Kasten mit Traufe und Dach als Zylinder.
-  addShadeCaster(loc, x, z, R + 0.15, 3.0);
+  addStillCaster(loc, x, z, R + 0.15, 3.0);
   // Ablage unter der Auslage.
   const ledge = new THREE.BoxGeometry(1.0, 0.06, 0.35);
   ledge.translate(0, 0.95, R * Math.cos(Math.PI / 8) + 0.12);
@@ -485,7 +485,7 @@ function buildUrania(loc, ux, uz) {
 
   addMesh(scene, oct(0.86, 0.9, 0.16, 0.08), std({ color: 0x5c5c58, roughness: 0.8 }));
   // Höher als jede Laterne: Ihr Licht kommt hinter der Säule nicht an (lamps.js).
-  addShadeCaster(loc, ux, uz, 0.55, 6);
+  addStillCaster(loc, ux, uz, 0.55, 6);
 
   // Unterbau: schräg abfallendes Achteck. Die Schaukästen liegen auf den vier Hauptseiten
   // und neigen sich mit der Schräge.

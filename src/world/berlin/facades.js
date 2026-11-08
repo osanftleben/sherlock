@@ -1167,10 +1167,11 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
     addMesh(scene, massing.build(), massMat);
     // Erker und Balkone in eigenen Meshes, damit die übrigen Häuser unverändert bleiben.
     if (reliefBag.parts.length) addMesh(scene, reliefBag.build(), massMat);
-    // Gitter: Alpha bestimmt die Abdeckung der Multisampling-Proben (alphaToCoverage). Aus der
-    // Ferne wird das Gitter so zu einem halb durchscheinenden dunklen Band, statt zu verschwinden.
+    // Gitter: durchscheinend überblendet. Aus der Ferne wird das Gitter so zu einem halb
+    // durchscheinenden dunklen Band, statt zu verschwinden (ausgestanzt fiele es mit den
+    // gröberen Mipmap-Stufen unter die Schwelle). Die Szene hat kein MSAA, darum kein alphaToCoverage.
     if (ironBag.parts.length) {
-      addMesh(scene, ironBag.build(), std({ map: railing(), vertexColors: true, roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide, alphaToCoverage: true }));
+      addMesh(scene, ironBag.build(), std({ map: railing(), vertexColors: true, roughness: 0.5, metalness: 0.4, side: THREE.DoubleSide, transparent: true }));
     }
 
     // Ladenschilder. Bretter über erleuchteten Läden fangen etwas vom Licht der Auslage.
@@ -1180,7 +1181,7 @@ export function createFacades(loc, r, { plasterTex, wallMat, darkGlass, litGlass
       addMesh(scene, merge(signs.litBoards), std({ map: boards, roughness: 0.55, emissive: 0xffffff, emissiveMap: boards, emissiveIntensity: 0.25 }));
     }
     if (signs.emblems.length) {
-      addMesh(scene, merge(signs.emblems), std({ map: emblems, roughness: 0.45, metalness: 0.3, side: THREE.DoubleSide, alphaToCoverage: true }));
+      addMesh(scene, merge(signs.emblems), std({ map: emblems, roughness: 0.45, metalness: 0.3, side: THREE.DoubleSide, alphaTest: 0.5 }));
     }
   };
 

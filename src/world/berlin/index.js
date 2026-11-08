@@ -11,7 +11,7 @@ import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { buildClutter } from './clutter.js';
 import { grimy } from './grime.js';
-import { LANTERN_GLASS, SHADE_GLSL, buildLamps, lampWash, shadeUniforms, shadedLightsChunk, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, SHADE_GLSL, bakeStillShade, buildLamps, lampWash, shadeUniforms, shadedLightsChunk, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -90,7 +90,11 @@ export function buildBerlin() {
         }`,
     }),
   );
-  sky.renderOrder = -10;
+  // Als Letztes vom Undurchsichtigen: Der Himmel füllt nur noch, was frei geblieben ist, statt erst
+  // den ganzen Bildschirm zu bemalen, den Häuser und Pflaster dann übermalen. Spart in 1080p
+  // 0,7–1,9 ms. (Alles strikt nach Entfernung zu sortieren statt three.js' Material-vor-Tiefe
+  // kostete dagegen durch die vielen Shaderwechsel abseits des Platzes 1–2 ms mehr.)
+  sky.renderOrder = 10;
   sky.layers.enable(MIRROR_LAYER);
   scene.add(sky);
   loc.onUpdate((dt, t, { camera }) => {
@@ -504,6 +508,8 @@ export function buildBerlin() {
   buildWeather(loc, r);
   buildLife(loc);
   buildSmoke(loc, { chimneys: facades.chimneys });
+  // Schatten der festen Werfer am Platz je Laterne vorab rechnen (lamps.js).
+  bakeStillShade(loc);
   // Zuletzt: sammelt Leute, Pferde und Wagen aus der Szene, auch die Figuren des Falls, und gibt
   // ihnen Bodenschatten und die übrigen Plätze der Laternenschatten.
   buildGroundShades(loc);

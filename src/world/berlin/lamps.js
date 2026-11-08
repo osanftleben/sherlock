@@ -30,9 +30,11 @@ export function lightPool(color, opacity) {
 // Hinter dem Kiosk glänzte das nasse Pflaster, als stünde er nicht da. Hohe Dinge bei Laternen
 // melden sich deshalb als senkrechte Zylinder an, und das Pflaster (wetStreet in index.js) und die
 // Lichtflecken prüfen für jede Laterne, ob der Weg zu ihr hindurchführt.
-// Die ersten Plätze nehmen die festen Werfer und die Pferdebahn (addShadeCaster), den Rest teilen sich
-// Leute, Pferde und Droschken nahe der Kamera (shadeSlots, groundshade.js).
-export const SHADE_MAX = 22;
+// Die ersten Plätze nimmt die Pferdebahn (addShadeCaster), den Rest teilen sich Leute, Pferde und
+// Droschken nahe der Kamera (shadeSlots, groundshade.js). Was nie seinen Platz verlässt (Kiosk,
+// Säulen, Brunnen), meldet sich mit addStillCaster an und wird beim Laden je Laterne in eine Textur
+// gerechnet (bakeStillShade): Das kostete in jedem Bild 0,7–1,2 ms, eine Texturprobe fast nichts.
+export const SHADE_MAX = 15;
 // So viele Laternen leuchten wirklich, als Punktlichter (die nächsten an der Kamera); die übrigen
 // haben nur Schein und Lichtfleck.
 const LIT_LAMPS = 6;
@@ -56,9 +58,136 @@ export function shadeUniforms(loc) {
     shadeCount: { value: 0 },
     // Bitmaske der festen Werfer, dazu je leuchtender Laterne x, z und die Bitmaske der Werfer in
     // ihrer Nähe (shadeSlots().use). Nur diese prüft lampShade; das spart die meiste Arbeit.
+    // w: Schicht der Laterne in lampStill plus 1 (0: keine).
     shadeFixed: { value: 0 },
     shadeLamps: { value: Array.from({ length: LIT_LAMPS }, () => new THREE.Vector4(1e6, 1e6, 0, 0)) },
+    // Schatten der festen Werfer je Laterne auf dem Boden (bakeStillShade), STILL_TILE Meter im Quadrat
+    // um die Laterne. Bis zum Backen eine helle Schicht.
+    lampStill: { value: stillTexture(new Uint8Array([255]), 1, 1) },
   });
+}
+
+function stillTexture(data, size, layers) {
+  const t = new THREE.DataArrayTexture(data, size, size, layers);
+  t.format = THREE.RedFormat;
+  t.type = THREE.UnsignedByteType;
+  t.minFilter = size > 1 ? THREE.LinearMipmapLinearFilter : THREE.LinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = size > 1;
+  t.needsUpdate = true;
+  return t;
+}
+
+// Fester Werfer (Zylinder wie bei addShadeCaster), der nie seinen Platz verlässt.
+export function addStillCaster(loc, x, z, r, h, floor = 0) {
+  (loc.stillCasters ??= []).push({ x, z, r, h, floor });
+}
+
+// Wie viel Licht einer Laterne (lx, ly, lz) am Punkt (px, py, pz) an einem Zylinder c vorbeikommt;
+// dieselbe Rechnung wie lampShadeMasked im Shader, für einen Werfer der Stärke 1.
+const smooth = (a, b, x) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+function stillLit(px, py, pz, lx, ly, lz, c) {
+  const dx = lx - px;
+  const dz = lz - pz;
+  const inv = 1 / Math.sqrt(Math.max(dx * dx + dz * dz, 1e-4));
+  const inv2 = inv * inv;
+  const t = ((c.x - px) * dx + (c.z - pz) * dz) * inv2;
+  if (t <= 0 || t >= 1) return 1;
+  const w = FLAME_R * t + 0.01;
+  const ox = px + dx * t - c.x;
+  const oz = pz + dz * t - c.z;
+  const dd = ox * ox + oz * oz;
+  if (dd >= (c.r + w) * (c.r + w)) return 1;
+  const span = Math.sqrt(Math.max(c.r * c.r - dd, 0)) * inv;
+  const tIn = Math.max(0, t - span);
+  const tOut = Math.min(1, t + span);
+  const yIn = py + (ly - py) * tIn;
+  const yOut = py + (ly - py) * tOut;
+  const wIn = FLAME_R * tIn + 0.01;
+  const wOut = FLAME_R * tOut + 0.01;
+  const hit = (1 - smooth(c.r - w, c.r + w, Math.sqrt(dd)))
+    * (1 - smooth(c.h - wIn, c.h + wIn, yIn))
+    * (c.floor <= 0 ? 1 : smooth(c.floor - wOut, c.floor + wOut, yOut));
+  return 1 - hit;
+}
+
+// Seitenlänge (m) und Auflösung einer Schicht von lampStill: so weit, wie lampShade prüft, und gut
+// 5 cm je Texel, damit der harte Schattenrand am Fuß eines Werfers nicht verschwimmt.
+const STILL_TILE = 2 * SHADE_FAR;
+const STILL_RES = 512;
+
+// Rechnet für jede Laterne, in deren Reichweite feste Werfer stehen, deren Schatten auf den Boden
+// (Höhe 0, der Platz ist eben) in eine Schicht von lampStill. Nach buildLamps und allen
+// addStillCaster aufrufen. Gerechnet wird je Werfer nur das Rechteck, in das sein Schatten fallen
+// kann: der Werfer selbst und der Keil hinter ihm, von der Laterne aus gesehen, bis SHADE_FAR.
+export function bakeStillShade(loc) {
+  const casters = loc.stillCasters ?? [];
+  const spots = loc.lampSpots ?? [];
+  const tiles = [];
+  for (const s of spots) {
+    const near = casters.filter((c) => Math.hypot(c.x - s.x, c.z - s.z) - c.r < SHADE_REACH);
+    if (near.length) tiles.push({ s, near });
+  }
+  if (!tiles.length) return;
+  const N = STILL_RES;
+  const cell = STILL_TILE / N;
+  const data = new Uint8Array(N * N * tiles.length);
+  const lit = new Float32Array(N * N);
+  tiles.forEach(({ s, near }, layer) => {
+    s.layer = layer + 1;
+    lit.fill(1);
+    const x0 = s.x - STILL_TILE / 2;
+    const z0 = s.z - STILL_TILE / 2;
+    for (const c of near) {
+      const pad = c.r + 2 * FLAME_R + 0.05;
+      const dist = Math.hypot(c.x - s.x, c.z - s.z);
+      let minX = c.x - pad;
+      let maxX = c.x + pad;
+      let minZ = c.z - pad;
+      let maxZ = c.z + pad;
+      if (dist <= pad) {
+        minX = minZ = -Infinity;
+        maxX = maxZ = Infinity;
+      } else {
+        const a = Math.atan2(c.z - s.z, c.x - s.x);
+        const h = Math.asin(pad / dist);
+        for (const b of [a - h, a, a + h]) {
+          const fx = s.x + Math.cos(b) * SHADE_FAR * 1.05;
+          const fz = s.z + Math.sin(b) * SHADE_FAR * 1.05;
+          minX = Math.min(minX, fx);
+          maxX = Math.max(maxX, fx);
+          minZ = Math.min(minZ, fz);
+          maxZ = Math.max(maxZ, fz);
+        }
+      }
+      const i0 = Math.max(0, Math.floor((minX - x0) / cell));
+      const i1 = Math.min(N - 1, Math.ceil((maxX - x0) / cell));
+      const j0 = Math.max(0, Math.floor((minZ - z0) / cell));
+      const j1 = Math.min(N - 1, Math.ceil((maxZ - z0) / cell));
+      for (let j = j0; j <= j1; j++) {
+        const pz = z0 + (j + 0.5) * cell;
+        for (let i = i0; i <= i1; i++) {
+          const k = j * N + i;
+          if (lit[k] > 0) lit[k] *= stillLit(x0 + (i + 0.5) * cell, 0, pz, s.x, s.y, s.z, c);
+        }
+      }
+    }
+    const base = layer * N * N;
+    for (let k = 0; k < N * N; k++) data[base + k] = Math.round(lit[k] * 255);
+  });
+  const u = shadeUniforms(loc);
+  u.lampStill.value.dispose();
+  u.lampStill.value = stillTexture(data, N, tiles.length);
+  // Lichtflecken: Schicht je Laterne über ein Attribut (Laternen anderer Bauteile haben keinen).
+  const attr = loc.lampPoolLayers;
+  if (attr) {
+    spots.forEach((s) => s.pool >= 0 && attr.setX(s.pool, s.layer ?? 0));
+    attr.needsUpdate = true;
+  }
+  loc.lampLayer = new Map(spots.filter((s) => s.layer).map((s) => [`${s.x},${s.z}`, s.layer]));
 }
 // Ein Zylinder als Vector4 (x, z, Radius, Oberkante), dazu seine Unterkante: Liegt sie über 0,
 // schwebt er wie die Schale des Brunnens. Wer sich bewegt, setzt den Vector4 selbst neu; Radius 0
@@ -97,7 +226,7 @@ export function shadeSlots(loc) {
           const c = casters[k];
           if (c.z > 0 && Math.hypot(c.x - x, c.y - z) - c.z < SHADE_REACH) mask |= 1 << k;
         }
-        u.shadeLamps.value[i].set(x, z, mask, 0);
+        u.shadeLamps.value[i].set(x, z, mask, loc.lampLayer?.get(`${x},${z}`) ?? 0);
       }
     },
   };
@@ -110,6 +239,7 @@ uniform vec2 shadeParams[${SHADE_MAX}];
 uniform int shadeCount;
 uniform int shadeFixed;
 uniform vec4 shadeLamps[${LIT_LAMPS}];
+uniform highp sampler2DArray lampStill;
 vec3 lampWorld(vec3 viewPos) {
   return transpose(mat3(viewMatrix)) * (viewPos - viewMatrix[3].xyz);
 }
@@ -117,14 +247,16 @@ vec3 lampWorld(vec3 viewPos) {
 // Bits gesetzt sind: Sie löst jedes Mal das niedrigste heraus und holt seine Nummer über log2. Ein
 // Durchlauf je Werfer mit Sprung über die ungesetzten wäre kürzer zu schreiben, aber der Übersetzer
 // unter Windows (ANGLE) glättet solche Sprünge, und dann rechnet doch jeder Durchlauf alles.
-float lampShadeMasked(vec3 p, vec3 lamp, int mask) {
+// layer: Schicht der Laterne in lampStill plus 1, 0 wenn keine festen Werfer bei ihr stehen.
+float lampShadeMasked(vec3 p, vec3 lamp, int mask, float layer) {
   vec2 d = lamp.xz - p.xz;
   float dist2 = dot(d, d);
   mask &= (1 << shadeCount) - 1;
-  if (mask == 0 || dist2 > ${(SHADE_FAR * SHADE_FAR).toFixed(1)}) return 1.0;
+  if ((mask == 0 && layer < 0.5) || dist2 > ${(SHADE_FAR * SHADE_FAR).toFixed(1)}) return 1.0;
   float inv = inversesqrt(max(dist2, 1e-4));
   float inv2 = inv * inv;
   float lit = 1.0;
+  if (layer > 0.5) lit = texture(lampStill, vec3(-d / ${STILL_TILE.toFixed(1)} + 0.5, layer - 1.0)).r;
   for (int n = 0; n < ${SHADE_MAX}; n++) {
     if (mask == 0) break;
     int bit = mask & -mask;
@@ -166,17 +298,18 @@ float lampShadeMasked(vec3 p, vec3 lamp, int mask) {
 // nicht, etwa weil ein anderes Punktlicht dazwischengekommen ist, werden alle Werfer geprüft.
 float lampShadeLit(vec3 p, vec3 lamp, vec4 e) {
   bool known = abs(e.x - lamp.x) + abs(e.y - lamp.z) < 0.1;
-  return lampShadeMasked(p, lamp, known ? int(e.z) : -1);
+  return known ? lampShadeMasked(p, lamp, int(e.z), e.w) : lampShadeMasked(p, lamp, -1, 0.0);
 }
-// Beliebige Laterne (Lichtflecken): Maske über die Lage suchen. Laternen ohne Punktlicht prüfen nur
-// die festen Werfer; die beweglichen stehen ohnehin bei den leuchtenden.
-float lampShade(vec3 p, vec3 lamp) {
+// Beliebige Laterne (Lichtflecken) mit ihrer Schicht in lampStill: Maske über die Lage suchen.
+// Laternen ohne Punktlicht prüfen nur die Pferdebahn; die übrigen beweglichen Werfer stehen ohnehin
+// bei den leuchtenden.
+float lampShade(vec3 p, vec3 lamp, float layer) {
   int mask = shadeFixed;
   for (int i = 0; i < ${LIT_LAMPS}; i++) {
     vec4 e = shadeLamps[i];
     if (abs(e.x - lamp.x) + abs(e.y - lamp.z) < 0.1) mask = int(e.z);
   }
-  return lampShadeMasked(p, lamp, mask);
+  return lampShadeMasked(p, lamp, mask, layer);
 }`;
 
 // Beleuchtungsteil von three.js mit Schatten für die Punktlichter: Die Farbe jedes Lichts wird
@@ -212,16 +345,17 @@ function shadedPool(material, loc) {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, shadeUniforms(loc));
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vPoolW;\nvarying vec3 vLampW;')
+      .replace('#include <common>', '#include <common>\nattribute float aStill;\nvarying vec3 vPoolW;\nvarying vec3 vLampW;\nvarying float vStill;')
       .replace(
         '#include <begin_vertex>',
         `#include <begin_vertex>
+        vStill = aStill;
         vPoolW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
         vLampW = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz + vec3(0.0, ${(FLAME - 0.03).toFixed(2)}, 0.0);`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec3 vPoolW;\nvarying vec3 vLampW;\n${SHADE_GLSL}`)
-      .replace('#include <premultiplied_alpha_fragment>', 'gl_FragColor.rgb *= lampShade(vPoolW, vLampW);\n#include <premultiplied_alpha_fragment>');
+      .replace('#include <common>', `#include <common>\nvarying vec3 vPoolW;\nvarying vec3 vLampW;\nvarying float vStill;\n${SHADE_GLSL}`)
+      .replace('#include <premultiplied_alpha_fragment>', 'gl_FragColor.rgb *= lampShade(vPoolW, vLampW, vStill);\n#include <premultiplied_alpha_fragment>');
   };
   material.customProgramCacheKey = () => 'shadedLampPool';
   return material;
@@ -244,6 +378,10 @@ export function buildLamps(loc, positions, ironMat) {
   const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
   const poolGeo = new THREE.PlaneGeometry(1, 1);
   poolGeo.rotateX(-Math.PI / 2);
+  // Schicht jedes Lichtflecks in lampStill (bakeStillShade füllt sie).
+  poolGeo.setAttribute('aStill', (loc.lampPoolLayers = new THREE.InstancedBufferAttribute(new Float32Array(positions.length), 1)));
+  // Alle Flammen für bakeStillShade: pool ist der Index des Lichtflecks, -1 für Laternen anderer Bauteile.
+  const spots = (loc.lampSpots = []);
   const poolMat = shadedPool(lightPool(0xc77b38, 0.33), loc);
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, positions.length);
   const glows = [];
@@ -261,6 +399,7 @@ export function buildLamps(loc, positions, ironMat) {
       return;
     }
     glassMesh.setMatrixAt(i, m);
+    spots.push({ x, y: y + FLAME, z, pool: i });
     m.makeScale(13, 1, 13).setPosition(x, y + 0.03, z);
     pools.setMatrixAt(i, m);
     const s = new THREE.Sprite(glowMat.clone());
@@ -284,6 +423,7 @@ export function buildLamps(loc, positions, ironMat) {
   }
   // Wer Schatten wirft, fragt hier, welche Laternen gerade leuchten (groundshade.js).
   loc.lampLights = lights;
+  for (const e of loc.extraLamps ?? []) spots.push({ x: e.x, y: e.y, z: e.z, pool: -1 });
   // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight). weight < 1
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
   // weiter weg sieht als ihre Entfernung vermuten lässt.

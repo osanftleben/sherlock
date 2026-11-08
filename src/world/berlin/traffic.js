@@ -160,7 +160,7 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
 // Zurück kommt place(), das die Lichter der Lage des Wagens nachführt; wer fährt (moving), ruft es
 // nach jeder Bewegung auf, wer steht, bekommt beim Laden eine vorab gerechnete Schattenschicht.
 export function cabLamps(loc, cab, moving = false) {
-  const lamps = cab.userData.lanterns.map((v) => ({ v, x: 0, y: 0, z: 0, intensity: 3, weight: 2.5, moving }));
+  const lamps = cab.userData.lanterns.map((v) => ({ v, x: 0, y: 0, z: 0, intensity: 3, moving }));
   const place = () => {
     const { x, y, z } = cab.position;
     const sin = Math.sin(cab.rotation.y);

@@ -169,7 +169,7 @@ export function buildRailway(loc, r) {
   {
     const p = wallLantern(lanterns, flames, new THREE.Vector3(-SEG / 2 + 1.1, 3.5, (VZ0 + VZ1) / 2), new THREE.Vector3(1, 0, 0), 0.52, washes);
     glows.push(p);
-    (loc.extraLamps ??= []).push({ x: p.x + 0.1, y: p.y, z: p.z, intensity: 16, weight: 0.3 });
+    (loc.extraLamps ??= []).push({ x: p.x + 0.1, y: p.y, z: p.z, intensity: 16, boost: 4 });
     // Tropfwasser aus dem Gewölbe, mit Pfützen darunter.
     buildDrips(loc, { cx: 0, spring: 4.1, radius: RING_IN, z0: VZ0, z1: VZ1, lamp: p });
   }
@@ -420,7 +420,7 @@ function buildEntrance(loc, x, z0) {
   // Treppenhaus; ein Licht dort schiene durch die Mauern auf den Platz (draußen gibt es keine
   // Schattenkarten). Darum sitzt es schwach in der Türöffnung, und die Bogenlaterne daneben hat
   // Vortritt: So fällt Licht aus der Tür, und wer davor steht, wirft Schatten aufs Pflaster.
-  (loc.extraLamps ??= []).push({ x, y: dh - 0.4, z: z0 - 0.2, intensity: 5, weight: 2 });
+  (loc.extraLamps ??= []).push({ x, y: dh - 0.4, z: z0 - 0.2, intensity: 5 });
   // Durch die offene Tür fällt warmes Licht auf das Pflaster vor der Nische.
   addMesh(scene, new THREE.PlaneGeometry(3.2, 3.4).rotateX(-Math.PI / 2).translate(x, 0.031, z0 - 2.2), lightPool(0xd09050, 0.35));
 

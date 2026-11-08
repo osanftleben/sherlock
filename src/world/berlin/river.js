@@ -112,7 +112,7 @@ export function buildRiver(loc, FOG, bank) {
   // Die Laterne am Mast des Kahns bekommt echtes Licht, wenn sie zu den nächsten gehört: Wer an der
   // Quaikante steht, wirft dann einen langen Schatten über das Pflaster. Das Schaukeln (3 cm) spielt
   // dafür keine Rolle.
-  (loc.extraLamps ??= []).push({ x: BARGE.x + BARGE_LANTERN.x, y: WATER_Y + BARGE_LANTERN.y, z: BARGE.z + BARGE_LANTERN.z, intensity: 9, weight: 1.5 });
+  (loc.extraLamps ??= []).push({ x: BARGE.x + BARGE_LANTERN.x, y: WATER_Y + BARGE_LANTERN.y, z: BARGE.z + BARGE_LANTERN.z, intensity: 9 });
   // Für den Klang: Abstand zur Quaimauer und zum Kahn, Seite (-1 links, 1 rechts) vom Hörer aus.
   loc.river = { distance: Infinity, barge: Infinity, pan: 0, bargePan: 0 };
   loc.onUpdate((dt, t, { camera, player }) => {

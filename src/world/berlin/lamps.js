@@ -53,6 +53,9 @@ const FLAME_R = 0.2;
 // Stücks statt aller bei der Laterne. Im Gedränge am Platz waren das sonst bis zu zwölf Werfer je
 // Laterne und Bildpunkt, 2,2 ms GPU-Zeit allein auf dem Pflaster.
 const SECTORS = 16;
+// Reichweite und Abnahme der echten Lichter (PointLight distance, decay).
+const LIGHT_RANGE = 22;
+const LIGHT_DECAY = 1.7;
 // So stark flackert eine Gasflamme: Die Helligkeit schwankt zwischen 86 und 100 %.
 const GAS_FLICKER = 0.07;
 // Uniforms der Schattenwerfer eines Ortes; alle Shader mit lampShade teilen sie sich.
@@ -461,19 +464,21 @@ export function buildLamps(loc, positions, ironMat) {
   const lights = [];
   const gas = new THREE.Color(0xffa35a);
   for (let i = 0; i < LIT_LAMPS; i++) {
-    const l = new THREE.PointLight(gas, 0, 22, 1.7);
+    const l = new THREE.PointLight(gas, 0, LIGHT_RANGE, LIGHT_DECAY);
     scene.add(l);
     lights.push(l);
   }
   // Wer Schatten wirft, fragt hier, welche Laternen gerade leuchten (groundshade.js).
   loc.lampLights = lights;
-  // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight, wahlweise
-  // color, flicker (Stärke des Flackerns, sonst 0,07 wie Gaslicht) und moving, wenn ihr Bauteil
-  // x, y, z in jedem Bild nachführt). weight < 1
-  // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
-  // weiter weg sieht als ihre Entfernung vermuten lässt; weight > 1 lässt den Straßenlaternen den
-  // Vortritt. Die Liste entsteht erst im ersten Bild, damit auch Laternen zählen, die nach
-  // buildLamps gebaut werden (etwa die über den Ladentüren).
+  // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme und intensity, wahlweise
+  // color, flicker (Stärke des Flackerns, sonst 0,07 wie Gaslicht), moving, wenn ihr Bauteil x, y, z
+  // in jedem Bild nachführt, und boost). Die Liste entsteht erst im ersten Bild, damit auch Laternen
+  // zählen, die nach buildLamps gebaut werden (etwa die über den Ladentüren).
+  //
+  // Die Rangliste ordnet nach der Lichtstärke, die an der Kamera ankommt, mit derselben Abnahme wie
+  // das Licht selbst: Eine kleine Droschkenlaterne kommt so nur vor eine Straßenlaterne, wenn man
+  // gut viermal näher an ihr steht. boost (sonst 1) hebt eine Laterne an, die man von weiter weg
+  // wirken sieht, als ihre Entfernung vermuten lässt: die im Durchgang unter dem Viadukt.
   let ranked = null;
   let timer = 0;
   loc.onUpdate((dt, t, { camera }) => {
@@ -481,26 +486,28 @@ export function buildLamps(loc, positions, ironMat) {
     // Pferdebahnwagen) ihn in jedem Bild nachführen können.
     // color: eigene Lichtfarbe (die grünen Signallaternen der Pferdebahn), sonst Gaslicht.
     ranked ??= [
-      ...glows.map((g) => ({ p: { x: g.x, y: g.ground + FLAME, z: g.z }, color: gas, seed: g.seed, intensity: 32, weight: 1, flicker: GAS_FLICKER, d: 0 })),
+      ...glows.map((g) => ({ p: { x: g.x, y: g.ground + FLAME, z: g.z }, color: gas, seed: g.seed, intensity: 32, boost: 1, flicker: GAS_FLICKER, score: 0 })),
       ...(loc.extraLamps ?? []).map((e, i) => ({
         p: e,
         color: e.color === undefined ? gas : new THREE.Color(e.color),
         seed: 50 + i * 1.3,
         intensity: e.intensity,
-        weight: e.weight,
+        boost: e.boost ?? 1,
         flicker: e.flicker ?? GAS_FLICKER,
-        d: 0,
+        score: 0,
       })),
     ];
     timer -= dt;
     if (timer <= 0) {
       timer = 0.25;
+      const c = camera.position;
       for (const e of ranked) {
-        const dx = e.p.x - camera.position.x;
-        const dz = e.p.z - camera.position.z;
-        e.d = (dx * dx + dz * dz) * e.weight;
+        // Unter 1 m zählt wie 1 m, sonst risse eine Lampe direkt vor dem Gesicht alles an sich. Keine
+        // Grenze bei LIGHT_RANGE: Eine Laterne 25 m entfernt erhellt noch die Straße vor einem.
+        const d = Math.max(1, Math.hypot(e.p.x - c.x, e.p.y - c.y, e.p.z - c.z));
+        e.score = (e.intensity * e.boost) / d ** LIGHT_DECAY;
       }
-      ranked.sort((a, b) => a.d - b.d);
+      ranked.sort((a, b) => b.score - a.score);
     }
     lights.forEach((l, i) => {
       const e = ranked[i];
@@ -580,11 +587,11 @@ export function wallLantern(iron, glass, base, out, reach = 0.52, wash = null) {
 // waagrechte Richtung von der Wand weg. Gehört sie zu den nächsten Laternen, bekommt sie echtes Licht,
 // und wer davor steht, wirft Schatten. Das Licht sitzt ein Stück vor dem Glas, sonst stünde dicht
 // dahinter ein greller Fleck auf der Wand (den Schein dort malt schon lampWash). Schwächer als eine
-// Straßenlaterne, und die haben Vortritt (weight > 1).
+// Straßenlaterne.
 const WALL_LAMP_OUT = 0.5;
-export function wallLamp(p, ox, oz, intensity = 9, weight = 1.5) {
+export function wallLamp(p, ox, oz, intensity = 9) {
   const n = Math.hypot(ox, oz) || 1;
-  return { x: p.x + (ox / n) * WALL_LAMP_OUT, y: p.y, z: p.z + (oz / n) * WALL_LAMP_OUT, intensity, weight };
+  return { x: p.x + (ox / n) * WALL_LAMP_OUT, y: p.y, z: p.z + (oz / n) * WALL_LAMP_OUT, intensity };
 }
 
 // Lichtschein einer Wandlaterne auf der Mauer dahinter: wie lightPool, nur schwächer, weil die

@@ -436,7 +436,7 @@ function buildCabRank(loc, ironMat) {
   (loc.braziers ??= []).push(new THREE.Vector3(bx, 1.0, bz));
   // Die Glut als Licht (lamps.js): rot, tief und unruhiger als eine Gasflamme. Es sitzt knapp über
   // dem Rand des Korbs und strahlt die Kutscher von unten an.
-  (loc.extraLamps ??= []).push({ x: bx, y: 1.1, z: bz, color: 0xff6a2a, intensity: 6, weight: 2, flicker: 0.22 });
+  (loc.extraLamps ??= []).push({ x: bx, y: 1.1, z: bz, color: 0xff6a2a, intensity: 6, flicker: 0.22 });
   glow.scale.setScalar(2.2);
   scene.add(glow);
   const pool = addPool(scene, bx, bz, 5, 0xd0602a, 0.32);
@@ -552,7 +552,7 @@ function buildUrania(loc, ux, uz) {
   // Gehört die Säule zu den nächsten Laternen, bekommen die vier Reflektoren ein gemeinsames echtes
   // Licht in der Mitte, und wer davor steht, wirft Schatten. Die Säule selbst schattet es nicht ab
   // (bakeStillShade lässt Werfer aus, in denen die Lampe steht): Ringsum hängt ja ein Reflektor.
-  (loc.extraLamps ??= []).push({ x: ux, y: 4.18, z: uz, intensity: 20, weight: 1.5 });
+  (loc.extraLamps ??= []).push({ x: ux, y: 4.18, z: uz, intensity: 20 });
   iron.add(cyl(0.24, 0.36, 0.26, ux, 4.53, uz, 24), IRON);
 
   // Kuppel als Himmelsglobus, mit Gradringen. Drei Uhren (Süd, West, Nord) und der Mond (Ost)

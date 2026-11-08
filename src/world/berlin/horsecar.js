@@ -32,8 +32,8 @@ const WHEEL_R = 0.38;
 // o längs des Wagens, y Höhe. Die beiden Innenlampen unter der Decke als ein Licht in der Mitte,
 // das vor allem seitlich durch die Fenster fällt; dazu die grünen Signallaternen an beiden Enden.
 export const CAR_LIGHTS = [
-  { o: 0, y: 2.42, color: 0xffa35a, intensity: 6, weight: 1.5 },
-  ...[-1, 1].map((e) => ({ o: e * (ZP + 0.14), y: EAVE - 0.16, color: 0x58ff98, intensity: 3, weight: 2.5 })),
+  { o: 0, y: 2.42, color: 0xffa35a, intensity: 6 },
+  ...[-1, 1].map((e) => ({ o: e * (ZP + 0.14), y: EAVE - 0.16, color: 0x58ff98, intensity: 3 })),
 ];
 const AXLES = [-0.85, 0.85];
 // Vom Pferd (Mitte) bis zum Ortscheit sind es wie bei der Droschke 1,82 m; das Ortscheit hängt

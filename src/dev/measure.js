@@ -48,6 +48,8 @@ export async function measure(game, { seconds = 2, warmup = 0.8, points = POINTS
     record.n[label] = (record.n[label] || 0) + 1;
   };
   const rows = [];
+  // Der erste Punkt lag sonst 1–2 ms zu hoch: Gleich nach dem Betreten läuft der Ort noch an.
+  let first = true;
   try {
     for (const [name, x, z, yaw] of points) {
       game.mode = 'pause';
@@ -58,7 +60,8 @@ export async function measure(game, { seconds = 2, warmup = 0.8, points = POINTS
       game.player.apply();
       view.fade = 0;
       view.fadeTarget = 0;
-      await frames(warmup);
+      await frames(first ? warmup + 3 : warmup);
+      first = false;
       record = { sum: {}, n: {} };
       const fps = await frames(seconds);
       const r = record;

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { reportError } from '../../core/errors.js';
-import { Bag, cyl, merge, std } from '../kit.js';
+import { Bag, cyl, glowSprites, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 import { MIRROR_LAYER } from './ripples.js';
 
@@ -411,7 +411,6 @@ export function buildLamps(loc, positions, ironMat) {
   const postMesh = new THREE.InstancedMesh(post.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }), positions.length);
   const glassMesh = new THREE.InstancedMesh(glass, new THREE.MeshBasicMaterial({ color: new THREE.Color(4.2, 2.6, 1.1) }), positions.length);
   const m = new THREE.Matrix4();
-  const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
   const poolGeo = new THREE.PlaneGeometry(1, 1);
   poolGeo.rotateX(-Math.PI / 2);
   // Schicht jedes Lichtflecks in lampStill (bakeStillShade füllt sie).
@@ -438,17 +437,15 @@ export function buildLamps(loc, positions, ironMat) {
     spots.push({ x, y: y + FLAME, z, pool: i });
     m.makeScale(13, 1, 13).setPosition(x, y + 0.03, z);
     pools.setMatrixAt(i, m);
-    const s = new THREE.Sprite(glowMat.clone());
-    s.position.set(x, y + 3.8, z);
-    s.scale.setScalar(3.6);
-    s.layers.enable(MIRROR_LAYER);
-    scene.add(s);
-    glows.push({ s, x, z, y, seed: i * 1.7 });
+    glows.push({ x, y: y + 3.8, z, size: 3.6, opacity: 0.55, ground: y, seed: i * 1.7 });
   });
+  // Alle Scheine in einem Aufruf (glowSprites), die Deckkraft flackert je Laterne.
+  const glowMesh = glowSprites(glows, softDisc('lampGlow'), 0xffa858);
+  glowMesh.layers.enable(MIRROR_LAYER);
   postMesh.frustumCulled = glassMesh.frustumCulled = pools.frustumCulled = false;
   postMesh.layers.enable(MIRROR_LAYER);
   glassMesh.layers.enable(MIRROR_LAYER);
-  scene.add(postMesh, glassMesh, pools);
+  scene.add(postMesh, glassMesh, pools, glowMesh);
 
   // Nur die nächsten Laternen werfen echtes Licht. Die Anzahl bleibt fest, damit nichts neu kompiliert.
   const lights = [];
@@ -464,7 +461,7 @@ export function buildLamps(loc, positions, ironMat) {
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
   // weiter weg sieht als ihre Entfernung vermuten lässt.
   const ranked = [
-    ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.y + FLAME, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
+    ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.ground + FLAME, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
     ...(loc.extraLamps ?? []).map((e, i) => ({ x: e.x, z: e.z, ly: e.y, seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
   ];
   let timer = 0;
@@ -487,9 +484,8 @@ export function buildLamps(loc, positions, ironMat) {
       const fade = i < 4 ? 1 : 0.6;
       l.intensity = e.intensity * flicker * fade;
     });
-    for (const g of glows) {
-      g.s.material.opacity = 0.5 + 0.06 * Math.sin(t * 6 + g.seed);
-    }
+    glows.forEach((g, i) => glowMesh.setOpacity(i, 0.5 + 0.06 * Math.sin(t * 6 + g.seed)));
+    glowMesh.instanceColor.needsUpdate = true;
   });
 }
 

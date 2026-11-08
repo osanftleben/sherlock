@@ -60,6 +60,36 @@ export function merge(list) {
   return mergeGeometries(flat, false);
 }
 
+// Viele gleiche Lichtscheine (additiv, wie ein THREE.Sprite mit map und color) in einem einzigen
+// Zeichenaufruf. Jeder Sprite war ein eigener Aufruf; am Platz kamen so über hundert zusammen, und
+// schon das Abschicken kostete Zeit. spots: [{ x, y, z, size, opacity }]. Jede Fläche dreht sich im
+// Vertex-Shader zur Kamera wie ein Sprite. Die Deckkraft steckt in der Instanzfarbe: Beim additiven
+// Mischen (Farbe × Alpha) ist das dasselbe. setOpacity(i, o) ändert sie, danach
+// instanceColor.needsUpdate setzen.
+export function glowSprites(spots, map, color) {
+  const material = new THREE.MeshBasicMaterial({ map, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <project_vertex>',
+      `vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+      mvPosition.xy += transformed.xy * vec2(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz));
+      gl_Position = projectionMatrix * mvPosition;`,
+    );
+  };
+  material.customProgramCacheKey = () => 'glowSprites';
+  const mesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), material, spots.length);
+  const m = new THREE.Matrix4();
+  const c = new THREE.Color();
+  spots.forEach((s, i) => {
+    mesh.setMatrixAt(i, m.makeScale(s.size, s.size, 1).setPosition(s.x, s.y, s.z));
+    mesh.setColorAt(i, c.setScalar(s.opacity ?? 1));
+  });
+  // Die Scheine liegen über die ganze Stadt verteilt; was außer Sicht ist, schneidet die Grafikkarte weg.
+  mesh.frustumCulled = false;
+  mesh.setOpacity = (i, o) => mesh.instanceColor.setXYZ(i, o, o, o);
+  return mesh;
+}
+
 // Sammelt Teile mit eigenem Farbton, Ergebnis ist ein einziges Geometrieobjekt.
 export class Bag {
   constructor() {

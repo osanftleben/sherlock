@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
-import { Bag, addMesh, box, matte, merge, std } from '../kit.js';
+import { Bag, addMesh, box, glowSprites, matte, merge, std } from '../kit.js';
 import { idleFigure, makeFigure } from '../figures.js';
 import { cobble, plaster, signTexture, slate, softDisc, rng, streetWet, viaductBrick } from '../textures.js';
 import { BAY_W, addSign, createFacades } from './facades.js';
@@ -426,15 +426,13 @@ export function buildBerlin() {
   const doorIron = new Bag();
   const doorGlass = [];
   const doorWash = [];
-  const doorGlow = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
+  const doorGlows = [];
   const lanternOver = (bld, bay) => {
     const side = bay + 1.15 / BAY_W;
     const wall = bld.at(side, 3.07, 0);
     const out = bld.at(side, 3.07, 1).sub(wall);
-    const glow = new THREE.Sprite(doorGlow);
-    glow.position.copy(wallLantern(doorIron, doorGlass, wall, out, 0.45, doorWash));
-    glow.scale.setScalar(1.5);
-    scene.add(glow);
+    const { x, y, z } = wallLantern(doorIron, doorGlass, wall, out, 0.45, doorWash);
+    doorGlows.push({ x, y, z, size: 1.5, opacity: 0.45 });
   };
 
   shopSign(kessler, 2.5, 'Uhrmacher E. Kessler');
@@ -455,6 +453,7 @@ export function buildBerlin() {
   addMesh(scene, doorIron.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(doorGlass), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
   addMesh(scene, merge(doorWash), lampWash());
+  scene.add(glowSprites(doorGlows, softDisc('lampGlow'), 0xffa858));
   buildShopWindows(loc, { kessler, apotheke, destille, bank, pension });
 
   // Rückwege aus den Häusern: ein Schritt vor der Tür, mit Blick auf die Straße.

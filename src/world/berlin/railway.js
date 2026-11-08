@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Bag, addMesh, cyl, matte, merge, std } from '../kit.js';
+import { Bag, addMesh, cyl, glowSprites, matte, merge, std } from '../kit.js';
 import { ARCH_FRONT, TIMETABLE_SIZE, archFronts, fogPuff, hallWindow, rng, signTexture, softDisc, stationTimetable, viaductBrick } from '../textures.js';
 import { grimy } from './grime.js';
 import { addSign } from './facades.js';
@@ -179,13 +179,7 @@ export function buildRailway(loc, r) {
   addMesh(scene, lanterns.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.5 }));
   addMesh(scene, merge(flames), new THREE.MeshBasicMaterial({ color: LANTERN_GLASS }));
   addMesh(scene, merge(washes), lampWash());
-  const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending });
-  for (const p of glows) {
-    const s = new THREE.Sprite(glowMat);
-    s.position.copy(p);
-    s.scale.setScalar(1.5);
-    scene.add(s);
-  }
+  scene.add(glowSprites(glows.map(({ x, y, z }) => ({ x, y, z, size: 1.5, opacity: 0.45 })), softDisc('lampGlow'), 0xffa858));
   addMesh(scene, merge(pools), lightPool(0xc08040, 0.5));
   const deck = new Bag();
   const deckW = 49 * SEG;

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { addMesh, merge, std } from '../kit.js';
+import { addMesh, matte, merge, std } from '../kit.js';
 import { bark, rng, twigs } from '../textures.js';
 
 // Kahle Linden im November, wie sie um 1890 an Berliner Plätzen standen: ein kräftiger Stamm
@@ -54,18 +54,80 @@ function grow(out, s, dir, len, rad, depth, r) {
   grow(out, mid.clone().addScaledVector(bent, len * 0.22), rise(turn(bent, 0.75 + r() * 0.35, r)), len * (0.5 + r() * 0.15), rad * 0.5, depth - 1, r);
 }
 
-// Reisigkarten: zwei gekreuzte Flächen, unten am Zweig, nach außen gerichtet.
-function tipCards(tips, r) {
-  const cards = [];
+// Umriss des Reisigs in der Textur als Achteck (u, v), das alle gemalten Bildpunkte mit etwas Rand
+// umschließt. Die Karten bestehen nur aus dieser Fläche: Das Reisig füllt kaum 14 % des Quadrats,
+// und jeder leere Bildpunkt kostete trotzdem die ganze Lichtrechnung. Rund 1 100 Karten je Baum
+// überdecken sich vielfach; mit vollen Quadraten kosteten die sechs Linden am Markt 7 ms GPU-Zeit.
+function twigOutline(texture) {
+  const img = texture.image;
+  const S = img.width;
+  const data = img.getContext('2d').getImageData(0, 0, S, S).data;
+  const dirs = Array.from({ length: 8 }, (_, k) => [Math.cos((k * Math.PI) / 4), Math.sin((k * Math.PI) / 4)]);
+  const reach = dirs.map(() => -Infinity);
+  for (let y = 0; y < S; y++) {
+    for (let x = 0; x < S; x++) {
+      if (data[(y * S + x) * 4 + 3] === 0) continue;
+      // Bildpunktmitte in u, v; die Leinwand steht auf dem Kopf (flipY).
+      const u = (x + 0.5) / S;
+      const v = 1 - (y + 0.5) / S;
+      dirs.forEach(([dx, dy], k) => (reach[k] = Math.max(reach[k], dx * u + dy * v)));
+    }
+  }
+  // Rand: drei Bildpunkte, weil die gröberen Mipmap-Stufen den Strich etwas verbreitern.
+  const d = reach.map((v) => v + 3 / S);
+  const out = [];
+  for (let k = 0; k < 8; k++) {
+    const [ax, ay] = dirs[k];
+    const [bx, by] = dirs[(k + 1) % 8];
+    const da = d[k];
+    const db = d[(k + 1) % 8];
+    const det = ax * by - ay * bx;
+    const u = (da * by - ay * db) / det;
+    const v = (ax * db - da * bx) / det;
+    out.push([Math.min(1, Math.max(0, u)), Math.min(1, Math.max(0, v))]);
+  }
+  return out;
+}
+
+// Reisigkarten: zwei gekreuzte Flächen, unten am Zweig, nach außen gerichtet, im Umriss outline.
+function tipCards(tips, outline, r) {
+  const n = outline.length;
+  const count = tips.length * 2;
+  const pos = new Float32Array(count * n * 3);
+  const nrm = new Float32Array(count * n * 3);
+  const uvs = new Float32Array(count * n * 2);
+  const index = [];
+  const m = new THREE.Matrix4();
+  const rot = new THREE.Matrix4();
+  const p = new THREE.Vector3();
+  const nn = new THREE.Vector3();
+  let c = 0;
   for (const [base, dir, len] of tips) {
     const size = 0.9 + len * 0.55 + r() * 0.3;
     const roll = r() * Math.PI;
     const q = new THREE.Quaternion().setFromUnitVectors(UP, dir);
     for (const a of [roll, roll + Math.PI / 2]) {
-      cards.push(new THREE.PlaneGeometry(size, size).translate(0, size * 0.48, 0).rotateY(a).applyQuaternion(q).translate(base.x, base.y, base.z));
+      // Wie früher PlaneGeometry(size, size), um 0,48 size hochgeschoben, um a gedreht, nach dir gekippt.
+      m.makeRotationFromQuaternion(q).multiply(rot.makeRotationY(a)).setPosition(base);
+      nn.set(0, 0, 1).transformDirection(m);
+      const first = c * n;
+      outline.forEach(([u, v], i) => {
+        p.set((u - 0.5) * size, (v - 0.02) * size, 0).applyMatrix4(m);
+        p.toArray(pos, (first + i) * 3);
+        nn.toArray(nrm, (first + i) * 3);
+        uvs[(first + i) * 2] = u;
+        uvs[(first + i) * 2 + 1] = v;
+      });
+      for (let i = 1; i < n - 1; i++) index.push(first, first + i, first + i + 1);
+      c++;
     }
   }
-  return merge(cards);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+  g.setIndex(index);
+  return g;
 }
 
 // Baumrost und Schutzgitter aus Gusseisen.
@@ -94,7 +156,13 @@ export function buildTrees(loc, spots, ironMat) {
   const { scene } = loc;
   const barkTex = bark();
   const woodMat = std({ map: barkTex, color: 0x9c9890, roughness: 0.8 });
-  const twigMat = std({ map: twigs(), color: 0x4a3f36, roughness: 0.9, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  // Das Reisig wird ausgestanzt statt überblendet: Es schreibt die Tiefe, sodass verdeckte Karten
+  // gar nicht erst gerechnet werden, und die Kanten glättet Alpha-to-Coverage im 4×-MSAA-Puffer.
+  // Lambert statt PBR, denn nasses Reisig glänzt bei Rauheit 0,9 ohnehin nicht. Zusammen mit den
+  // zugeschnittenen Karten (twigOutline) halbiert das die Kosten der Linden ungefähr.
+  const twigTex = twigs();
+  const outline = twigOutline(twigTex);
+  const twigMat = matte({ map: twigTex, color: 0x4a3f36, alphaTest: 0.25, alphaToCoverage: true, side: THREE.DoubleSide });
   const irons = [];
   spots.forEach(([x, z], i) => {
     const r = rng(4100 + i * 17);
@@ -116,9 +184,8 @@ export function buildTrees(loc, spots, ironMat) {
     }
     grow(out, base.clone().addScaledVector(lean, H), lean, 3.2, 0.15, 3, r);
     addMesh(scene, merge(out.wood), woodMat);
-    // Ein Mesh je Baum, damit die durchscheinenden Karten mit Laternenschein und Regen
-    // richtig sortiert werden.
-    addMesh(scene, tipCards(out.tips, r), twigMat);
+    // Ein Mesh je Baum, damit Bäume außer Sicht gar nicht erst gezeichnet werden.
+    addMesh(scene, tipCards(out.tips, outline, r), twigMat);
     irons.push(guard(x, z));
     loc.collide(x - 0.5, x + 0.5, z - 0.5, z + 0.5);
   });

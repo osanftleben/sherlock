@@ -1367,7 +1367,34 @@ export function trotHorse(horse, phase) {
     poseLeg(leg, Math.sin(q) * 0.42, flex * flex * (3 - 2 * flex));
   });
   head.rotation.x = tilt + Math.sin(phase * 2) * 0.03;
+  head.rotation.y = 0;
   tail.rotation.x = 0.15 + Math.sin(phase * 2 + 1) * 0.04;
+  tail.rotation.z = 0;
+}
+
+// Schritt: Viertakt, die Hufe setzen nacheinander auf, links hinten, links vorn, rechts hinten,
+// rechts vorn (legs: rechts vorn, links vorn, rechts hinten, links hinten). Jedes Bein trägt gut
+// sechs Zehntel der Zeit und wird beim Vorschwingen nur flach angehoben; der Kopf nickt bei jedem
+// Vorderhuf. phase wächst um 2π je Doppelschritt, beim Rückwärtsrichten fällt sie.
+const WALK_LAND = [0.75, 0.25, 0.5, 0];
+const WALK_DUTY = 0.62;
+export function walkHorse(horse, phase) {
+  const { legs, head, tail, tilt } = horse.userData;
+  const cycle = phase / (Math.PI * 2);
+  legs.forEach((leg, i) => {
+    const u = cycle - WALK_LAND[i];
+    const f = u - Math.floor(u);
+    if (f < WALK_DUTY) {
+      poseLeg(leg, (-1 + (2 * f) / WALK_DUTY) * 0.3, 0);
+    } else {
+      const k = (f - WALK_DUTY) / (1 - WALK_DUTY);
+      poseLeg(leg, (1 - 2 * k * k * (3 - 2 * k)) * 0.3, Math.sin(Math.PI * k) * 0.55);
+    }
+  });
+  head.rotation.x = tilt + 0.02 + Math.sin(phase * 2) * 0.045;
+  head.rotation.y = 0;
+  tail.rotation.x = 0.1;
+  tail.rotation.z = Math.sin(phase) * 0.05;
 }
 
 // Stehendes Pferd: Kopf und Schweif bewegen sich ein wenig, ab und zu stampft ein Huf
@@ -1376,8 +1403,12 @@ export function idleHorse(horse, t) {
   const { legs, head, tail, tilt } = horse.userData;
   head.rotation.x = tilt + Math.sin(t * 0.6) * 0.03 + Math.max(0, Math.sin(t * 2.3)) * 0.02;
   head.rotation.y = Math.sin(t * 0.23) * 0.08;
+  tail.rotation.x = 0;
   tail.rotation.z = Math.sin(t * 1.1) * Math.max(0, Math.sin(t * 0.17)) * 0.25;
   const lift = Math.min(1, Math.max(0, Math.sin(t * 0.5) - 0.97) / 0.02);
+  // Wer eben noch gelaufen ist, steht jetzt auf allen vieren.
+  poseLeg(legs[1], 0, 0);
+  poseLeg(legs[2], 0, 0);
   poseLeg(legs[0], -0.05 * lift, 0.8 * lift);
   // Ein Hinterbein ruht: Die Röhre steht etwas vor, der Huf nur auf der Spitze.
   const rest = legs[3];

@@ -12,7 +12,6 @@ export class Audio {
     this.nextClack = 0;
     this.nextClank = 0;
     this.nextHop = 0;
-    this.nextTram = 25;
     this.nextDrop = 0;
   }
 
@@ -286,6 +285,30 @@ export class Audio {
     roll.connect(rollGain).connect(this.cabOut);
     this.nextBump = 0;
 
+    // Rollender Pferdebahnwagen (tramline.js): gleichmäßiges, tiefes Rollen der Räder auf den
+    // Schienen, leise darüber das Singen des Eisens; Fenster und Türen klappern (update), an jedem
+    // Schienenstoß schlägt es (railJoint).
+    this.tramPan = ctx.createStereoPanner();
+    this.tramOut = ctx.createGain();
+    this.tramOut.gain.value = 0;
+    this.tramOut.connect(this.tramPan).connect(this.master);
+    const tramRoll = ctx.createBiquadFilter();
+    tramRoll.type = 'lowpass';
+    tramRoll.frequency.value = 230;
+    const tramRollGain = ctx.createGain();
+    tramRollGain.gain.value = 0.16;
+    this.loop(tramRoll);
+    tramRoll.connect(tramRollGain).connect(this.tramOut);
+    const sing = ctx.createBiquadFilter();
+    sing.type = 'bandpass';
+    sing.frequency.value = 1150;
+    sing.Q.value = 3;
+    const singGain = ctx.createGain();
+    singGain.gain.value = 0.025;
+    this.loop(sing);
+    sing.connect(singGain).connect(this.tramOut);
+    this.nextRattle = 0;
+
     this.setEnvironment(this.env);
   }
 
@@ -391,9 +414,10 @@ export class Audio {
 
   // Ein Hufpaar im Trab: Hufeisen auf Pflasterstein, ein heller Klick, ein hohles „Klopp“ und ein
   // kurzer Stoß darunter; die beiden diagonalen Hufe fast gleichzeitig, der zweite etwas leiser.
-  hoof(vol, pan) {
+  // single: ein einzelner Huf, wie im Schritt.
+  hoof(vol, pan, { single = false } = {}) {
     const out = this.panned(pan * 0.85);
-    for (const [when, k] of [[0, 1], [0.018 + Math.random() * 0.02, 0.75]]) {
+    for (const [when, k] of single ? [[0, 1]] : [[0, 1], [0.018 + Math.random() * 0.02, 0.75]]) {
       const v = vol * k * (0.85 + Math.random() * 0.3);
       this.burst({ freq: 3200 + Math.random() * 800, q: 3, dur: 0.022, gain: 0.7 * v, when, out });
       this.burst({ freq: 1000 + Math.random() * 250, q: 2.5, dur: 0.06, gain: 1.6 * v, when, out });
@@ -558,13 +582,28 @@ export class Audio {
     }
   }
 
-  // Pferdebahn in einer Nachbarstraße: das Glöckchen am Wagen, zweimal angeschlagen.
-  trambell() {
-    const out = this.panned((Math.random() - 0.5) * 1.4, 3);
-    for (const when of [0, 0.32 + Math.random() * 0.1]) {
-      this.tone({ freq: 1760, dur: 0.9, gain: 0.014, when, out });
-      this.tone({ freq: 2790, dur: 0.5, gain: 0.007, when, out });
-      this.tone({ freq: 4330, dur: 0.25, gain: 0.003, when, out });
+  // Glocke am Pferdebahnwagen (tramline.js): rings Schläge, die späteren etwas leiser.
+  tramBell(vol, pan, { rings = 2 } = {}) {
+    const out = this.panned(pan * 0.85, 3);
+    let when = 0;
+    for (let i = 0; i < rings; i++) {
+      const k = vol * (i ? 0.8 : 1);
+      this.tone({ freq: 1760, dur: 0.9, gain: 0.06 * k, when, out });
+      this.tone({ freq: 2790, dur: 0.5, gain: 0.03 * k, when, out });
+      this.tone({ freq: 4330, dur: 0.25, gain: 0.013 * k, when, out });
+      when += 0.3 + Math.random() * 0.1;
+    }
+  }
+
+  // Schienenstoß unter dem Pferdebahnwagen: ein dumpfer Schlag der Achse, das Klacken des Rads an
+  // der Lasche und ein heller Rest; über die Weichen des Gleiswechsels schlägt es härter, zweimal.
+  railJoint(vol, pan, { heavy = false } = {}) {
+    const out = this.panned(pan * 0.8);
+    for (const [when, k] of heavy ? [[0, 1.5], [0.05, 1.1]] : [[0, 1]]) {
+      const v = vol * k;
+      this.burst({ freq: 140, q: 1.1, dur: 0.11, gain: 0.9 * v, when, out });
+      this.burst({ freq: 620, q: 2.5, dur: 0.05, gain: 0.35 * v, when, out });
+      this.burst({ freq: 2300 + Math.random() * 400, q: 6, dur: 0.025, gain: 0.25 * v, when, out });
     }
   }
 
@@ -700,8 +739,9 @@ export class Audio {
   // train: Stadtbahn aus railway.js ({ roll, loco }, null, wenn kein Zug fährt); river aus river.js
   // (Abstand und Seite von Quaimauer und Kahn), fehlt in Innenräumen. sounds: Ereignisse des
   // Orts ({ type: 'hoof' | 'stamp' | 'snort', vol, pan }), werden hier abgespielt und geleert.
-  // cab: Pegel und Seite der fahrenden Droschke (traffic.js).
-  update(dt, train, river, sounds, cab, gutter) {
+  // cab: Pegel und Seite der fahrenden Droschke (traffic.js), tram die des Pferdebahnwagens
+  // ({ vol, pan, speed, moving }, tramline.js).
+  update(dt, train, river, sounds, cab, gutter, tram) {
     if (!this.ctx) {
       if (sounds) sounds.length = 0;
       return;
@@ -722,6 +762,14 @@ export class Audio {
     if (this.nextBump < 0) {
       if (outdoors && cab?.moving && cab.vol > 0.02) this.burst({ freq: 120 + Math.random() * 110, q: 1.3, dur: 0.05 + Math.random() * 0.04, gain: 0.25 + Math.random() * 0.25, out: this.cabOut });
       this.nextBump = 0.06 + Math.random() * 0.16;
+    }
+    const tramLevel = outdoors && tram?.moving ? tram.vol * Math.min(1, 0.35 + tram.speed / 3) : 0;
+    this.tramOut.gain.setTargetAtTime(tramLevel, now, 0.3);
+    if (tram) this.tramPan.pan.setTargetAtTime(tram.pan * 0.8, now, 0.1);
+    this.nextRattle -= dt;
+    if (this.nextRattle < 0) {
+      if (tramLevel > 0.02) this.burst({ freq: 700 + Math.random() * 900, q: 2.2, dur: 0.03 + Math.random() * 0.03, gain: 0.12 + Math.random() * 0.12, out: this.tramOut });
+      this.nextRattle = 0.08 + Math.random() * 0.25;
     }
     const nearGutter = outdoors && gutter ? gutter.vol : 0;
     this.gutterOut.gain.setTargetAtTime(nearGutter, now, 0.2);
@@ -754,11 +802,6 @@ export class Audio {
       if (this.nextHoof < 0) {
         this.hooves();
         this.nextHoof = 18 + Math.random() * 30;
-      }
-      this.nextTram -= dt;
-      if (this.nextTram < 0) {
-        this.trambell();
-        this.nextTram = 50 + Math.random() * 80;
       }
     }
     this.nextBell -= dt;

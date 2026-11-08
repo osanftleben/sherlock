@@ -152,7 +152,7 @@ export function makeDroschke({ driver: withDriver = true, horse: horseColor = 0x
 }
 
 // Stab von a nach b, Querschnitt r.
-function rod(a, b, r, sides = 6) {
+export function rod(a, b, r, sides = 6) {
   const d = new THREE.Vector3().subVectors(b, a);
   const geo = new THREE.CylinderGeometry(r, r, d.length(), sides);
   geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()));
@@ -160,7 +160,7 @@ function rod(a, b, r, sides = 6) {
 }
 
 // Durchhängender Riemen von a nach b, in n Stücken.
-function strap(bag, a, b, sag, r, color, n = 4) {
+export function strap(bag, a, b, sag, r, color, n = 4) {
   let prev = a;
   for (let i = 1; i <= n; i++) {
     const k = i / n;
@@ -205,19 +205,18 @@ function harness(withDriver) {
 
 export function buildTraffic(loc, r) {
   const { scene } = loc;
-  // Droschke fährt die Rosenthaler rauf und runter, Wende im Platz.
+  // Droschke fährt die Rosenthaler rauf und runter, Wende im Platz. Die Spuren liegen weit genug
+  // außen, dass sie neben dem Pferdebahnwagen Platz hat, auch wo der über den Gleiswechsel schwenkt.
+  // Vor der Baustelle wendet sie über die Gleise: Fährt dort gerade die Bahn (loc.tramZone,
+  // tramline.js), wartet sie davor, und solange sie wendet (loc.cab.turning), wartet die Bahn.
+  const LANE = 4.3;
+  // Genug Stützpunkte auf den Geraden, sonst baucht die Kurve vor den Wenden bis an den Bordstein aus.
   const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(3.6, 0, -180),
-    new THREE.Vector3(3.6, 0, -90),
-    new THREE.Vector3(3.6, 0, -30),
-    new THREE.Vector3(6, 0, -4),
-    new THREE.Vector3(0, 0, 8),
-    new THREE.Vector3(-6, 0, -4),
-    new THREE.Vector3(-3.6, 0, -30),
-    new THREE.Vector3(-3.6, 0, -90),
-    new THREE.Vector3(-3.6, 0, -180),
-    new THREE.Vector3(0, 0, -184),
-  ], true);
+    [LANE, -176], [LANE, -150], [LANE, -110], [LANE, -70], [LANE, -36],
+    [6, -4], [0, 8], [-6, -4],
+    [-LANE, -36], [-LANE, -70], [-LANE, -110], [-LANE, -150], [-LANE, -176],
+    [0, -184],
+  ].map(([x, z]) => new THREE.Vector3(x, 0, z)), true);
   const cab = makeDroschke({ color: 0x24121a, horse: 0x4a2c1a, number: '2215' });
   scene.add(cab);
   const light = new THREE.Vector3();
@@ -230,14 +229,16 @@ export function buildTraffic(loc, r) {
     const p = curve.getPointAt(u);
     curve.getPointAt((u + 0.002) % 1, ahead);
     const dist = Math.hypot(p.x - camera.position.x, p.z - camera.position.z);
-    const blocked = dist < 7 && (camera.position.x - p.x) * (ahead.x - p.x) + (camera.position.z - p.z) * (ahead.z - p.z) > 0;
+    const turning = p.z < -174;
+    const enteringTurn = !turning && p.z < -166 && ahead.z < p.z;
+    const blocked = (dist < 7 && (camera.position.x - p.x) * (ahead.x - p.x) + (camera.position.z - p.z) * (ahead.z - p.z) > 0) || (enteringTurn && loc.tramZone);
     const speed = blocked ? 0 : 4.2;
     u = (u + (speed * dt) / pathLen) % 1;
     cab.position.set(p.x, 0, p.z);
     cab.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z);
     // Rattern der Räder (audio.js) und je halbem Schritt ein Hufpaar, so wie die Beine schwingen.
     const ear = hearing(camera, p.x, p.z, 45);
-    loc.cab = { vol: ear.vol, pan: ear.pan, moving: speed > 0 };
+    loc.cab = { vol: ear.vol, pan: ear.pan, moving: speed > 0, turning };
     if (speed > 0) {
       phase += dt * 9;
       trotHorse(cab.userData.horse, phase);
@@ -310,6 +311,15 @@ export function buildTraffic(loc, r) {
     scene.add(fig);
     return w;
   });
+  loc.walkers = walkers;
+  // Vor dem Pferdebahnwagen bleibt man stehen (loc.tramBlockers, tramline.js); dauert es, kehrt man um.
+  const tramAhead = (w, x, z) => {
+    const k = (0.6 * w.dir) / w.len;
+    const nx = x + (w.to.x - w.from.x) * k;
+    const nz = z + (w.to.y - w.from.y) * k;
+    for (const b of loc.tramBlockers ?? []) if ((nx - b.x) ** 2 + (nz - b.z) ** 2 < b.r * b.r) return true;
+    return false;
+  };
   // Wer am Ende seines Wegs ankommt, biegt dort ab oder geht ins Haus, wenn man es nicht sieht:
   // Er verschwindet und kommt nach einer Weile an einem Ende wieder, das ebenfalls nicht im Blick
   // liegt. Sieht man das Ende, bleibt er stehen, sieht sich um und kehrt um. Unterwegs bleibt
@@ -355,7 +365,17 @@ export function buildTraffic(loc, r) {
         w.fig.visible = true;
       }
       let [x, z] = at(w, w.s);
-      if (w.state === 'walk') {
+      if (w.state === 'walk' && tramAhead(w, x, z)) {
+        idleFigure(w.fig, t, camera.position);
+        w.waited = (w.waited ?? 0) + dt;
+        if (w.waited > 3) {
+          w.waited = 0;
+          w.state = 'turn';
+          w.timer = 1.6 + Math.random() * 1.6;
+          w.dir = -w.dir;
+        }
+      } else if (w.state === 'walk') {
+        w.waited = 0;
         const dx = camera.position.x - x;
         const dz = camera.position.z - z;
         if (dx * dx + dz * dz > 1.3) {

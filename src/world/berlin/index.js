@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Location } from '../../engine/location.js';
 import { Bag, addMesh, box, matte, merge, std } from '../kit.js';
+import { idleFigure, makeFigure } from '../figures.js';
 import { cobble, plaster, signTexture, slate, softDisc, rng, streetWet, viaductBrick } from '../textures.js';
 import { BAY_W, addSign, createFacades } from './facades.js';
 import { buildRailway } from './railway.js';
@@ -14,6 +15,7 @@ import { LANTERN_GLASS, buildLamps, lampWash, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
+import { buildTramLine } from './tramline.js';
 import { DRY, buildWeather, dryRects } from './weather.js';
 import { DRIP_GLSL, dripUniforms } from './drips.js';
 import { TRAM_GLSL } from './tramway.js';
@@ -233,15 +235,22 @@ export function buildBerlin() {
   // Baustellen an den Rändern der begehbaren Welt.
   // Wird das nächste Viertel gebaut, verschwinden diese Sperren einfach.
   // away: Seite, auf der der Aushub liegt (-1 spiegelt ihn), immer abseits des Spielers.
-  const barrier = (cx, cz, along, width, away = 1) => {
+  // gap: halbe Breite einer Durchfahrt in der Mitte, die ein Schlagbaum schließt (nur along 'x',
+  // away 1). Holmes kommt trotzdem nicht durch, der Bauwächter lässt nur die Pferdebahn passieren.
+  const barrier = (cx, cz, along, width, away = 1, { gap = 0, say } = {}) => {
     const b = new Bag();
     const w = width;
     const add = (ox, oz, sx, sy, sz, y, c) => (along === 'x'
       ? b.box(c, sx, sy, sz, cx + ox, y, cz + oz)
       : b.box(c, sz, sy, sx, cx + oz, y, cz + ox));
-    add(0, 0, w, 0.16, 0.08, 1.05, 0xa8362c);
-    add(0, 0, w, 0.16, 0.08, 0.55, 0xd6cfba);
-    for (let o = -w / 2; o <= w / 2; o += 3) add(o, 0, 0.1, 1.2, 0.1, 0.6, 0x2c2015);
+    for (const [o0, o1] of gap ? [[-w / 2, -gap], [gap, w / 2]] : [[-w / 2, w / 2]]) {
+      add((o0 + o1) / 2, 0, o1 - o0, 0.16, 0.08, 1.05, 0xa8362c);
+      add((o0 + o1) / 2, 0, o1 - o0, 0.16, 0.08, 0.55, 0xd6cfba);
+    }
+    for (let o = -w / 2; o <= w / 2; o += 3) if (!gap || Math.abs(o) > gap + 0.4) add(o, 0, 0.1, 1.2, 0.1, 0.6, 0x2c2015);
+    // Mit Durchfahrt rückt alles, was zwischen den Torpfosten läge, seitlich hinaus (reach: wie
+    // weit es sonst höchstens von der Mitte läge, margin: wie weit es über seinen Platz hinausragt).
+    const aside = (ox, reach, margin) => (gap ? (ox < 0 ? -1 : 1) * (gap + margin + (Math.abs(ox) * (w / 2 - gap - margin - 0.4)) / reach) : ox);
     // Aushub hinter der Absperrung: Erdhaufen, Bretter, Tonrohre für den Kanal.
     // Je Haufen genau zwei Zahlen aus r wie früher, damit sich der Zufall des Viertels
     // dahinter (Verkehr, Wetter) nicht verschiebt. Alles Weitere aus eigenem Zufall.
@@ -257,7 +266,7 @@ export function buildBerlin() {
       return geo;
     };
     for (let i = 0; i < 6; i++) {
-      const ox = (i / 5 - 0.5) * w * 0.8;
+      const ox = aside((i / 5 - 0.5) * w * 0.8, w * 0.4, 2.9);
       const oz = -2 - r() * 2;
       const h = 0.9 + r() * 0.7;
       // Halbkugel, zum Kegel hin abgeflacht und unregelmäßig verbeult: Berliner Sand.
@@ -284,7 +293,7 @@ export function buildBerlin() {
       const plank = box(0.28, 2.2, 0.04, 0, 1.0, 0);
       plank.rotateX(-0.35 - rs() * 0.2);
       plank.rotateY((rs() - 0.5) * 0.4);
-      b.add(place(plank, (rs() - 0.5) * w * 0.9, -0.45), 0x4a3522);
+      b.add(place(plank, aside((rs() - 0.5) * w * 0.9, w * 0.45, 0.5), -0.45), 0x4a3522);
     }
     for (let i = 0; i < 3; i++) {
       // Tonrohre
@@ -292,9 +301,10 @@ export function buildBerlin() {
       pipe.rotateZ(Math.PI / 2);
       pipe.rotateY(rs() * Math.PI);
       pipe.translate(0, 0.32, 0);
-      b.add(place(pipe, (rs() - 0.5) * w * 0.7, -1.2 - rs() * 2.6), 0x7a4a30);
+      b.add(place(pipe, aside((rs() - 0.5) * w * 0.7, w * 0.35, 1.0), -1.2 - rs() * 2.6), 0x7a4a30);
     }
-    addMesh(scene, b.build(), std({ vertexColors: true, roughness: 1, side: THREE.DoubleSide }));
+    const mat = std({ vertexColors: true, roughness: 1, side: THREE.DoubleSide });
+    addMesh(scene, b.build(), mat);
     if (along === 'x') loc.collide(cx - w / 2, cx + w / 2, cz - 0.4, cz + 0.4);
     else loc.collide(cx - 0.4, cx + 0.4, cz - w / 2, cz + w / 2);
     loc.addHotspot({
@@ -302,14 +312,88 @@ export function buildBerlin() {
       radius: 1.4,
       range: 4,
       label: 'Kanalbau',
-      action: { say: 'Hobrechts Kanalisation frisst sich durch Berlin. Hier ist die Straße aufgerissen und für heute kein Durchkommen. Weiter draußen wartet der Rest der Stadt – ein andermal.' },
+      action: { say: say ?? 'Hobrechts Kanalisation frisst sich durch Berlin. Hier ist die Straße aufgerissen und für heute kein Durchkommen. Weiter draußen wartet der Rest der Stadt – ein andermal.' },
     });
     const warn = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('warn'), color: 0xff5a2c, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
     warn.position.set(cx, 1.5, cz);
     warn.scale.setScalar(1.3);
     scene.add(warn);
+    if (gap) tramGate(cx, cz, gap, mat, warn);
   };
-  barrier(0, -188, 'x', 20);
+
+  // Schlagbaum über der Durchfahrt für die Pferdebahn: Drehpunkt am westlichen Torpfosten, das
+  // freie Ende liegt in der Gabel am östlichen, am kurzen Ende ein Kasten mit Steinen als
+  // Gegengewicht. Daneben der Bauwächter mit seiner Laterne; er hebt den Baum, sobald ein Wagen
+  // kommt (loc.tramGate.want, tramline.js), und senkt ihn, wenn der durch ist.
+  const tramGate = (cx, cz, gap, mat, warn) => {
+    const POLE_Y = 1.0;
+    const PZ = cz + 0.17; // auf der Platzseite neben den Holmen, damit das Gegengewicht frei schwingt
+    const WOODC = 0x2c2015;
+    const IRONC = 0x1a1a1a;
+    const b = new Bag();
+    for (const s of [-1, 1]) b.box(WOODC, 0.18, 1.32, 0.18, cx + s * gap, 0.66, cz);
+    // Gabel am östlichen Pfosten, Bolzen durch den westlichen.
+    b.box(WOODC, 0.2, 0.06, 0.2, cx + gap - 0.02, POLE_Y - 0.08, PZ);
+    for (const dz of [-0.075, 0.075]) b.box(IRONC, 0.04, 0.2, 0.025, cx + gap - 0.02, POLE_Y, PZ + dz);
+    b.add(new THREE.CylinderGeometry(0.03, 0.03, 0.34, 8).rotateX(Math.PI / 2).translate(cx - gap, POLE_Y, cz + 0.12), IRONC);
+    // Rote Warnlaterne obenauf am Gabelpfosten.
+    b.box(IRONC, 0.16, 0.2, 0.16, cx + gap, 1.42, cz);
+    b.add(new THREE.ConeGeometry(0.13, 0.1, 4).rotateY(Math.PI / 4).translate(cx + gap, 1.57, cz), IRONC);
+    addMesh(scene, b.build(), mat);
+    const lampGlass = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.13, 0.17), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.35, 0.12) }));
+    lampGlass.position.set(cx + gap, 1.42, cz);
+    scene.add(lampGlass);
+    warn.position.set(cx + gap, 1.42, cz);
+    warn.scale.setScalar(0.9);
+
+    // Der Baum selbst, rot und weiß gestrichen, zum freien Ende dünner.
+    const arm = new THREE.Group();
+    arm.position.set(cx - gap, POLE_Y, PZ);
+    const pole = new Bag();
+    const len = 2 * gap + 0.12;
+    const n = 9;
+    for (let k = 0; k < n; k++) {
+      const d = 0.12 - (0.045 * (k + 0.5)) / n;
+      pole.box(k % 2 ? 0xd6cfba : 0xa8362c, len / n, d, d, (k + 0.5) * (len / n), 0, 0);
+    }
+    pole.box(WOODC, 1.0, 0.11, 0.11, -0.5, 0, 0);
+    pole.box(0x4a4640, 0.36, 0.3, 0.24, -0.82, -0.08, 0);
+    pole.box(IRONC, 0.38, 0.03, 0.26, -0.82, 0.075, 0);
+    arm.add(new THREE.Mesh(pole.build(), mat));
+    scene.add(arm);
+
+    // Bauwächter: Joppe, Schal, Mütze, die Laterne in der Linken.
+    const guard = makeFigure({ coat: 0x2e2a24, trousers: 0x24201a, neck: 'scarf', tie: 0x4a3426, hat: 'cap', hatColor: 0x1e1c18, moustache: 'walrus', beard: 'stubble', hair: 0x6a6258, lantern: true, build: 'stout', height: 1.7 });
+    const gx = cx - gap - 1.05;
+    const gz = cz + 0.95;
+    guard.position.set(gx, 0, gz);
+    guard.rotation.y = Math.PI / 2;
+    scene.add(guard);
+    loc.collide(gx - 0.3, gx + 0.3, gz - 0.3, gz + 0.3);
+    loc.addHotspot({
+      pos: [gx, 1.45, gz],
+      radius: 0.6,
+      range: 3.2,
+      label: 'Bauwächter',
+      action: { say: '„Hier is zu, der Herr. Bloß die Pferdebahn lass ick durch, die hat ihre Gleise mitten durch die Baustelle. Morjen früh is det Rohr drin, denn können Se wieder.“ Die Laterne in der Linken, behält er mich im Blick.' },
+    });
+
+    const gate = (loc.tramGate = { want: false, k: 0, angle: 0, open: false, watch: null });
+    loc.onUpdate((dt, t, { camera }) => {
+      // Gut drei Sekunden zum Heben, etwas länger zum Senken; offen erst, wenn er ganz oben steht.
+      gate.k = THREE.MathUtils.clamp(gate.k + (gate.want ? dt / 3.2 : -dt / 4.5), 0, 1);
+      gate.angle = 1.45 * THREE.MathUtils.smoothstep(gate.k, 0, 1);
+      gate.open = gate.k >= 1;
+      arm.rotation.z = gate.angle;
+      // Solange er den Baum bedient, sieht er dem Wagen nach, sonst dem, der vor ihm steht.
+      const busy = gate.want || gate.k > 0;
+      idleFigure(guard, t, busy && gate.watch ? gate.watch : camera.position);
+    });
+  };
+  barrier(0, -188, 'x', 20, 1, {
+    gap: 3.3,
+    say: 'Hobrechts Kanalisation frisst sich durch Berlin. Hier ist die Straße aufgerissen und für heute kein Durchkommen; nur die Pferdebahn lässt der Bauwächter auf ihren Gleisen durch. Weiter draußen wartet der Rest der Stadt – ein andermal.',
+  });
   barrier(127, -100, 'z', 12, -1);
   barrier(-168, -8, 'z', 14);
   barrier(-145, 38, 'z', 14);
@@ -410,6 +494,7 @@ export function buildBerlin() {
   buildClutter(loc, facades.shopFronts);
 
   buildTraffic(loc, r);
+  buildTramLine(loc);
   buildWeather(loc, r);
   buildLife(loc);
   buildSmoke(loc, { chimneys: facades.chimneys });

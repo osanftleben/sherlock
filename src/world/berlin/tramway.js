@@ -29,6 +29,98 @@ export const TRAM = {
   far: 90,
 };
 
+// --- Fahrwege ------------------------------------------------------------------------------
+// Linien entlang der Gleismitte mit ihrer Bogenlänge s, dicht genug gerastert, dass man dazwischen
+// gerade rechnen darf. Hinter den Enden wird geradeaus weitergerechnet.
+export class TramPath {
+  constructor(points) {
+    const n = points.length;
+    this.x = new Float64Array(n);
+    this.z = new Float64Array(n);
+    this.s = new Float64Array(n);
+    points.forEach(([x, z], i) => {
+      this.x[i] = x;
+      this.z[i] = z;
+      if (i > 0) this.s[i] = this.s[i - 1] + Math.hypot(x - this.x[i - 1], z - this.z[i - 1]);
+    });
+    this.length = this.s[n - 1];
+  }
+
+  // Abschnitt i mit s[i] <= s < s[i + 1], an den Enden der erste bzw. letzte.
+  seek(s) {
+    let lo = 0;
+    let hi = this.s.length - 2;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (this.s[mid] <= s) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  }
+
+  // Punkt bei s in out.x / out.z.
+  at(s, out) {
+    const i = this.seek(s);
+    const len = this.s[i + 1] - this.s[i];
+    const k = len > 0 ? (s - this.s[i]) / len : 0;
+    out.x = this.x[i] + (this.x[i + 1] - this.x[i]) * k;
+    out.z = this.z[i] + (this.z[i + 1] - this.z[i]) * k;
+    return out;
+  }
+
+  // Fahrtrichtung bei s als Einheitsvektor in out.x / out.z.
+  dir(s, out) {
+    const i = this.seek(s);
+    const dx = this.x[i + 1] - this.x[i];
+    const dz = this.z[i + 1] - this.z[i];
+    const d = Math.hypot(dx, dz) || 1;
+    out.x = dx / d;
+    out.z = dz / d;
+    return out;
+  }
+
+  // Erstes s, an dem die Linie die Höhe z (bzw. die Querlage x) erreicht.
+  cross(key, v) {
+    const a = this[key];
+    for (let i = 0; i < a.length - 1; i++) {
+      if ((a[i] - v) * (a[i + 1] - v) <= 0 && a[i] !== a[i + 1]) return this.s[i] + ((v - a[i]) / (a[i + 1] - a[i])) * (this.s[i + 1] - this.s[i]);
+    }
+    return null;
+  }
+}
+
+const smooth = (q) => q * q * (3 - 2 * q);
+function line(pts, x1, z1, step = 1) {
+  const [x0, z0] = pts[pts.length - 1];
+  const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, z1 - z0) / step));
+  for (let i = 1; i <= n; i++) pts.push([x0 + ((x1 - x0) * i) / n, z0 + ((z1 - z0) * i) / n]);
+}
+function curve(pts, f, n) {
+  for (let i = 1; i <= n; i++) pts.push(f(i / n));
+}
+
+// Hinein: aus der Querstraße (dort steckt der Wagen noch hinter den Häusern) über den äußeren
+// Bogen und das westliche Gleis bis über das Stumpfende hinaus, denn das Pferd geht vor dem Wagen.
+// Hinaus: von der Endstelle das westliche Gleis hinauf, über den Gleiswechsel aufs östliche,
+// durch den inneren Bogen und die Querstraße hinunter, bis die Häuser den Wagen wieder verdecken.
+export const TRAM_HIDE_X = 34;
+export function tramPaths() {
+  const { west, east, cross, turn } = TRAM;
+  const zIn = turn.z - turn.outer;
+  const zOut = turn.z - turn.inner;
+  const inbound = [[TRAM_HIDE_X, zIn]];
+  line(inbound, turn.x, zIn);
+  curve(inbound, (q) => [turn.x - turn.outer * Math.sin((q * Math.PI) / 2), turn.z - turn.outer * Math.cos((q * Math.PI) / 2)], 72);
+  line(inbound, west, 4);
+  const outbound = [[west, -6]];
+  line(outbound, west, cross.south);
+  curve(outbound, (q) => [west + (east - west) * smooth(q), cross.south - (cross.south - cross.north) * q], 56);
+  line(outbound, east, turn.z);
+  curve(outbound, (q) => [turn.x - turn.inner * Math.cos((q * Math.PI) / 2), turn.z - turn.inner * Math.sin((q * Math.PI) / 2)], 52);
+  line(outbound, TRAM_HIDE_X + 12, zOut);
+  return { inbound: new TramPath(inbound), outbound: new TramPath(outbound) };
+}
+
 // Querschnitt der Schiene, von der Fahrkante aus nach außen gemessen (Meter).
 const HEAD = 0.058;
 const GROOVE = 0.034;

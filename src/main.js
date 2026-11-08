@@ -636,7 +636,7 @@ class Game {
     }
 
     this.location.update(dt, this.time, { camera, player: this.player });
-    safely('Klang', () => this.audio.update(dt, this.location.train ?? null, this.location.river, this.location.sounds, this.location.cab, this.location.gutter));
+    safely('Klang', () => this.audio.update(dt, this.location.train ?? null, this.location.river, this.location.sounds, this.location.cab, this.location.gutter, this.location.tram));
     safely('Ticken', () => this.ticking.update(this.time, camera));
 
     if (this.mode === 'play') {

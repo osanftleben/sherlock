@@ -20,6 +20,7 @@ import { DRY, buildWeather, dryRects } from './weather.js';
 import { DRIP_GLSL, dripUniforms } from './drips.js';
 import { TRAM_GLSL } from './tramway.js';
 import { buildSmoke } from './smoke.js';
+import { buildGroundShades } from './groundshade.js';
 import { MIRROR_LAYER, RIPPLES, RIPPLE_GLINT, rainTime } from './ripples.js';
 
 // Das erste Viertel: Hackescher Markt, Rosenthaler und Oranienburger Straße, Sophienstraße,
@@ -503,6 +504,8 @@ export function buildBerlin() {
   buildWeather(loc, r);
   buildLife(loc);
   buildSmoke(loc, { chimneys: facades.chimneys });
+  // Zuletzt: sammelt Leute, Pferde und Wagen aus der Szene, auch die Figuren des Falls.
+  buildGroundShades(loc);
   loc.onUpdate((dt, t) => {
     rainTime.value = t % 1000;
   });

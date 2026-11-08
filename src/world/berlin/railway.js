@@ -3,7 +3,7 @@ import { Bag, addMesh, cyl, glowSprites, matte, merge, std } from '../kit.js';
 import { ARCH_FRONT, TIMETABLE_SIZE, archFronts, fogPuff, hallWindow, rng, signTexture, softDisc, stationTimetable, viaductBrick } from '../textures.js';
 import { grimy } from './grime.js';
 import { addSign } from './facades.js';
-import { LANTERN_GLASS, lampWash, lightPool, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, lampWash, lightPool, wallLamp, wallLantern } from './lamps.js';
 import { hearing } from './traffic.js';
 import { buildDrips } from './drips.js';
 
@@ -140,7 +140,10 @@ export function buildRailway(loc, r) {
       if (lit && Math.abs(x) < 70) {
         const lx = x + (entrance ? -1.5 : cell === 0 ? 0.9 : 3.2);
         const lz = VZ0 + 1.14;
-        glows.push(wallLantern(lanterns, flames, new THREE.Vector3(lx, 3.2, lz), new THREE.Vector3(0, 0, -1), 0.52, washes));
+        const p = wallLantern(lanterns, flames, new THREE.Vector3(lx, 3.2, lz), new THREE.Vector3(0, 0, -1), 0.52, washes);
+        glows.push(p);
+        // Bekommt echtes Licht, wenn sie zu den nächsten gehört; dann werfen die Leute davor Schatten.
+        (loc.extraLamps ??= []).push(wallLamp(p, 0, -1));
         pools.push(new THREE.PlaneGeometry(5.5, 4.5).rotateX(-Math.PI / 2).translate(x, 0.03, VZ0 - 0.4));
       }
       if (entrance) {

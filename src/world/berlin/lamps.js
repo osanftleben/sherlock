@@ -133,7 +133,8 @@ const STILL_RES = 512;
 // kann: der Werfer selbst und der Keil hinter ihm, von der Laterne aus gesehen, bis SHADE_FAR.
 export function bakeStillShade(loc) {
   const casters = loc.stillCasters ?? [];
-  const spots = loc.lampSpots ?? [];
+  // Straßenlaternen und die Laternen anderer Bauteile (loc.extraLamps), die echtes Licht bekommen können.
+  const spots = [...(loc.lampSpots ?? []), ...(loc.extraLamps ?? []).map((e) => ({ x: e.x, y: e.y, z: e.z, pool: -1 }))];
   const tiles = [];
   for (const s of spots) {
     const near = casters.filter((c) => Math.hypot(c.x - s.x, c.z - s.z) - c.r < SHADE_REACH);
@@ -415,7 +416,8 @@ export function buildLamps(loc, positions, ironMat) {
   poolGeo.rotateX(-Math.PI / 2);
   // Schicht jedes Lichtflecks in lampStill (bakeStillShade füllt sie).
   poolGeo.setAttribute('aStill', (loc.lampPoolLayers = new THREE.InstancedBufferAttribute(new Float32Array(positions.length), 1)));
-  // Alle Flammen für bakeStillShade: pool ist der Index des Lichtflecks, -1 für Laternen anderer Bauteile.
+  // Alle Flammen für bakeStillShade: pool ist der Index des Lichtflecks (loc.extraLamps nimmt
+  // bakeStillShade selbst dazu, mit pool -1).
   const spots = (loc.lampSpots = []);
   const poolMat = shadedPool(lightPool(0xc77b38, 0.33), loc);
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, positions.length);
@@ -456,18 +458,20 @@ export function buildLamps(loc, positions, ironMat) {
   }
   // Wer Schatten wirft, fragt hier, welche Laternen gerade leuchten (groundshade.js).
   loc.lampLights = lights;
-  for (const e of loc.extraLamps ?? []) spots.push({ x: e.x, y: e.y, z: e.z, pool: -1 });
   // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight). weight < 1
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
-  // weiter weg sieht als ihre Entfernung vermuten lässt.
-  const ranked = [
-    ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.ground + FLAME, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
-    ...(loc.extraLamps ?? []).map((e, i) => ({ x: e.x, z: e.z, ly: e.y, seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
-  ];
+  // weiter weg sieht als ihre Entfernung vermuten lässt; weight > 1 lässt den Straßenlaternen den
+  // Vortritt. Die Liste entsteht erst im ersten Bild, damit auch Laternen zählen, die nach
+  // buildLamps gebaut werden (etwa die über den Ladentüren).
+  let ranked = null;
   let timer = 0;
   loc.onUpdate((dt, t, { camera }) => {
+    ranked ??= [
+      ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.ground + FLAME, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
+      ...(loc.extraLamps ?? []).map((e, i) => ({ x: e.x, z: e.z, ly: e.y, seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
+    ];
     timer -= dt;
-    if (timer < 0) {
+    if (timer <= 0) {
       timer = 0.25;
       for (const e of ranked) {
         const dx = e.x - camera.position.x;
@@ -547,6 +551,17 @@ export function wallLantern(iron, glass, base, out, reach = 0.52, wash = null) {
   glass.push(put(new THREE.BoxGeometry(0.17, 0.28, 0.17).translate(0, -0.32, reach)));
   if (wash) wash.push(put(new THREE.PlaneGeometry(3.4, 3.4).translate(0, -0.36, 0.03)));
   return new THREE.Vector3(0, -0.32, reach).applyMatrix4(m);
+}
+
+// Eintrag für loc.extraLamps zu einer Wandlaterne: p die Mitte des Glases (wallLantern), (ox, oz) die
+// waagrechte Richtung von der Wand weg. Gehört sie zu den nächsten Laternen, bekommt sie echtes Licht,
+// und wer davor steht, wirft Schatten. Das Licht sitzt ein Stück vor dem Glas, sonst stünde dicht
+// dahinter ein greller Fleck auf der Wand (den Schein dort malt schon lampWash). Schwächer als eine
+// Straßenlaterne, und die haben Vortritt (weight > 1).
+const WALL_LAMP_OUT = 0.5;
+export function wallLamp(p, ox, oz, intensity = 9, weight = 1.5) {
+  const n = Math.hypot(ox, oz) || 1;
+  return { x: p.x + (ox / n) * WALL_LAMP_OUT, y: p.y, z: p.z + (oz / n) * WALL_LAMP_OUT, intensity, weight };
 }
 
 // Lichtschein einer Wandlaterne auf der Mauer dahinter: wie lightPool, nur schwächer, weil die

@@ -11,7 +11,7 @@ import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { buildClutter } from './clutter.js';
 import { grimy } from './grime.js';
-import { LANTERN_GLASS, SHADE_GLSL, bakeStillShade, buildLamps, lampWash, shadeUniforms, shadedLightsChunk, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, SHADE_GLSL, bakeStillShade, buildLamps, lampWash, shadeUniforms, shadedLightsChunk, wallLamp, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -431,8 +431,10 @@ export function buildBerlin() {
     const side = bay + 1.15 / BAY_W;
     const wall = bld.at(side, 3.07, 0);
     const out = bld.at(side, 3.07, 1).sub(wall);
-    const { x, y, z } = wallLantern(doorIron, doorGlass, wall, out, 0.45, doorWash);
-    doorGlows.push({ x, y, z, size: 1.5, opacity: 0.45 });
+    const p = wallLantern(doorIron, doorGlass, wall, out, 0.45, doorWash);
+    doorGlows.push({ x: p.x, y: p.y, z: p.z, size: 1.5, opacity: 0.45 });
+    // Echtes Licht, wenn sie zu den nächsten gehört: Wer vor der Tür steht, wirft Schatten.
+    (loc.extraLamps ??= []).push(wallLamp(p, out.x, out.z));
   };
 
   shopSign(kessler, 2.5, 'Uhrmacher E. Kessler');

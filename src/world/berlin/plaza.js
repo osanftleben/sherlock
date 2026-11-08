@@ -4,7 +4,7 @@ import { clockFace, granite as graniteTex, posterWall, rng, signTexture, softDis
 import { idleFigure, idleHorse, makeFigure } from '../figures.js';
 import { hearing, makeDroschke } from './traffic.js';
 import { buildTrees } from './trees.js';
-import { lightPool } from './lamps.js';
+import { addShadeCaster, lightPool } from './lamps.js';
 import { coughs } from './life.js';
 import { MIRROR_LAYER, rainOnWater, waterMirror } from './ripples.js';
 
@@ -338,6 +338,8 @@ function buildKiosk(loc) {
   roof.translate(x, 2.95, z);
   b.add(roof, 0x141c18);
   b.add(cyl(0.03, 0.07, 0.5, x, 3.55, z, 8), 0x141c18);
+  // Das Häuschen hält das Licht der Laternen ab (lamps.js): Kasten mit Traufe und Dach als Zylinder.
+  addShadeCaster(loc, x, z, R + 0.15, 3.0);
   // Ablage unter der Auslage.
   const ledge = new THREE.BoxGeometry(1.0, 0.06, 0.35);
   ledge.translate(0, 0.95, R * Math.cos(Math.PI / 8) + 0.12);
@@ -471,6 +473,8 @@ function buildUrania(loc, ux, uz) {
   const oct = (rt, rb, h, y) => new THREE.CylinderGeometry(rt, rb, h, 8).rotateY(Math.PI / 8).translate(ux, y, uz);
 
   addMesh(scene, oct(0.86, 0.9, 0.16, 0.08), std({ color: 0x5c5c58, roughness: 0.8 }));
+  // Höher als jede Laterne: Ihr Licht kommt hinter der Säule nicht an (lamps.js).
+  addShadeCaster(loc, ux, uz, 0.55, 6);
 
   // Unterbau: schräg abfallendes Achteck. Die Schaukästen liegen auf den vier Hauptseiten
   // und neigen sich mit der Schräge.

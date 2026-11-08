@@ -11,7 +11,7 @@ import { DISPLAY_RECESS, buildShopWindows } from './shopwindows.js';
 import { buildCourt } from './court.js';
 import { buildClutter } from './clutter.js';
 import { grimy } from './grime.js';
-import { LANTERN_GLASS, buildLamps, lampWash, wallLantern } from './lamps.js';
+import { LANTERN_GLASS, SHADE_GLSL, buildLamps, lampWash, shadeCasters, shadedLightsChunk, wallLantern } from './lamps.js';
 import { buildLife } from './life.js';
 import { FOUNTAIN, buildPlaza } from './plaza.js';
 import { buildTraffic } from './traffic.js';
@@ -521,12 +521,15 @@ function wetStreet(material, loc) {
     shader.uniforms.wetMap = { value: wet };
     shader.uniforms.rainTime = rainTime;
     shader.uniforms.roofs = { value: dryRects(loc) };
+    shader.uniforms.shadeCasters = { value: shadeCasters(loc) };
     Object.assign(shader.uniforms, dripUniforms);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vGroundXZ;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}\n${DRIP_GLSL}\n${TRAM_GLSL}
+      // Kiosk, Urania-Säule und Pferdebahnwagen halten das Licht der Laternen ab (lamps.js).
+      .replace('#include <lights_fragment_begin>', shadedLightsChunk('vec3( vGroundXZ.x, 0.0, vGroundXZ.y )'))
+      .replace('#include <common>', `#include <common>\nuniform sampler2D wetMap;\nvarying vec2 vGroundXZ;\n${RIPPLES}\n${DRIP_GLSL}\n${TRAM_GLSL}\n${SHADE_GLSL}
         uniform vec4 roofs[${DRY}];
         float underRoof(vec2 xz) {
           for (int i = 0; i < ${DRY}; i++) {

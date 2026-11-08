@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { reportError } from '../../core/errors.js';
 import { Bag, cyl, merge, std } from '../kit.js';
 import { softDisc } from '../textures.js';
 import { MIRROR_LAYER } from './ripples.js';
@@ -24,6 +25,81 @@ export function lightPool(color, opacity) {
   });
 }
 
+// --- Schatten der Laternen -----------------------------------------------------------------
+// Draußen gibt es keine Schattenkarten (view.js), das Licht der Laternen ginge durch alles hindurch:
+// Hinter dem Kiosk glänzte das nasse Pflaster, als stünde er nicht da. Hohe Dinge bei Laternen
+// melden sich deshalb als senkrechte Zylinder an, und das Pflaster (wetStreet in index.js) und die
+// Lichtflecken prüfen für jede Laterne, ob der Weg zu ihr hindurchführt.
+export const SHADE_MAX = 6;
+// Höhe der Flamme über dem Boden
+const FLAME = 3.7;
+export function shadeCasters(loc) {
+  return (loc.shadeCasters ??= Array.from({ length: SHADE_MAX }, () => new THREE.Vector4()));
+}
+// Ein Zylinder als Vector4 (x, z, Radius, Höhe); wer sich bewegt, setzt ihn selbst neu, Radius 0
+// heißt: gerade nicht da.
+export function addShadeCaster(loc, x = 0, z = 0, r = 0, h = 0) {
+  const list = shadeCasters(loc);
+  loc.shadeCount = (loc.shadeCount ?? 0) + 1;
+  if (loc.shadeCount > SHADE_MAX) throw new Error(`Mehr als ${SHADE_MAX} Schattenwerfer`);
+  return list[loc.shadeCount - 1].set(x, z, r, h);
+}
+// GLSL: lampShade(p, lamp) sagt, wie viel vom Licht der Laterne bei lamp am Punkt p ankommt (beides
+// in Weltkoordinaten); lampWorld holt die Lage eines Punktlichts aus der Kamerasicht zurück.
+export const SHADE_GLSL = `
+uniform vec4 shadeCasters[${SHADE_MAX}];
+vec3 lampWorld(vec3 viewPos) {
+  return transpose(mat3(viewMatrix)) * (viewPos - viewMatrix[3].xyz);
+}
+float lampShade(vec3 p, vec3 lamp) {
+  vec2 d = lamp.xz - p.xz;
+  float inv = inversesqrt(max(dot(d, d), 1e-4));
+  float lit = 1.0;
+  for (int k = 0; k < ${SHADE_MAX}; k++) {
+    vec4 c = shadeCasters[k];
+    if (c.z <= 0.0) continue;
+    // Wo der Weg zur Laterne der Achse am nächsten kommt, und zurück bis dahin, wo er in den
+    // Zylinder eintritt: Liegt der Eintritt unter seiner Oberkante, ist das Licht verdeckt.
+    float t = clamp(dot(c.xy - p.xz, d) * inv * inv, 0.0, 1.0);
+    float dist = length(p.xz + d * t - c.xy);
+    float tin = max(0.0, t - sqrt(max(c.z * c.z - dist * dist, 0.0)) * inv);
+    float y = mix(p.y, lamp.y, tin);
+    // Weiche Ränder: Die Flamme ist kein Punkt.
+    lit *= 1.0 - (1.0 - smoothstep(c.z - 0.2, c.z + 0.2, dist)) * (1.0 - smoothstep(c.w - 0.2, c.w + 0.2, y));
+  }
+  return lit;
+}`;
+
+// Beleuchtungsteil von three.js mit Schatten für die Punktlichter: Die Farbe jedes Lichts wird
+// gleich nach getPointLightInfo mit lampShade verrechnet. p: GLSL-Ausdruck für den Punkt (Welt).
+const POINT_HOOK = 'getPointLightInfo( pointLight, geometryPosition, directLight );';
+export function shadedLightsChunk(p) {
+  const chunk = THREE.ShaderChunk.lights_fragment_begin;
+  if (!chunk.includes(POINT_HOOK)) reportError('Laternenschatten', new Error('Beleuchtungsteil von three.js hat sich geändert, die Laternen werfen keine Schatten'));
+  return chunk.replace(POINT_HOOK, `${POINT_HOOK}\n\t\tif ( directLight.visible ) directLight.color *= lampShade( ${p}, lampWorld( pointLight.position ) );`);
+}
+
+// Lichtfleck der Laternen mit Schatten: Wo der Weg zur Flamme durch einen Schattenwerfer führt,
+// hellt der Fleck nichts auf.
+function shadedPool(material, loc) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.shadeCasters = { value: shadeCasters(loc) };
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vPoolW;\nvarying vec3 vLampW;')
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vPoolW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        vLampW = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz + vec3(0.0, ${(FLAME - 0.03).toFixed(2)}, 0.0);`,
+      );
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vPoolW;\nvarying vec3 vLampW;\n${SHADE_GLSL}`)
+      .replace('#include <premultiplied_alpha_fragment>', 'gl_FragColor.rgb *= lampShade(vPoolW, vLampW);\n#include <premultiplied_alpha_fragment>');
+  };
+  material.customProgramCacheKey = () => 'shadedLampPool';
+  return material;
+}
+
 export function buildLamps(loc, positions, ironMat) {
   const { scene } = loc;
   const post = new Bag();
@@ -41,7 +117,7 @@ export function buildLamps(loc, positions, ironMat) {
   const glowMat = new THREE.SpriteMaterial({ map: softDisc('lampGlow'), color: 0xffa858, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
   const poolGeo = new THREE.PlaneGeometry(1, 1);
   poolGeo.rotateX(-Math.PI / 2);
-  const poolMat = lightPool(0xc77b38, 0.33);
+  const poolMat = shadedPool(lightPool(0xc77b38, 0.33), loc);
   const pools = new THREE.InstancedMesh(poolGeo, poolMat, positions.length);
   const glows = [];
   const zero = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -83,7 +159,7 @@ export function buildLamps(loc, positions, ironMat) {
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
   // weiter weg sieht als ihre Entfernung vermuten lässt.
   const ranked = [
-    ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.y + 3.7, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
+    ...glows.map((g) => ({ x: g.x, z: g.z, ly: g.y + FLAME, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
     ...(loc.extraLamps ?? []).map((e, i) => ({ x: e.x, z: e.z, ly: e.y, seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
   ];
   let timer = 0;

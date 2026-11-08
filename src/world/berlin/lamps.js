@@ -53,6 +53,8 @@ const FLAME_R = 0.2;
 // Stücks statt aller bei der Laterne. Im Gedränge am Platz waren das sonst bis zu zwölf Werfer je
 // Laterne und Bildpunkt, 2,2 ms GPU-Zeit allein auf dem Pflaster.
 const SECTORS = 16;
+// So stark flackert eine Gasflamme: Die Helligkeit schwankt zwischen 86 und 100 %.
+const GAS_FLICKER = 0.07;
 // Uniforms der Schattenwerfer eines Ortes; alle Shader mit lampShade teilen sie sich.
 export function shadeUniforms(loc) {
   return (loc.shadeUniforms ??= {
@@ -466,7 +468,8 @@ export function buildLamps(loc, positions, ironMat) {
   // Wer Schatten wirft, fragt hier, welche Laternen gerade leuchten (groundshade.js).
   loc.lampLights = lights;
   // Dazu Laternen anderer Bauteile (loc.extraLamps: x, y, z der Flamme, intensity, weight, wahlweise
-  // color und moving, wenn ihr Bauteil x, y, z in jedem Bild nachführt). weight < 1
+  // color, flicker (Stärke des Flackerns, sonst 0,07 wie Gaslicht) und moving, wenn ihr Bauteil
+  // x, y, z in jedem Bild nachführt). weight < 1
   // rückt eine Laterne in der Rangliste vor, etwa die im Durchgang unter dem Viadukt, die man von
   // weiter weg sieht als ihre Entfernung vermuten lässt; weight > 1 lässt den Straßenlaternen den
   // Vortritt. Die Liste entsteht erst im ersten Bild, damit auch Laternen zählen, die nach
@@ -478,8 +481,16 @@ export function buildLamps(loc, positions, ironMat) {
     // Pferdebahnwagen) ihn in jedem Bild nachführen können.
     // color: eigene Lichtfarbe (die grünen Signallaternen der Pferdebahn), sonst Gaslicht.
     ranked ??= [
-      ...glows.map((g) => ({ p: { x: g.x, y: g.ground + FLAME, z: g.z }, color: gas, seed: g.seed, intensity: 32, weight: 1, d: 0 })),
-      ...(loc.extraLamps ?? []).map((e, i) => ({ p: e, color: e.color === undefined ? gas : new THREE.Color(e.color), seed: 50 + i * 1.3, intensity: e.intensity, weight: e.weight, d: 0 })),
+      ...glows.map((g) => ({ p: { x: g.x, y: g.ground + FLAME, z: g.z }, color: gas, seed: g.seed, intensity: 32, weight: 1, flicker: GAS_FLICKER, d: 0 })),
+      ...(loc.extraLamps ?? []).map((e, i) => ({
+        p: e,
+        color: e.color === undefined ? gas : new THREE.Color(e.color),
+        seed: 50 + i * 1.3,
+        intensity: e.intensity,
+        weight: e.weight,
+        flicker: e.flicker ?? GAS_FLICKER,
+        d: 0,
+      })),
     ];
     timer -= dt;
     if (timer <= 0) {
@@ -495,7 +506,7 @@ export function buildLamps(loc, positions, ironMat) {
       const e = ranked[i];
       l.position.set(e.p.x, e.p.y, e.p.z);
       l.color.copy(e.color);
-      const flicker = 0.93 + 0.07 * Math.sin(t * 9 + e.seed) * Math.sin(t * 3.7 + e.seed * 2);
+      const flicker = 1 - e.flicker + e.flicker * Math.sin(t * 9 + e.seed) * Math.sin(t * 3.7 + e.seed * 2);
       // Die letzte Lampe der Rangliste blendet aus, damit das Umspringen nicht auffällt.
       const fade = i < 4 ? 1 : 0.6;
       l.intensity = e.intensity * flicker * fade;

@@ -329,6 +329,9 @@ export function buildBerlin() {
     warn.scale.setScalar(1.3);
     scene.add(warn);
     if (gap) tramGate(cx, cz, gap, mat, warn);
+    // Die Warnlaterne als rotes Licht (lamps.js), dort, wo ihr Schein hängt (am Schlagbaum auf dem
+    // Gabelpfosten).
+    (loc.extraLamps ??= []).push({ x: warn.position.x, y: warn.position.y, z: warn.position.z, color: 0xff3c1a, intensity: 3, weight: 2.5 });
   };
 
   // Schlagbaum über der Durchfahrt für die Pferdebahn: Drehpunkt am westlichen Torpfosten, das

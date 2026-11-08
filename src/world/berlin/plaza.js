@@ -434,6 +434,9 @@ function buildCabRank(loc, ironMat) {
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDisc('glow'), color: 0xff7a30, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending }));
   glow.position.set(bx, 1.15, bz);
   (loc.braziers ??= []).push(new THREE.Vector3(bx, 1.0, bz));
+  // Die Glut als Licht (lamps.js): rot, tief und unruhiger als eine Gasflamme. Es sitzt knapp über
+  // dem Rand des Korbs und strahlt die Kutscher von unten an.
+  (loc.extraLamps ??= []).push({ x: bx, y: 1.1, z: bz, color: 0xff6a2a, intensity: 6, weight: 2, flicker: 0.22 });
   glow.scale.setScalar(2.2);
   scene.add(glow);
   const pool = addPool(scene, bx, bz, 5, 0xd0602a, 0.32);

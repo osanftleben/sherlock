@@ -60,6 +60,8 @@ export function buildPlaza(loc, r, ironMat) {
   capBag.add(new THREE.SphereGeometry(0.11, 12, 8).translate(lx, 4.79, lz), IRON);
   capBag.add(cyl(0.01, 0.03, 0.32, lx, 5.04, lz, 6), IRON);
   addMesh(scene, capBag.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.4 }));
+  // Säule, Gesims und Kuppel halten das Licht der Laternen ab (lamps.js).
+  addShadeCaster(loc, lx, lz, 0.95, 4.4);
   loc.collide(lx - 0.7, lx + 0.7, lz - 0.7, lz + 0.7);
   loc.anchor('litfass', lx, 1.7, lz);
   loc.addHotspot({
@@ -81,6 +83,8 @@ export function buildPlaza(loc, r, ironMat) {
   octo.add(cyl(1.55, 1.5, 0.12, cx, 2.15, cz, 8), 0x162a1e);
   octo.add(cyl(0.3, 1.5, 0.6, cx, 2.5, cz, 8), 0x162a1e);
   addMesh(scene, octo.build(), std({ vertexColors: true, roughness: 0.5, metalness: 0.3 }));
+  // Das Häuschen samt Dachrand hält das Licht der Laternen ab (lamps.js).
+  addShadeCaster(loc, cx, cz, 1.5, 2.5);
   loc.collide(cx - 1.25, cx + 1.25, cz - 1.25, cz + 1.25);
   loc.addHotspot({
     pos: [cx, 1.5, cz],
@@ -247,6 +251,13 @@ function buildFountain(loc) {
   lathe([[0, 0], [0.11, 0], [0.09, 0.07], [0.06, 0.24], [0.09, 0.38], [0.07, 0.43], [0.1, 0.48], [0, 0.5]], 2.92, iron, 16);
   lathe([[0, 0], [0.09, 0], [0.3, 0.09], [0.5, 0.17], [0.55, 0.2], [0.55, 0.24], [0.5, 0.24], [0.46, 0.2], [0, 0.2]], 3.38, iron, 24);
   lathe([[0, 0], [0.05, 0], [0.04, 0.08], [0.1, 0.1], [0.11, 0.16], [0.1, 0.24], [0.08, 0.3], [0.05, 0.36], [0.02, 0.4], [0, 0.42]], 3.58, bronze, 9);
+
+  // Becken, Pfeiler mit Schaft und große Schale halten das Licht der Laternen ab (lamps.js). Die
+  // Schale schwebt: Unter ihr kommt das Licht bis an den Schaft heran. Was darüber liegt, streift
+  // ein Weg vom Pflaster zur Flamme erst weit außerhalb der Reichweite der Laternen.
+  addShadeCaster(loc, x, z, R - 0.05, 0.71);
+  addShadeCaster(loc, x, z, 0.35, 2.62);
+  addShadeCaster(loc, x, z, 1.16, 3.04, 2.7);
 
   // Granit matt und stumpf, Eisen mit halbmattem Anstrich, Bronze metallisch mit warmem Glanz.
   // Alle drei spiegeln sich im Becken (MIRROR_LAYER).

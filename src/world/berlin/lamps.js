@@ -30,42 +30,71 @@ export function lightPool(color, opacity) {
 // Hinter dem Kiosk glänzte das nasse Pflaster, als stünde er nicht da. Hohe Dinge bei Laternen
 // melden sich deshalb als senkrechte Zylinder an, und das Pflaster (wetStreet in index.js) und die
 // Lichtflecken prüfen für jede Laterne, ob der Weg zu ihr hindurchführt.
-export const SHADE_MAX = 6;
-// Höhe der Flamme über dem Boden
+export const SHADE_MAX = 10;
+// Höhe der Flamme über dem Boden und halbe Breite dessen, was in der Laterne leuchtet (Flamme und
+// das von ihr erhellte Glas); daraus folgt, wie weich die Schattenränder werden.
 const FLAME = 3.7;
-export function shadeCasters(loc) {
-  return (loc.shadeCasters ??= Array.from({ length: SHADE_MAX }, () => new THREE.Vector4()));
+const FLAME_R = 0.2;
+// Uniforms der Schattenwerfer eines Ortes; alle Shader mit lampShade teilen sie sich.
+export function shadeUniforms(loc) {
+  return (loc.shadeUniforms ??= {
+    shadeCasters: { value: Array.from({ length: SHADE_MAX }, () => new THREE.Vector4()) },
+    shadeFloors: { value: new Array(SHADE_MAX).fill(0) },
+  });
 }
-// Ein Zylinder als Vector4 (x, z, Radius, Höhe); wer sich bewegt, setzt ihn selbst neu, Radius 0
+// Ein Zylinder als Vector4 (x, z, Radius, Oberkante), dazu seine Unterkante: Liegt sie über 0,
+// schwebt er wie die Schale des Brunnens. Wer sich bewegt, setzt den Vector4 selbst neu; Radius 0
 // heißt: gerade nicht da.
-export function addShadeCaster(loc, x = 0, z = 0, r = 0, h = 0) {
-  const list = shadeCasters(loc);
-  loc.shadeCount = (loc.shadeCount ?? 0) + 1;
-  if (loc.shadeCount > SHADE_MAX) throw new Error(`Mehr als ${SHADE_MAX} Schattenwerfer`);
-  return list[loc.shadeCount - 1].set(x, z, r, h);
+export function addShadeCaster(loc, x = 0, z = 0, r = 0, h = 0, floor = 0) {
+  const { shadeCasters, shadeFloors } = shadeUniforms(loc);
+  const i = loc.shadeCount ?? 0;
+  if (i >= SHADE_MAX) throw new Error(`Mehr als ${SHADE_MAX} Schattenwerfer`);
+  loc.shadeCount = i + 1;
+  shadeFloors.value[i] = floor;
+  return shadeCasters.value[i].set(x, z, r, h);
 }
 // GLSL: lampShade(p, lamp) sagt, wie viel vom Licht der Laterne bei lamp am Punkt p ankommt (beides
 // in Weltkoordinaten); lampWorld holt die Lage eines Punktlichts aus der Kamerasicht zurück.
 export const SHADE_GLSL = `
 uniform vec4 shadeCasters[${SHADE_MAX}];
+uniform float shadeFloors[${SHADE_MAX}];
 vec3 lampWorld(vec3 viewPos) {
   return transpose(mat3(viewMatrix)) * (viewPos - viewMatrix[3].xyz);
 }
 float lampShade(vec3 p, vec3 lamp) {
   vec2 d = lamp.xz - p.xz;
   float inv = inversesqrt(max(dot(d, d), 1e-4));
+  float inv2 = inv * inv;
   float lit = 1.0;
   for (int k = 0; k < ${SHADE_MAX}; k++) {
     vec4 c = shadeCasters[k];
     if (c.z <= 0.0) continue;
-    // Wo der Weg zur Laterne der Achse am nächsten kommt, und zurück bis dahin, wo er in den
-    // Zylinder eintritt: Liegt der Eintritt unter seiner Oberkante, ist das Licht verdeckt.
-    float t = clamp(dot(c.xy - p.xz, d) * inv * inv, 0.0, 1.0);
-    float dist = length(p.xz + d * t - c.xy);
-    float tin = max(0.0, t - sqrt(max(c.z * c.z - dist * dist, 0.0)) * inv);
-    float y = mix(p.y, lamp.y, tin);
-    // Weiche Ränder: Die Flamme ist kein Punkt.
-    lit *= 1.0 - (1.0 - smoothstep(c.z - 0.2, c.z + 0.2, dist)) * (1.0 - smoothstep(c.w - 0.2, c.w + 0.2, y));
+    // Wo der Weg zur Laterne der Achse am nächsten kommt: 0 am Punkt, 1 an der Laterne. Steht der
+    // Zylinder hinter dem Punkt (der Punkt liegt auf seiner beleuchteten Seite) oder hinter der
+    // Laterne, ist der Weg frei.
+    float t = dot(c.xy - p.xz, d) * inv2;
+    if (t <= 0.0 || t >= 1.0) continue;
+    // Halbschatten: Was in der Laterne leuchtet, hat eine Breite. Durch einen Rand nahe am Punkt
+    // sieht man davon wenig (harter Schatten), durch einen nahe der Laterne viel (weicher).
+    float w = ${FLAME_R.toFixed(2)} * t + 0.01;
+    vec2 off = p.xz + d * t - c.xy;
+    float dd = dot(off, off);
+    if (dd >= (c.z + w) * (c.z + w)) continue;
+    // Zur Laterne hin steigt der Weg an: Er tritt am tiefsten Punkt in den Zylinder ein und am
+    // höchsten wieder aus. Verdeckt ist das Licht, wenn er unter der Oberkante eintritt und über
+    // der Unterkante austritt.
+    float span = sqrt(max(c.z * c.z - dd, 0.0)) * inv;
+    float tIn = max(0.0, t - span);
+    float tOut = min(1.0, t + span);
+    float yIn = mix(p.y, lamp.y, tIn);
+    float yOut = mix(p.y, lamp.y, tOut);
+    float wIn = ${FLAME_R.toFixed(2)} * tIn + 0.01;
+    float wOut = ${FLAME_R.toFixed(2)} * tOut + 0.01;
+    float under = shadeFloors[k];
+    float hit = (1.0 - smoothstep(c.z - w, c.z + w, sqrt(dd)))
+      * (1.0 - smoothstep(c.w - wIn, c.w + wIn, yIn))
+      * max(step(under, 0.0), smoothstep(under - wOut, under + wOut, yOut));
+    lit *= 1.0 - hit;
   }
   return lit;
 }`;
@@ -83,7 +112,7 @@ export function shadedLightsChunk(p) {
 // hellt der Fleck nichts auf.
 function shadedPool(material, loc) {
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.shadeCasters = { value: shadeCasters(loc) };
+    Object.assign(shader.uniforms, shadeUniforms(loc));
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vPoolW;\nvarying vec3 vLampW;')
       .replace(

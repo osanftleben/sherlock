@@ -81,16 +81,18 @@ export const uhrmacher = {
     werkstatt: { requires: ['f_schluessel'], message: 'Verschlossen. Den Schlüssel hat Fräulein Kessler, und sie wartet in der Pension Puhlmann.' },
   },
 
+  // Die Figuren tragen, was Holmes im ersten Gespräch an ihnen bemerkt (siehe `obs` in den Dialogen).
   npcs: [
-    { id: 'martha', location: 'pension', anchor: 'martha', name: 'Martha Kessler', dialog: 'martha', look: { coat: 0x1c1a1e, skirt: true, hair: 0x4a3322, hat: 'none', height: 1.64 } },
+    // Ein Alltagskleid: Für Schwarz war keine Zeit, nur für den Trauerflor.
+    { id: 'martha', location: 'pension', anchor: 'martha', name: 'Martha Kessler', dialog: 'martha', look: { coat: 0x2c3a2e, skirt: true, hair: 0x4a3322, hat: 'none', height: 1.64, mourningBand: true } },
     { id: 'voss', location: 'pension', anchor: 'voss', name: 'Dr. Henriette Voss', dialog: 'voss', look: { coat: 0x2a3440, skirt: true, hair: 0x6a4a30, hat: 'none', height: 1.7, apron: 0xbfb8a4 } },
-    { id: 'piefke', location: 'berlin', anchor: 'vorWerkstatt', name: 'Schutzmann Piefke', dialog: 'piefke', look: { coat: 0x1b2a44, trousers: 0x14181f, hat: 'pickelhaube', moustache: true, hair: 0x2a2018 } },
-    { id: 'krause', location: 'berlin', anchor: 'sophienEcke', name: 'Nachtwächter Krause', dialog: 'krause', look: { coat: 0x2c2820, hat: 'cap', hatColor: 0x1a1812, beard: true, hair: 0x7a7468, cane: true } },
-    { id: 'seidel', location: 'apotheke', anchor: 'seidel', name: 'Apotheker Seidel', dialog: 'seidel', look: { coat: 0xd0cabb, trousers: 0x20201f, hair: 0x8a8478, moustache: true } },
-    { id: 'kluge', location: 'destille', anchor: 'kluge', name: 'Mutter Kluge', dialog: 'kluge', look: { coat: 0x38302a, skirt: true, apron: 0xb0a890, hair: 0x6a6258, height: 1.6 } },
-    { id: 'brandt', location: 'destille', anchor: 'brandt', name: 'Otto Brandt', dialog: 'brandt', look: { coat: 0x32291e, trousers: 0x201c16, hat: 'cap', hatColor: 0x241e16, hair: 0x4a3622, height: 1.72 } },
-    { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { coat: 0x2a2a30, trousers: 0x3a3a40, moustache: true, cane: true, hair: 0x5a5048 } },
-    { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { coat: 0x16181c, trousers: 0x202024, hair: 0x2a241e, moustache: true, height: 1.8 } },
+    { id: 'piefke', location: 'berlin', anchor: 'vorWerkstatt', name: 'Schutzmann Piefke', dialog: 'piefke', look: { coat: 0x1b2a44, trousers: 0x14181f, hat: 'pickelhaube', moustache: 'kaiser', hair: 0x2a2018 } },
+    { id: 'krause', location: 'berlin', anchor: 'sophienEcke', name: 'Nachtwächter Krause', dialog: 'krause', look: { coat: 0x2c2820, hat: 'cap', hatColor: 0x1a1812, beard: 'stubble', hair: 0x7a7468, cane: true, horn: true, keys: true } },
+    { id: 'seidel', location: 'apotheke', anchor: 'seidel', name: 'Apotheker Seidel', dialog: 'seidel', look: { coat: 0xd0cabb, trousers: 0x20201f, hair: 0x8a8478, moustache: true, pincenez: true } },
+    { id: 'kluge', location: 'destille', anchor: 'kluge', name: 'Mutter Kluge', dialog: 'kluge', look: { coat: 0x38302a, skirt: true, apron: 0xb0a890, hair: 0x6a6258, height: 1.6, sleeves: 'rolled' } },
+    { id: 'brandt', location: 'destille', anchor: 'brandt', name: 'Otto Brandt', dialog: 'brandt', look: { coat: 0x32291e, trousers: 0x201c16, hat: 'cap', hatColor: 0x241e16, hair: 0x4a3622, height: 1.72, tired: true, loupe: true, idle: 'tremble' } },
+    { id: 'rathen', location: 'destille', anchor: 'rathen', name: 'Egon von Rathen', dialog: 'rathen', look: { coat: 0x2a2a30, trousers: 0x3a3a40, moustache: true, cane: true, hair: 0x5a5048, scar: true, cigar: true, idle: 'shift' } },
+    { id: 'wendt', location: 'bank', anchor: 'wendt', name: 'Reinhold Wendt', dialog: 'wendt', look: { coat: 0x16181c, trousers: 0x202024, hair: 0x2a241e, moustache: true, height: 1.8, vest: 0x3a3a42, watchChain: true, tired: true } },
     { id: 'gast1', location: 'destille', anchor: 'gast1', name: 'Stammgast', look: { coat: 0x2c2a26, hat: 'cap', beard: true }, say: '„Wat kiekste denn so? Ick sitz hier seit Sedan, und bis jetzt hat mir noch keener wat jefragt, wat ick wissen wollte.“ Wir sind fertig miteinander.' },
     { id: 'gast2', location: 'destille', anchor: 'gast2', name: 'Stammgast', look: { coat: 0x24282c, hat: 'bowler', moustache: true }, say: 'Er stiert in seine Molle und hebt nur einen Finger. Die Berliner Fassung von „Guten Abend“.' },
   ],

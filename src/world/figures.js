@@ -321,35 +321,52 @@ export function makeFigure(look = {}) {
   const head = new THREE.Mesh(headBag.build(), shared);
   if (headTrim.parts.length) head.add(new THREE.Mesh(headTrim.build(), metal));
   head.position.y = 1.67;
+  // Erst drehen, dann nicken: So hebt ein Kopf, der über die Schulter blickt, den Blick und kippt nicht zur Seite.
+  head.rotation.order = 'YXZ';
 
   body.add(new THREE.Mesh(torso.build(), shared), head);
   if (trim.parts.length) body.add(new THREE.Mesh(trim.build(), metal));
 
-  // Arme an den Schultern, side = +1 ist der linke Arm der Figur.
+  // Arme an den Schultern, side = +1 ist der linke Arm der Figur. Der Unterarm hängt an einem
+  // Ellbogengelenk (userData.fore), damit Gesten nicht wie mit steifem Arm aussehen.
+  const elbow = 0.28;
   const arm = (side) => {
     const r = 0.055;
-    const parts = [];
+    const upper = [];
+    const lower = [];
     if (sleeves === 'rolled') {
       // Bis über den Ellbogen hochgekrempelt, die Unterarme kräftig wie bei einem Droschkenkutscher.
       // So hoch, dass man sie auch über einem Tresen noch sieht; der Umschlag zeigt die hellere Innenseite.
-      parts.push(tint(cyl(r, r * 0.96, 0.2, 0, -0.1, 0, 8), coat));
-      parts.push(tint(cyl(r * 1.2, r * 1.2, 0.055, 0, -0.2, 0, 10), new THREE.Color(coat).multiplyScalar(1.35)));
-      parts.push(tint(cyl(r * 1.04, r * 0.86, 0.36, 0, -0.38, 0, 8), skin));
+      upper.push(tint(cyl(r, r * 0.96, 0.2, 0, -0.1, 0, 8), coat));
+      upper.push(tint(cyl(r * 1.2, r * 1.2, 0.055, 0, -0.2, 0, 10), new THREE.Color(coat).multiplyScalar(1.35)));
+      upper.push(tint(cyl(r * 1.04, r, 0.08, 0, -0.24, 0, 8), skin));
+      upper.push(tint(ball(r, 0, -elbow, 0), skin));
+      lower.push(tint(cyl(r, r * 0.86, 0.28, 0, -0.14, 0, 8), skin));
     } else {
-      parts.push(tint(cyl(r, r * 0.8, 0.56, 0, -0.28, 0, 8), coat));
+      upper.push(tint(cyl(r, r * 0.9, elbow, 0, -elbow / 2, 0, 8), coat));
+      upper.push(tint(ball(r * 0.9, 0, -elbow, 0), coat));
+      lower.push(tint(cyl(r * 0.9, r * 0.8, 0.28, 0, -0.14, 0, 8), coat));
     }
-    parts.push(tint(ball(r * 0.95, 0, -0.58, 0), skin));
+    lower.push(tint(ball(r * 0.95, 0, -0.3, 0), skin));
     if (mourningBand && side > 0) {
       // Trauerflor am linken Oberarm, hastig angeheftet und ein wenig schief.
       const band = cyl(r * 1.14, r * 1.12, 0.075, 0, 0, 0, 12);
       band.rotateZ(0.16);
       band.translate(0, -0.15, 0);
-      parts.push(tint(band, 0x0a0a0c));
+      upper.push(tint(band, 0x0a0a0c));
     }
     const g = new THREE.Group();
-    g.add(new THREE.Mesh(merge(parts), shared));
+    g.add(new THREE.Mesh(merge(upper), shared));
+    const fore = new THREE.Group();
+    fore.position.y = -elbow;
+    // Erst beugen (x), dann den gebeugten Unterarm vor den Körper schwenken (y).
+    fore.rotation.order = 'YXZ';
+    fore.add(new THREE.Mesh(merge(lower), shared));
+    g.add(fore);
     g.position.set(side * 0.225, 1.44, 0);
     g.rotation.z = side * 0.08;
+    g.userData.fore = fore;
+    g.userData.restZ = g.rotation.z;
     return g;
   };
   const armL = arm(-1);
@@ -379,11 +396,78 @@ export function makeFigure(look = {}) {
     body.add(stick);
   }
 
-  root.userData.figure = { head, armL, armR, legL, legR, body, idle };
+  root.userData.figure = {
+    head,
+    armL,
+    armR,
+    foreL: armL.userData.fore,
+    foreR: armR.userData.fore,
+    legL,
+    legR,
+    body,
+    idle,
+    look: 0,
+    gesture: null,
+  };
   return root;
 }
 
+// Gesten: kurze Abläufe aus Schlüsselposen, ausgelöst von einem Dialogknoten (`gesture`).
+// Eine Pose nennt nur, was sich bewegt, als Abweichung von der Ruhehaltung; dazwischen wird weich
+// übergeblendet. Die Seiten heißen, wie die Figur sie empfindet (rechts ist -X, im Code armL).
+//   rArm, lArm:   [vor (-) / zurück, zur Körpermitte]
+//   rFore, lFore: [Ellbogen beugen (-), Unterarm vor den Körper schwenken]
+//   head:         [drehen (- = nach rechts), nicken (- = hoch)]
+//   body:         [drehen (- = nach rechts), vorbeugen (+ = nach vorn)]
+export const GESTURES = {
+  // Gefragt nach der Uhrzeit: Die rechte Hand zuckt zur Westentasche, hält auf halbem Weg inne und
+  // greift nach dem Federhalter. Dann der Blick über die Schulter hinauf zur Wanduhr.
+  westentasche: [
+    [0, {}],
+    [0.3, { rArm: [-0.7, 0.2], rFore: [-0.8, 1.4] }],
+    [0.9, { rArm: [-0.7, 0.2], rFore: [-0.8, 1.4] }],
+    [1.6, { rArm: [-0.5, 0.15], rFore: [-0.2, 1.0], body: [0, 0.06] }],
+    [2.3, { rArm: [-0.5, 0.15], rFore: [-0.2, 1.0], head: [-1.45, -0.4], body: [-0.12, 0.06] }],
+    [3.7, { rArm: [-0.5, 0.15], rFore: [-0.2, 1.0], head: [-1.45, -0.4], body: [-0.12, 0.06] }],
+    [4.4, { rArm: [-0.5, 0.15], rFore: [-0.2, 1.0], body: [0, 0.06] }],
+    [5.3, {}],
+  ],
+};
+
+const CHANNELS = ['rArm', 'rFore', 'lArm', 'lFore', 'head', 'body'];
+const STILL = [0, 0];
+const REST = Object.fromEntries(CHANNELS.map((c) => [c, STILL]));
+
+function samplePose(keys, t) {
+  let i = 0;
+  while (i < keys.length - 2 && t >= keys[i + 1][0]) i++;
+  const [ta, a] = keys[i];
+  const [tb, b] = keys[i + 1];
+  const u = THREE.MathUtils.smoothstep(t, ta, tb);
+  const pose = {};
+  for (const c of CHANNELS) {
+    const p = a[c] || STILL;
+    const q = b[c] || STILL;
+    pose[c] = [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u];
+  }
+  return pose;
+}
+
+function poseArm(arm, fore, side, [swing, inward], [bend, across]) {
+  arm.rotation.x += swing;
+  arm.rotation.z = arm.userData.restZ - side * inward;
+  fore.rotation.x = bend;
+  fore.rotation.y = -side * across;
+}
+
+// Spielt eine Geste aus GESTURES ab; eine laufende wird ersetzt.
+export function startGesture(figure, name) {
+  const keys = GESTURES[name];
+  if (keys) figure.userData.figure.gesture = { keys, start: null };
+}
+
 // Atmen und zum Spieler hinsehen. Die Kopfdrehung bleibt unter 60 Grad, sonst wirkt sie unheimlich.
+// Eine laufende Geste legt sich darüber.
 export function idleFigure(figure, time, lookAt) {
   const f = figure.userData.figure;
   const phase = figure.id * 0.73;
@@ -411,7 +495,22 @@ export function idleFigure(figure, time, lookAt) {
       target = THREE.MathUtils.clamp(target, -1, 1);
     }
   }
-  f.head.rotation.y += (target - f.head.rotation.y) * 0.06;
+  f.look += (target - f.look) * 0.06;
+
+  let pose = REST;
+  if (f.gesture) {
+    if (f.gesture.start === null) f.gesture.start = time;
+    const t = time - f.gesture.start;
+    const keys = f.gesture.keys;
+    if (t >= keys[keys.length - 1][0]) f.gesture = null;
+    else pose = samplePose(keys, t);
+  }
+  poseArm(f.armL, f.foreL, -1, pose.rArm, pose.rFore);
+  poseArm(f.armR, f.foreR, 1, pose.lArm, pose.lFore);
+  f.head.rotation.y = f.look + pose.head[0];
+  f.head.rotation.x = pose.head[1];
+  f.body.rotation.y = pose.body[0];
+  f.body.rotation.x = pose.body[1];
 }
 
 export function walkFigure(figure, phase) {

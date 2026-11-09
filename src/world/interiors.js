@@ -495,20 +495,37 @@ function buildBank() {
   // Papiere, Tintenfass, Zigarrenkiste, Aschenbecher
   room.plainBag.box(0xd9cfb4, 0.4, 0.012, 0.3, -0.5, 0.875, -1.25);
   room.plainBag.box(0xcfc4a4, 0.3, 0.02, 0.22, -0.8, 0.885, -1.5);
-  room.plainBag.add(cyl(0.04, 0.05, 0.07, 0.15, 0.905, -1.6, 10), 0x101014);
+  room.plainBag.add(cyl(0.04, 0.05, 0.07, 0.36, 0.905, -1.58, 10), 0x101014);
   room.woodBag.box(0x7a4a22, 0.34, 0.09, 0.22, 0.8, 0.915, -1.2);
   room.plainBag.box(0xc9a24a, 0.28, 0.005, 0.16, 0.8, 0.962, -1.2);
   room.plainBag.add(cyl(0.09, 0.07, 0.03, 0.4, 0.88, -1.0, 14), 0x6a6a6a);
   room.plainBag.add(cyl(0.05, 0.05, 0.015, 0.4, 0.9, -1.0, 12), 0xd8d8d2);
   loc.anchor('zigarren', 0.8, 0.98, -1.2);
-  // Grüne Bankerlampe
-  room.metalBag.add(cyl(0.06, 0.09, 0.02, -0.1, 0.875, -1.7, 12), 0xb59a55);
-  room.metalBag.add(cyl(0.012, 0.012, 0.32, -0.1, 1.03, -1.7, 8), 0xb59a55);
-  const shadeGeo = cyl(0.05, 0.13, 0.12, -0.1, 1.22, -1.7, 12);
+  // Grüne Bankerlampe. Ihr Licht fällt als Kegel auf die Platte: Ein Punktlicht strahlte ohne Schatten
+  // auch Wendts Weste gleich daneben an und überstrahlte genau dort die Uhrkette. Sie steht so weit links,
+  // dass Wendts Arm beim Griff zum Federhalter nicht dicht an der Glühbirne vorbeistreicht und ausbrennt.
+  room.metalBag.add(cyl(0.06, 0.09, 0.02, -0.35, 0.875, -1.7, 12), 0xb59a55);
+  room.metalBag.add(cyl(0.012, 0.012, 0.32, -0.35, 1.03, -1.7, 8), 0xb59a55);
+  const shadeGeo = cyl(0.05, 0.13, 0.12, -0.35, 1.22, -1.7, 12);
   addMesh(scene, shadeGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.1, 0.7, 0.3) }));
-  const desk = new THREE.PointLight(0xffd090, 6, 7, 2);
-  desk.position.set(-0.1, 1.15, -1.5);
-  scene.add(desk);
+  const desk = new THREE.SpotLight(0xffd090, 6, 7, 0.95, 0.6, 2);
+  desk.position.set(-0.35, 1.17, -1.7);
+  desk.target.position.set(-0.15, 0.86, -1.55);
+  scene.add(desk, desk.target);
+  // Federhalter vor dem Tintenfass: Danach greift Wendt, statt seine Uhr hervorzuziehen. Er liegt so weit
+  // vorn, wie Wendts Hand über die Tischkante reicht.
+  const penRod = (r, a, b) => {
+    const from = new THREE.Vector3(...a);
+    const dir = new THREE.Vector3(...b).sub(from);
+    const len = dir.length();
+    const g = new THREE.CylinderGeometry(r, r, len, 6);
+    g.translate(0, len / 2, 0);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize()));
+    g.translate(from.x, from.y, from.z);
+    return g;
+  };
+  room.plainBag.add(penRod(0.0055, [0.05, 0.871, -1.665], [0.2, 0.871, -1.61]), 0x141012);
+  room.metalBag.add(penRod(0.0035, [0.2, 0.871, -1.61], [0.2225, 0.871, -1.602]), 0xc9a24a);
   // Tresor
   room.metalBag.box(0x1c2024, 1.3, 2.1, 0.9, 3.5, 1.05, -2.9);
   room.metalBag.box(0x2a2f34, 1.15, 1.95, 0.05, 3.5, 1.05, -2.43);

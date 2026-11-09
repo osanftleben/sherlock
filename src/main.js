@@ -12,7 +12,7 @@ import { Player } from './engine/player.js';
 import { UI } from './ui/ui.js';
 import { buildBerlin } from './world/berlin.js';
 import { buildInteriors } from './world/interiors.js';
-import { idleFigure, makeFigure } from './world/figures.js';
+import { idleFigure, makeFigure, startGesture } from './world/figures.js';
 import { softDisc } from './world/textures.js';
 import { CASES, FIRST_CASE } from './cases/index.js';
 
@@ -126,7 +126,7 @@ class Game {
       loc.scene.add(fig);
       loc.collide(a.pos.x - 0.28, a.pos.x + 0.28, a.pos.z - 0.28, a.pos.z + 0.28);
       loc.onUpdate((dt, t, { camera }) => idleFigure(fig, t, camera.position));
-      loc.addHotspot({
+      const spot = loc.addHotspot({
         id: `npc_${npc.id}`,
         pos: [a.pos.x, a.pos.y + 1.45, a.pos.z],
         radius: 0.6,
@@ -134,6 +134,8 @@ class Game {
         label: npc.name,
         action: npc.dialog ? { dialog: npc.dialog } : { say: npc.say },
       });
+      // Damit Dialogknoten Gesten an der sprechenden Figur auslösen können.
+      spot.figure = fig;
     }
   }
 
@@ -320,6 +322,7 @@ class Game {
     // Etwas unter den Kopf zielen, damit das Gesicht über dem Dialogfeld bleibt.
     const speaker = this.location.hotspots.find((s) => s.action.dialog === id);
     this.player.focus = speaker ? { x: speaker.pos.x, y: speaker.pos.y - 0.5, z: speaker.pos.z } : null;
+    this.speakerFigure = speaker?.figure ?? null;
     let start = dlg.start;
     if (Array.isArray(start)) start = start.find((s) => this.state.check(s.req)).node;
     this.showNode(id, start);
@@ -330,6 +333,7 @@ class Game {
     const node = dlg.nodes[nodeId];
     for (const g of node.give || []) this.state.add(g);
     if (node.sound) this.audio[node.sound]();
+    if (node.gesture && this.speakerFigure) startGesture(this.speakerFigure, node.gesture);
     const options = node.opts
       .map((o, i) => ({ ...o, key: `o_${id}_${nodeId}_${i}` }))
       .filter((o) => this.state.check(o.req) && !(o.once && this.state.has(o.key)));

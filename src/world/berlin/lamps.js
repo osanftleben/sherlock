@@ -365,10 +365,33 @@ float lampShade(vec3 p, vec3 lamp, float layer) {
 // UNROLLED_LOOP_INDEX die Nummer ein;
 // die Punktlichter liegen in der Reihenfolge von loc.lampLights vor (die einzigen der Szene).
 const POINT_HOOK = 'getPointLightInfo( pointLight, geometryPosition, directLight );';
-export function shadedLightsChunk(p) {
+function pointLightChunk(code) {
   const chunk = THREE.ShaderChunk.lights_fragment_begin;
-  if (!chunk.includes(POINT_HOOK)) reportError('Laternenschatten', new Error('Beleuchtungsteil von three.js hat sich geändert, die Laternen werfen keine Schatten'));
-  return chunk.replace(POINT_HOOK, `${POINT_HOOK}\n\t\tif ( directLight.visible ) directLight.color *= lampShadeLit( ${p}, lampWorld( pointLight.position ), UNROLLED_LOOP_INDEX );`);
+  if (!chunk.includes(POINT_HOOK)) reportError('Laternenlicht', new Error('Beleuchtungsteil von three.js hat sich geändert: Laternenschatten fehlen, Innenlampen scheinen durch Wände'));
+  return chunk.replace(POINT_HOOK, `${POINT_HOOK}\n\t\t${code}`);
+}
+export function shadedLightsChunk(p) {
+  return pointLightChunk(`if ( directLight.visible ) directLight.color *= lampShadeLit( ${p}, lampWorld( pointLight.position ), UNROLLED_LOOP_INDEX );`);
+}
+
+// Hält ein einzelnes Punktlicht von einem Material fern. Punktlichter scheinen in three.js durch
+// alles hindurch: Die Innenlampe des Pferdebahnwagens fiele sonst von innen auf Plattformdach,
+// Plattformen und Schilder. lamp: Uniform, dessen Wert die Weltlage der Flamme trägt ({ x, y, z },
+// etwa der Eintrag in loc.extraLamps, der ihr folgt). Das Punktlicht folgt seinem Eintrag ein Bild
+// später (die Rangliste rechnet vor dem Bauteil, das den Eintrag nachführt), darum der Abstand von
+// 0,4 m statt einer genauen Übereinstimmung; andere Lampen stehen weiter weg.
+export function shutOut(material, lamp, key) {
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.shutLamp = lamp;
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 shutLamp;')
+      .replace(
+        '#include <lights_fragment_begin>',
+        pointLightChunk('if ( distance( pointLight.position, ( viewMatrix * vec4( shutLamp, 1.0 ) ).xyz ) < 0.4 ) directLight.color = vec3( 0.0 );'),
+      );
+  };
+  material.customProgramCacheKey = () => key;
+  return material;
 }
 
 // Dasselbe für ein gewöhnliches Material ohne eigene Weltlage, etwa die Gehwege (facades.js): Auch

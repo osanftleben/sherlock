@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { idleFigure, idleHorse, trotHorse, walkFigure, walkHorse } from '../figures.js';
-import { CAR_HALF, CAR_LIGHTS, CAR_NOSE, Cords, HORSE_Z, PFLOOR, SPOTS, SWINGLE, TRACE, ZP, holdReins, makeCrew, makeHorseCar, makeLink, makeTeam } from './horsecar.js';
+import { CAR_HALF, CAR_LIGHTS, CAR_NOSE, Cords, HORSE_Z, INNER_LAMP, PFLOOR, SPOTS, SWINGLE, TRACE, ZP, holdReins, makeCrew, makeHorseCar, makeLink, makeTeam } from './horsecar.js';
 import { addShadeCaster } from './lamps.js';
 import { hearing } from './traffic.js';
 import { TRAM, TRAM_HIDE_X, TramPath, tramPaths } from './tramway.js';
@@ -489,6 +489,8 @@ export function buildTramLine(loc) {
   // halten es nach vorn und hinten ab, sodass es vor allem seitlich wie durch die Fenster fällt.
   const carLamps = CAR_LIGHTS.map((l) => ({ ...l, x: 1e6, z: 1e6, moving: true }));
   (loc.extraLamps ??= []).push(...carLamps);
+  // Lack und Schilder außen am Wagen bekommen das Licht der Innenlampe nicht ab (horsecar.js).
+  INNER_LAMP.value = carLamps[0];
   const block = (x, z, r) => {
     const b = pool[blockers.length];
     b.x = x;

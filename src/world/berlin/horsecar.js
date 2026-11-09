@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Bag, merge, std } from '../kit.js';
 import { makeFigure, makeHorse } from '../figures.js';
 import { signTexture, softDisc } from '../textures.js';
-import { lightPool } from './lamps.js';
+import { lightPool, shutOut } from './lamps.js';
 import { rod, strap } from './traffic.js';
 import { GAUGE } from './tramway.js';
 
@@ -32,7 +32,9 @@ const WHEEL_R = 0.38;
 // o längs des Wagens, y Höhe. Die beiden Innenlampen unter der Decke als ein Licht in der Mitte,
 // das vor allem seitlich durch die Fenster fällt; dazu die grünen Signallaternen an beiden Enden.
 export const CAR_LIGHTS = [
-  { o: 0, y: 2.42, color: 0xffa35a, intensity: 6 },
+  // inside: Die Innenlampe leuchtet nur in den Wagen; nach außen fällt ihr Licht als gemalter Fleck
+  // unter den Fenstern aufs Pflaster, nicht über das Lichtraster (lamps.js).
+  { o: 0, y: 2.42, color: 0xffa35a, intensity: 6, inside: true },
   ...[-1, 1].map((e) => ({ o: e * (ZP + 0.14), y: EAVE - 0.16, color: 0x58ff98, intensity: 3 })),
 ];
 const AXLES = [-0.85, 0.85];
@@ -61,11 +63,16 @@ const LIT_SEAT = new THREE.Color(0.34, 0.1, 0.05);
 const LIT_FLOOR = new THREE.Color(0.14, 0.08, 0.035);
 const LIT_POST = new THREE.Color(0.7, 0.48, 0.24);
 
+// Weltlage der Innenlampe (CAR_LIGHTS[0]); tramline.js setzt hier den Eintrag ein, der ihr folgt.
+// Was außen am Wagen sitzt, bekommt ihr Licht nicht ab (shutOut in lamps.js): Es schien sonst durch
+// Stirnwand und Dach, als heller Fleck unter dem Plattformdach und auf den Plattformen.
+export const INNER_LAMP = { value: new THREE.Vector3(1e6, 1e6, 1e6) };
+
 let mats = null;
 function materials() {
   return (mats ??= {
     // Glänzender Lack: Laternen spiegeln sich als klarer Fleck statt als breiter Schimmer.
-    body: std({ vertexColors: true, roughness: 0.22, metalness: 0.12 }),
+    body: shutOut(std({ vertexColors: true, roughness: 0.22, metalness: 0.12 }), INNER_LAMP, 'tramOutside'),
     glass: std({ color: 0x2a3a48, roughness: 0.04, metalness: 0.3, transparent: true, opacity: 0.16, depthWrite: false }),
     inside: new THREE.MeshBasicMaterial({ vertexColors: true }),
     lamp: new THREE.MeshBasicMaterial({ color: new THREE.Color(4.0, 2.5, 1.0) }),
@@ -85,7 +92,7 @@ function panel(bag, color, ax, az, bx, bz, y0, y1, t = 0.04) {
 
 // Schild als Fläche, die nach normal zeigt.
 function sign(texture, w, h, x, y, z, yaw) {
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: texture, roughness: 0.45 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), shutOut(new THREE.MeshStandardMaterial({ map: texture, roughness: 0.45 }), INNER_LAMP, 'tramOutside'));
   m.position.set(x, y, z);
   m.rotation.y = yaw;
   return m;

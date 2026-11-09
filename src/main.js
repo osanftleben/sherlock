@@ -624,7 +624,9 @@ class Game {
 
   frame() {
     const now = performance.now();
-    const dt = Math.min(0.05, (now - this.lastFrame) / 1000);
+    // freeze (für Messungen, dev/measure.js): Die Zeit steht, die Bilder laufen weiter, und jedes
+    // zeigt genau dieselbe Szene.
+    const dt = this.freeze ? 0 : Math.min(0.05, (now - this.lastFrame) / 1000);
     this.lastFrame = now;
     this.time += dt;
     const { camera } = this.view;

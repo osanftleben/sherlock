@@ -254,6 +254,8 @@ export function buildTraffic(loc, r) {
   // die Droschke an; wer daneben oder auf dem Gehweg steht, an dem fährt sie vorbei. So bleibt sie
   // auch nicht mitten in der Wende über den Gleisen stehen, wenn er nur in der Nähe wartet.
   const look = new THREE.Vector3();
+  // Für Messungen angehalten (loc.trafficStage unten).
+  let held = false;
   const inPath = (cam) => {
     for (let k = 0; k <= 10; k++) {
       curve.getPointAt((u + (k * 0.75) / pathLen) % 1, look);
@@ -268,7 +270,7 @@ export function buildTraffic(loc, r) {
     const turning = p.z < -174;
     const enteringTurn = !turning && p.z < -166 && ahead.z < p.z;
     const blocked = (dist < 9 && inPath(camera.position)) || (enteringTurn && loc.tramZone);
-    const speed = blocked ? 0 : 4.2;
+    const speed = held || blocked ? 0 : 4.2;
     u = (u + (speed * dt) / pathLen) % 1;
     cab.position.set(p.x, 0, p.z);
     cab.rotation.y = Math.atan2(ahead.x - p.x, ahead.z - p.z);
@@ -388,6 +390,7 @@ export function buildTraffic(loc, r) {
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     frustum.setFromProjectionMatrix(viewProj);
     for (const w of walkers) {
+      if (held) continue;
       if (w.state === 'gone') {
         w.timer -= dt;
         if (w.timer > 0) continue;
@@ -469,4 +472,25 @@ export function buildTraffic(loc, r) {
       w.fig.rotation.y = w.yaw;
     }
   });
+
+  // Für Messungen (src/dev/measure.js), damit jede Messung dieselben Passanten und dieselbe
+  // Droschke sieht: 'start' stellt alle dorthin, wo sie beim Laden standen, und hält sie dort;
+  // 'free' lässt sie von da an weiterlaufen.
+  const initial = walkers.map((w) => ({ s: w.s, phase: w.phase }));
+  loc.trafficStage = (where) => {
+    held = where !== 'free';
+    if (!held) return;
+    u = 0.1;
+    phase = 0;
+    trotHorse(cab.userData.horse, phase);
+    walkers.forEach((w, i) => {
+      Object.assign(w, initial[i], { dir: 1, state: 'walk', timer: 0, waited: 0 });
+      w.yaw = heading(w);
+      walkFigure(w.fig, w.phase);
+      const [x, z] = at(w, w.s);
+      w.fig.position.set(x, loc.heightAt(x, z), z);
+      w.fig.rotation.y = w.yaw;
+      w.fig.visible = true;
+    });
+  };
 }

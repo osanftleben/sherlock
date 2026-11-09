@@ -649,10 +649,36 @@ export function buildTramLine(loc) {
   });
 
   // Gleich beim Bau an die Endstelle stellen: Die Fallprüfung sieht den Ort vor dem ersten Bild.
-  placeCar(0, 0);
-  placeTeam();
-  team.updateMatrixWorld();
-  stepActor(crew.driver, 0, 0, null);
-  stepActor(crew.conductor, 0, 0, null);
-  layout();
+  const atEnd = () => {
+    placeCar(0, 0);
+    placeTeam();
+    team.updateMatrixWorld();
+    stepActor(crew.driver, 0, 0, null);
+    stepActor(crew.conductor, 0, 0, null);
+    layout();
+  };
+  atEnd();
+
+  // Für Messungen (src/dev/measure.js), damit jede Messung dieselbe Lage sieht: 'end' stellt die
+  // Bahn abfahrbereit an die Endstelle und hält sie dort, 'away' schickt sie fort, und 'free' lässt
+  // den Fahrplan von da an wieder laufen.
+  loc.tramStage = (where) => {
+    if (where === 'free') {
+      if (st.mode === 'away' || st.mode === 'layover') st.timer = Math.min(st.timer, 20);
+      return;
+    }
+    if (st.zone) st.zone = loc.tramZone = false;
+    if (st.gateUse && loc.tramGate) loc.tramGate.want = st.gateUse = false;
+    if (where === 'away') {
+      goAway();
+      st.timer = Infinity;
+      return;
+    }
+    Object.assign(st, { mode: 'layover', leg: OUT, s: OUT.end, v: 0, timer: Infinity, hitched: true, reinsOn: true, walk: null, sway: 0, kick: 0 });
+    Object.assign(crew.driver, { mode: 'ride', end: -1, script: [] });
+    Object.assign(crew.conductor, { mode: 'ride', end: 1, script: [] });
+    resetJoints();
+    setVisible(true);
+    atEnd();
+  };
 }

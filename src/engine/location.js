@@ -1,6 +1,27 @@
 import * as THREE from 'three';
 import { reportError } from '../core/errors.js';
 
+// Nur beim Entwickeln: Jedes Teil merkt sich, an welcher Stelle im Code es in die Szene kam
+// (userData.source, etwa „world/berlin/plaza.js:212“). Die Zeitmessung je Teil (dev/measure.js)
+// ordnet damit jeden Zeichenaufruf zu.
+function tagSources(scene) {
+  const add = scene.add.bind(scene);
+  scene.add = (...objects) => {
+    const source = callerOf(new Error().stack);
+    for (const o of objects) o.userData.source ??= source;
+    return add(...objects);
+  };
+}
+
+// Erste Stelle im Aufrufstapel außerhalb dieser Datei und der Hilfsfunktionen in kit.js.
+function callerOf(stack = '') {
+  for (const line of stack.split('\n').slice(1)) {
+    const m = line.match(/\/src\/([^?:)\s]+)(?:\?[^:)\s]*)?:(\d+):\d+/);
+    if (m && !/(engine\/location|world\/kit)\.js$/.test(m[1])) return `${m[1]}:${m[2]}`;
+  }
+  return null;
+}
+
 // Ein Ort, den man betreten kann: die Straße genauso wie jede Stube.
 // Hinzu kommende Stadtviertel und Fälle docken über `anchors` und `hotspots` an.
 export class Location {
@@ -10,6 +31,7 @@ export class Location {
     this.ambience = ambience;
     this.surface = surface;
     this.scene = new THREE.Scene();
+    if (import.meta.env.DEV) tagSources(this.scene);
     this.colliders = [];
     this.raised = [];
     this.hotspots = [];
